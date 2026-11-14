@@ -29,6 +29,7 @@ const GRID_ZONE = 'browseGrid';
 const GUIDE_ZONE = 'browseGuide';
 const HEAD_ZONE = 'browseHead';
 import { SIDEBAR_ICON, GENRE_SKELETONS, LIST_KINDS, CACHED_KINDS, columnsFor, PREFETCH_ROWS, DEFAULT_SCREEN_ROWS, BATCH_ROWS, firstKeptRow, wantedCount, createGrowingGridModel, sidebarItems, indexOfFilter, isGuideKind } from './browse/model.js';
+import { TOPBAR_ZONE } from '../components/topbar.js';
 
 export { SIDEBAR_ICON, GENRE_SKELETONS, columnsFor, PREFETCH_ROWS, firstKeptRow, wantedCount, createGrowingGridModel, sidebarItems, indexOfFilter };
 
@@ -985,6 +986,8 @@ export function createBrowsePage(ctx, params = {}) {
     takeFocusFromBar() {
       return items.length > 0 && ctx.focus.focus(CATS_ZONE, Math.max(0, selected));
     },
+    /** Down from the top bar: the first entry of the sidebar. */
+    enterFromBar: () => items.length > 0 && ctx.focus.focus(CATS_ZONE, 0),
     el: pageEl,
     /** Back: a selected row of the guide lets go; from the grid / guide the focus goes to the sidebar; then the main entry; then the page is left. */
     onBack() {
@@ -1003,6 +1006,7 @@ export function createBrowsePage(ctx, params = {}) {
     },
     mount() {
       ctx.focus.register(catsZone);
+      ctx.focus.link(CATS_ZONE, 'up', TOPBAR_ZONE); // Up from the first entry: the top bar
       ctx.focus.register(gridZone);
       ctx.focus.register(guideZone);
       ctx.focus.register(headZone);

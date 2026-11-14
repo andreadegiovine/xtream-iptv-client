@@ -33,3 +33,20 @@ test('the bar entry of the page on screen only gives it the focus; another entry
   expect(takeFocusFromBar).toHaveBeenCalledTimes(1);
   document.body.innerHTML = '';
 });
+
+test('Down from the bar: the page on screen takes the focus from it (its sidebar, its first row); nothing without the hook', async () => {
+  const { Action } = await import('../../src/core/input.js');
+  const { TOPBAR_ZONE } = await import('../../src/ui/components/topbar.js');
+  const focus = new FocusManager();
+  const enterFromBar = jest.fn();
+  const router = { depth: 1, current: { name: 'home', params: {} }, page: { enterFromBar }, reset: jest.fn() };
+  const bar = createTopbar({ focus, router }, {});
+  document.body.appendChild(bar.el);
+  focus.focus(TOPBAR_ZONE, 0);
+  focus.handle(Action.DOWN);
+  expect(enterFromBar).toHaveBeenCalledTimes(1);
+  router.page = {};
+  focus.handle(Action.DOWN);
+  expect(focus.activeId).toBe(TOPBAR_ZONE);
+  document.body.innerHTML = '';
+});

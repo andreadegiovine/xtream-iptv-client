@@ -9,6 +9,7 @@ import { createCarousel, VISIBLE_CARDS, AHEAD_CARDS } from '../components/carous
 import { createSkeletonCard } from '../components/card.js';
 import { getEntry, pageEntries } from '../../services/catalogQuery.js';
 import { log } from '../../core/logger.js';
+import { TOPBAR_ZONE } from '../components/topbar.js';
 
 const ROW_LIMIT = 200; // a home row ends here, however long the catalog
 const SUGGESTION_LIMIT = 500; // every suggestion found (the rows load lazily)
@@ -95,7 +96,8 @@ export function createHomePage(ctx, params = {}) {
         enrich(c);
         c.fresh = false;
       }
-      if (i > 0) ctx.focus.link(c.zone.id, 'up', carousels[i - 1].zone.id); // the top bar is reached with Back, not Up
+      // Up from the first row: the top bar (Down from the bar comes back to it, on the card it was left from).
+      ctx.focus.link(c.zone.id, 'up', i > 0 ? carousels[i - 1].zone.id : TOPBAR_ZONE);
       if (i < carousels.length - 1) ctx.focus.link(c.zone.id, 'down', carousels[i + 1].zone.id);
     });
     if (carousels.length) {
@@ -173,6 +175,8 @@ export function createHomePage(ctx, params = {}) {
       clearRows();
     },
     /** The card the focus is on, to land on it again when the page comes back. */
+    /** Down from the top bar: the first row, on the card it was left from. */
+    enterFromBar: () => carousels.length > 0 && ctx.focus.focus(carousels[0].zone.id),
     saveState: () => ({ focus: savedRowFocus(ctx.focus, carousels.map((c) => c.zone.id)), onBar: focusOnBar(ctx.focus) }),
     restoreState(state) {
       restored = (state && state.focus) || null;

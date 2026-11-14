@@ -13,6 +13,7 @@ import { getEntry, entryGenres } from '../../services/catalogQuery.js';
 import { collectionGenres, collectionImages, collectionKey, presentKeys, unionGenres } from '../../services/collections.js';
 import { formatNumber } from '../../core/format.js';
 import { log } from '../../core/logger.js';
+import { TOPBAR_ZONE } from '../components/topbar.js';
 
 const CATS_ZONE = 'collectionsCategories';
 const GRID_ZONE = 'collectionsGrid';
@@ -253,6 +254,8 @@ export function createCollectionsPage(ctx, params = {}) {
     takeFocusFromBar() {
       return items.length > 0 && ctx.focus.focus(CATS_ZONE, Math.max(0, selected));
     },
+    /** Down from the top bar: the first entry of the sidebar. */
+    enterFromBar: () => items.length > 0 && ctx.focus.focus(CATS_ZONE, 0),
     el: h('section', { class: 'page browse' }, h('div', { class: 'browse-body' }, catList, h('div', { class: 'browse-main' }, head, gridEl, empty))),
     /** On a genre (or favourites) Back first goes to "show all", the page is left from there. */
     onBack() {
@@ -273,6 +276,7 @@ export function createCollectionsPage(ctx, params = {}) {
     },
     mount() {
       ctx.focus.register(catsZone);
+      ctx.focus.link(CATS_ZONE, 'up', TOPBAR_ZONE); // Up from the first entry: the top bar
       ctx.focus.register(gridZone);
       ctx.focus.register(headZone);
       // Each zone keeps the focus: the sidebar Up / Down (OK opens its grid), the grid between its cards (Up from the first row: the

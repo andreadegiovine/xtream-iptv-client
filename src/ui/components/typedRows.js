@@ -25,7 +25,7 @@ export function groupByType(entries, limit = 500) {
  * Used by Favorites, Suggestions and the search results. `linkFromField`: Down from the search field reaches the first row (the
  * results); Up never leaves the rows (Back goes to the field, or to the top bar). A `collection` entry carries `collectionId` and a `subtitle` (its item count).
  */
-export function createTypedRows(ctx, { prefix, onOpen, limit = 500, hideFavorite = false, linkFromField = false }) { // onOpen(entry): titles and favourite filters (see isFilterEntry)
+export function createTypedRows(ctx, { prefix, onOpen, limit = 500, hideFavorite = false, linkFromField = false, upZone = null }) { // upZone: where Up from the first row goes (the top bar); onOpen(entry): titles and favourite filters (see isFilterEntry)
   const el = h('div', { class: 'typed-rows' });
   let carousels = [];
 
@@ -62,6 +62,7 @@ export function createTypedRows(ctx, { prefix, onOpen, limit = 500, hideFavorite
         el.appendChild(carousel.el);
         ctx.focus.register(carousel.zone);
         if (i > 0) ctx.focus.link(carousel.zone.id, 'up', carousels[i - 1].zone.id);
+        else if (upZone) ctx.focus.link(carousel.zone.id, 'up', upZone);
         if (i < carousels.length - 1) ctx.focus.link(carousel.zone.id, 'down', carousels[i + 1].zone.id);
         if (ctx.enrich && carousel.type !== 'collection' && carousel.type !== 'programme') ctx.enrich(carousel.items.map((item) => item.entry), carousel.cards, carousel.type, i > 0, { hideFavorite });
       });
@@ -69,6 +70,8 @@ export function createTypedRows(ctx, { prefix, onOpen, limit = 500, hideFavorite
     },
     count: () => carousels.length,
     focusFirst: () => carousels.length > 0 && ctx.focus.focus(carousels[0].zone.id, 0),
+    /** The first row, on the card it was left from (Down from the top bar). */
+    focusTop: () => carousels.length > 0 && ctx.focus.focus(carousels[0].zone.id),
     /** The card the focus is on (to land on it again when the page comes back), or null. */
     savedFocus: () => savedRowFocus(ctx.focus, carousels.map((c) => c.zone.id)),
     /** Focuses a saved card (its row reads its cards up to it), or the first card when its row is gone. */

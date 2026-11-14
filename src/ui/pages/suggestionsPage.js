@@ -4,11 +4,13 @@ import { createHint } from '../atoms/hint.js';
 import { t } from '../../i18n/index.js';
 import { createTypedRows } from '../components/typedRows.js';
 import { log } from '../../core/logger.js';
+import { TOPBAR_ZONE } from '../components/topbar.js';
 
 /** Suggested titles available in the provider catalog (TMDB recommendations from the watch history). */
 export function createSuggestionsPage(ctx) {
   const status = createHint({ text: t('suggestions.loading'), className: 'search-status' });
-  const rows = createTypedRows(ctx, { prefix: 'suggestions', onOpen: (entry) => ctx.openEntry(entry, { section: 'suggestions' }) });
+  // Up from the first row: the top bar; Down from the bar: back to that row, on the card it was left from.
+  const rows = createTypedRows(ctx, { prefix: 'suggestions', upZone: TOPBAR_ZONE, onOpen: (entry) => ctx.openEntry(entry, { section: 'suggestions' }) });
   let destroyed = false;
   let restored = null; // the card to land on again (a title opened from here, then Back)
   let onBar = false;
@@ -37,6 +39,7 @@ export function createSuggestionsPage(ctx) {
       destroyed = true;
       rows.destroy();
     },
+    enterFromBar: () => rows.focusTop(),
     saveState: () => ({ focus: rows.savedFocus(), onBar: focusOnBar(ctx.focus) }),
     restoreState(state) {
       restored = (state && state.focus) || null;

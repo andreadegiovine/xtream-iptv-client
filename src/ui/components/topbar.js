@@ -70,10 +70,29 @@ export function createTopbar(ctx, handlers = {}) {
   const items = () => SECTIONS.filter((section) => !hidden.has(section.id));
   const indexOf = (id) => Math.max(0, items().findIndex((s) => s.id === id));
 
+  /**
+   * Left / Right along the bar; Down goes to the page on screen when it takes the focus from the bar (`enterFromBar()`: the first entry of
+   * a sidebar, the first row of Home or Suggestions); elsewhere Down does nothing.
+   */
+  function barModel() {
+    const list = new ListModel({ orientation: 'horizontal', getCount: () => (searching || skeleton ? 0 : items().length) });
+    return {
+      getCount: () => list.getCount(),
+      navigate(dir, index) {
+        if (dir === 'down') {
+          const page = ctx.router && ctx.router.page;
+          if (page && page.enterFromBar) page.enterFromBar();
+          return { type: 'exit', dir };
+        }
+        return list.navigate(dir, index);
+      },
+    };
+  }
+
   const zone = new FocusZone({
     id: TOPBAR_ZONE,
     nodes: () => nodes,
-    model: new ListModel({ orientation: 'horizontal', getCount: () => (searching || skeleton ? 0 : items().length) }),
+    model: barModel(),
     onFocus: (i) => nodes[i] && nodes[i].classList.add('focused'),
     onBlur: (i) => nodes[i] && nodes[i].classList.remove('focused'),
     onActivate: (i) => {

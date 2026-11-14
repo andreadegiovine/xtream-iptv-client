@@ -32,6 +32,7 @@ import { runningVersions, lastCheck } from '../../services/updates.js';
 import { providerMediaTypes } from '../../services/providerTypes.js';
 import { APP_VERSION } from '../../core/env.js';
 import { formatDateTime } from '../../core/format.js';
+import { TOPBAR_ZONE } from '../components/topbar.js';
 
 const ZONE_ID = 'settings';
 const NAV_ZONE = 'settingsNav';
@@ -643,17 +644,20 @@ export function createSettingsPage(ctx) {
   };
 
 
-  // The sidebar: moving on it shows its sub-page at once; Right / OK enter it.
+  /** The focus into the sub-page on screen, on its first row. */
+  const enterSubpage = () => ctx.focus.focus(ZONE_ID, subpages[current].ops ? opsPanel.rows.length : 0);
+  // The sidebar, as the other pages with one: Up / Down move the focus only (Up from the first entry: the top bar); OK (a click) shows
+  // the entry's sub-page and enters it; Right enters the sub-page on screen.
   const navZone = new FocusZone({
     id: NAV_ZONE,
     nodes: () => navItems,
-    model: sidebarModel({ getCount: () => navItems.length, enter: () => navZone.onActivate() }), // Right: the focus into the sub-page on screen (the one of the focused entry)
-    onFocus: (i) => {
-      navItems[i].classList.add('focused');
-      if (i !== current) showSubpage(i);
-    },
+    model: sidebarModel({ getCount: () => navItems.length, enter: () => enterSubpage() }),
+    onFocus: (i) => navItems[i].classList.add('focused'),
     onBlur: (i) => navItems[i] && navItems[i].classList.remove('focused'),
-    onActivate: () => ctx.focus.focus(ZONE_ID, subpages[current].ops ? opsPanel.rows.length : 0),
+    onActivate: (i) => {
+      if (i !== current) showSubpage(i);
+      enterSubpage();
+    },
   });
   let restored = null;
   const body = h('div', { class: 'settings-main' }, pageTitle, sections_);
@@ -665,18 +669,21 @@ export function createSettingsPage(ctx) {
       return ctx.focus.focus(NAV_ZONE, current);
     },
     el: page,
-    /** Back from the rows goes to the sidebar, then to its first entry; from there the top bar (main.js). */
+    /** Back from the rows goes to the sidebar (the entry on screen); from another sub-page, the overview; from there the top bar (main.js). */
     onBack() {
       if (ctx.focus.activeId === ZONE_ID) {
         ctx.focus.focus(NAV_ZONE, current);
         return true;
       }
       if (ctx.focus.activeId === NAV_ZONE && current !== 0) {
-        ctx.focus.focus(NAV_ZONE, 0); // the first entry (the overview) before the bar
+        showSubpage(0); // as the main grid of the other pages
+        ctx.focus.focus(NAV_ZONE, 0);
         return true;
       }
       return false;
     },
+    /** Down from the top bar: the first entry of the sidebar. */
+    enterFromBar: () => ctx.focus.focus(NAV_ZONE, 0),
     mount() {
       opsPanel.mount();
       tmdbPanel.mount();
@@ -702,6 +709,7 @@ export function createSettingsPage(ctx) {
       devicePanel.refresh().catch(() => undefined);
       ctx.focus.register(zone);
       ctx.focus.register(navZone);
+      ctx.focus.link(NAV_ZONE, 'up', TOPBAR_ZONE); // Up from the first entry: the top bar
       // As the other pages with a sidebar: the sidebar Up / Down (OK enters the sub-page), the rows among themselves; Back from the rows
       // goes to the sidebar, then to its first entry, then to the top bar (main.js).
       showSubpage(restored ? restored.page || 0 : 0);

@@ -91,8 +91,6 @@ test('the sidebar moves Up / Down, Right only moves the focus into the grid on s
   const page = createBrowsePage(ctx, { type: 'movie', section: 'movies', fromBar: true });
   page.mount();
   await tick(150);
-  ctx.focus.handle(Action.UP);
-  expect(ctx.focus.activeId).toBe('browseCategories'); // no way up to the top bar
   const title = () => page.el.querySelector('.browse-title').textContent;
   const shown = title();
   ctx.focus.handle(Action.DOWN); // another entry has the focus, the grid on screen is still the first one's
@@ -112,5 +110,26 @@ test('the sidebar moves Up / Down, Right only moves the focus into the grid on s
   expect(ctx.focus.activeId).toBe('browseGrid'); // "Show all" has no buttons in its head: nowhere up (not the top bar)
   expect(page.onBack()).toBe(true);
   expect(ctx.focus.activeId).toBe('browseCategories');
+  page.destroy();
+});
+
+test('Up from the first sidebar entry: the top bar; Down from the bar (enterFromBar): the first sidebar entry', async () => {
+  const { Action } = await import('../../src/core/input.js');
+  const { FocusZone } = await import('../../src/ui/focus/FocusManager.js');
+  const { ListModel } = await import('../../src/ui/focus/models.js');
+  const { TOPBAR_ZONE } = await import('../../src/ui/components/topbar.js');
+  const { ctx } = await setup('browse-focus-bar');
+  ctx.focus.register(new FocusZone({ id: TOPBAR_ZONE, model: new ListModel({ orientation: 'horizontal', getCount: () => 3 }) }));
+  const page = createBrowsePage(ctx, { type: 'movie', section: 'movies', fromBar: true });
+  page.mount();
+  await tick(150);
+  ctx.focus.handle(Action.DOWN);
+  ctx.focus.handle(Action.UP); // back on the first entry
+  expect(ctx.focus.activeId).toBe('browseCategories');
+  ctx.focus.handle(Action.UP);
+  expect(ctx.focus.activeId).toBe(TOPBAR_ZONE);
+  page.enterFromBar();
+  expect(ctx.focus.activeId).toBe('browseCategories');
+  expect(ctx.focus.active.index).toBe(0);
   page.destroy();
 });
