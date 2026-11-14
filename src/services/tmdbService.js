@@ -14,14 +14,33 @@ const yearOf = (date) => Number.parseInt(String(date || '').slice(0, 4), 10) || 
 /** A title in a script an Italian or English reader cannot read (Greek, Cyrillic, Hebrew, Arabic, Thai, Japanese, Chinese, Korean). */
 export const UNREADABLE_TITLE = /[\u0370-\u03FF\u0400-\u04FF\u0590-\u06FF\u0E00-\u0E7F\u3040-\u30FF\u3400-\u9FFF\uAC00-\uD7AF]/;
 
-/** YouTube key of the best trailer: the UI language first, then English, then any; trailers before teasers. */
-export function trailerKeyOf(videos, language = '') {
+/**
+ * A video with subtitles burned in, by its name: many TMDB videos marked with a language are the original with subtitles in it
+ * ("Trailer Sub ITA", "Sottotitolato", "VOST", "Legendado").
+ */
+export const SUBTITLED_VIDEO = /\bsub\b|\bsubs\b|\bsub[\s._-]?ita\b|sottotitolat|\bsubbed\b|\bsubtitled\b|\bvost|legendad|\bomu\b|untertitel/i;
+
+/**
+ * The best trailer: { key, local } (`local`: in the language of the app and not subtitled; '' / false when there is none).
+ * Order: in the language of the app (dubbed), English, any other language, in the language of the app but subtitled; within each, a
+ * trailer before a teaser.
+ */
+export function trailerOf(videos, language = '') {
   const list = ((videos && videos.results) || []).filter((v) => v && v.site === 'YouTube' && v.key && (v.type === 'Trailer' || v.type === 'Teaser'));
   const lang = String(language).slice(0, 2);
-  const rank = (v) => (v.type === 'Trailer' ? 0 : 4) + (v.iso_639_1 === lang ? 0 : v.iso_639_1 === 'en' ? 1 : 2);
+  const subtitled = (v) => SUBTITLED_VIDEO.test(String(v.name || ''));
+  const group = (v) => {
+    if (v.iso_639_1 === lang && !subtitled(v)) return 0;
+    if (v.iso_639_1 === lang) return 3;
+    return v.iso_639_1 === 'en' ? 1 : 2;
+  };
+  const rank = (v) => group(v) * 2 + (v.type === 'Trailer' ? 0 : 1);
   const best = list.slice().sort((a, b) => rank(a) - rank(b))[0];
-  return best ? best.key : '';
+  return best ? { key: best.key, local: group(best) === 0 } : { key: '', local: false };
 }
+
+/** YouTube key of the best trailer (see trailerOf). */
+export const trailerKeyOf = (videos, language = '') => trailerOf(videos, language).key;
 
 /**
  * What is kept in the database for every title of the catalog: only what the grids and the genre lists need.
@@ -66,7 +85,8 @@ export function normalizeMeta(type, data, language = '') {
     year: yearOf(date),
     seasons: Number(data.number_of_seasons) || null,
     episodes: Number(data.number_of_episodes) || null,
-    trailerKey: trailerKeyOf(data.videos, language),
+    trailerKey: trailerOf(data.videos, language).key,
+    trailerLocal: trailerOf(data.videos, language).local, // in the language of the app, not subtitled: it wins over the provider's
     companies: (Array.isArray(data.production_companies) ? data.production_companies : [])
       .map((c) => ({ id: c.id, name: c.name || '', logo: posterUrl(c.logo_path, 'w185') }))
       .filter((c) => c.name),

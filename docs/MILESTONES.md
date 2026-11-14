@@ -902,3 +902,9 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
 - Home and Suggestions: Up from the first row reaches the bar; Down from the bar goes back to the first row, on the card it was left from. Other pages (title pages, search...): unchanged (Down on the bar does nothing there).
 - Tests: Down from the bar with and without the page hook; Up from the first sidebar entry to the bar and back. Browser checks with the mock: Home (same card), Movies, Settings (sub-page only on OK / click, Right, Back, Up / Down with the bar, mouse at rest), plus the navigation and settings scripts updated to the new rules. Not verified on the TV.
 
+### Patch 178 — Trailers in the language of the app, without burned-in subtitles
+- Trailers were almost always in English: the title page used the provider's trailer first (`youtube_trailer`, which panels usually fill with TMDB's English one), and TMDB's only without it. Now: TMDB's trailer in the language of the app and dubbed first (`trailerOf` → `trailerLocal`), then the provider's, then TMDB's other (English, other languages, and last the subtitled one in the language of the app).
+- Many TMDB videos marked with a language are the original with subtitles burned in: they are recognised by their name (`SUBTITLED_VIDEO`: "Sub ITA", "(SUB)", "sottotitolato", "subbed", "VOST", "legendado", "OmU", "Untertitel") and never count as the language of the app. YouTube's own captions are never shown by the app's player. A subtitled video whose name does not say so is not recognised.
+- Within a language a trailer comes before a teaser; a dubbed teaser comes before an English trailer. The full TMDB details are read when a title page opens (memory cache only): no stale data.
+- Tests: subtitled names, the order, the dubbed teaser. Not verified on the TV.
+

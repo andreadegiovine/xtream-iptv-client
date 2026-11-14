@@ -83,3 +83,15 @@ describe('waitForService (the first trailer after the TV started)', () => {
     expect(never).not.toHaveBeenCalled();
   });
 });
+
+test('TMDB trailer: a subtitled one in the language of the app comes after the original; only a dubbed one is "local"', async () => {
+  const { trailerOf, SUBTITLED_VIDEO } = await import('../../../src/services/tmdbService.js');
+  ['Trailer Sub ITA', 'Trailer (SUB)', 'Teaser sottotitolato', 'Trailer Sottotitolato in italiano', 'VOSTFR', 'Trailer Legendado', 'Trailer [subbed]'].forEach((name) => expect(SUBTITLED_VIDEO.test(name)).toBe(true));
+  ['Trailer Italiano Ufficiale', 'Official Trailer', 'Teaser Trailer', 'Submarine Trailer', 'Trailer 2'].forEach((name) => expect(SUBTITLED_VIDEO.test(name)).toBe(false));
+  const videos = (list) => ({ results: list.map(([key, lang, type, name]) => ({ site: 'YouTube', key, iso_639_1: lang, type, name })) });
+  const subbedOnly = videos([['itsub', 'it', 'Trailer', 'Trailer Sub ITA'], ['en1', 'en', 'Trailer', 'Official Trailer']]);
+  expect(trailerOf(subbedOnly, 'it-IT')).toEqual({ key: 'en1', local: false });
+  expect(trailerOf(videos([['itsub', 'it', 'Trailer', 'Trailer Sub ITA']]), 'it-IT')).toEqual({ key: 'itsub', local: false }); // nothing else
+  // A dubbed teaser beats an English trailer: the language first.
+  expect(trailerOf(videos([['en1', 'en', 'Trailer', 'Official Trailer'], ['itt', 'it', 'Teaser', 'Teaser Italiano']]), 'it-IT')).toEqual({ key: 'itt', local: true });
+});

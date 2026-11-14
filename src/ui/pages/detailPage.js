@@ -554,8 +554,9 @@ export function createDetailPage(ctx, params) {
     if (buttons.length && entry.type !== 'live') {
       buttons.push({ id: 'watched', icon: 'check', active: watched, label: watched ? t('detail.unwatched') : t('detail.watched'), run: () => toggleWatched(episodes, watched) });
     }
-    // The provider's trailer first, otherwise the one TMDB lists for the title.
-    const trailerId = (info && youtubeId(info.trailer)) || (meta && meta.trailerKey) || '';
+    // The trailer: TMDB's in the language of the app (dubbed), otherwise the provider's (often the English one), otherwise TMDB's other.
+    const localTrailer = meta && meta.trailerLocal ? meta.trailerKey : '';
+    const trailerId = localTrailer || (info && youtubeId(info.trailer)) || (meta && meta.trailerKey) || '';
     if (buttons.length && trailerId && trailers.available) buttons.push({ id: 'trailer', icon: 'trailer', label: t('detail.trailer'), run: () => playTrailer(trailerId) });
     if (buttons.length) {
       buttons.push({ id: 'favorite', icon: 'heart', active: favorite, label: favorite ? t('detail.unfavorite') : t('detail.favorite'), run: toggleFavorite });
