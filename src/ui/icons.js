@@ -59,9 +59,51 @@ import { faLock } from '@fortawesome/free-solid-svg-icons/faLock';
 import { faDeleteLeft } from '@fortawesome/free-solid-svg-icons/faDeleteLeft';
 import { faArrowLeft } from '@fortawesome/free-solid-svg-icons/faArrowLeft';
 
+import { faPaw } from '@fortawesome/free-solid-svg-icons/faPaw';
+import { faCat } from '@fortawesome/free-solid-svg-icons/faCat';
+import { faDog } from '@fortawesome/free-solid-svg-icons/faDog';
+import { faOtter } from '@fortawesome/free-solid-svg-icons/faOtter';
+import { faFrog } from '@fortawesome/free-solid-svg-icons/faFrog';
+import { faHippo } from '@fortawesome/free-solid-svg-icons/faHippo';
+import { faDragon } from '@fortawesome/free-solid-svg-icons/faDragon';
+import { faHorse } from '@fortawesome/free-solid-svg-icons/faHorse';
+import { faKiwiBird } from '@fortawesome/free-solid-svg-icons/faKiwiBird';
+import { faFish } from '@fortawesome/free-solid-svg-icons/faFish';
+import { faDove } from '@fortawesome/free-solid-svg-icons/faDove';
+import { faCrow } from '@fortawesome/free-solid-svg-icons/faCrow';
+import { faSpider } from '@fortawesome/free-solid-svg-icons/faSpider';
+import { faCow } from '@fortawesome/free-solid-svg-icons/faCow';
+import { faRobot } from '@fortawesome/free-solid-svg-icons/faRobot';
+import { faGhost } from '@fortawesome/free-solid-svg-icons/faGhost';
+import { faUserAstronaut } from '@fortawesome/free-solid-svg-icons/faUserAstronaut';
+import { faUserNinja } from '@fortawesome/free-solid-svg-icons/faUserNinja';
+import { faRocket } from '@fortawesome/free-solid-svg-icons/faRocket';
+import { faGamepad } from '@fortawesome/free-solid-svg-icons/faGamepad';
+
 // Font Awesome Free (CC BY 4.0 / SIL OFL): only the icons listed here end up in the bundle.
 // They are inlined as SVG, so there are no font files to ship or load on the TV.
 const ICONS = {
+  // Profile avatars (src/ui/atoms/avatar.js).
+  'avatar-paw': faPaw,
+  'avatar-cat': faCat,
+  'avatar-dog': faDog,
+  'avatar-otter': faOtter,
+  'avatar-frog': faFrog,
+  'avatar-hippo': faHippo,
+  'avatar-dragon': faDragon,
+  'avatar-horse': faHorse,
+  'avatar-kiwi': faKiwiBird,
+  'avatar-fish': faFish,
+  'avatar-dove': faDove,
+  'avatar-crow': faCrow,
+  'avatar-spider': faSpider,
+  'avatar-cow': faCow,
+  'avatar-robot': faRobot,
+  'avatar-ghost': faGhost,
+  'avatar-astronaut': faUserAstronaut,
+  'avatar-ninja': faUserNinja,
+  'avatar-rocket': faRocket,
+  'avatar-gamepad': faGamepad,
   home: faHouse,
   search: faMagnifyingGlass,
   settings: faGear,

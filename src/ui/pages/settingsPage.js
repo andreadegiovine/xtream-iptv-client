@@ -33,6 +33,9 @@ import { providerMediaTypes } from '../../services/providerTypes.js';
 import { APP_VERSION } from '../../core/env.js';
 import { formatDateTime } from '../../core/format.js';
 import { TOPBAR_ZONE } from '../components/topbar.js';
+import { createAvatar } from '../atoms/avatar.js';
+import { openProfileForm } from '../components/profileForm.js';
+import { MAIN_ID } from '../../services/profiles.js';
 
 const ZONE_ID = 'settings';
 const NAV_ZONE = 'settingsNav';
@@ -557,17 +560,100 @@ export function createSettingsPage(ctx) {
   // The sub-pages of the sidebar: the overview (operations, catalog, device), each service, each group of preferences. Each has its
   // blocks (shown only while it is the current one) and its rows (the focus walks them in this order).
   const SECTION_ICON = { 'settings.section.general': 'settings', 'settings.section.vod': 'movie', 'settings.section.live': 'network', 'settings.section.networks': 'group', 'settings.section.advanced': 'warning' };
+  // Profiles: the list (an admin manages them all, the others only their own), switching profile, adding one (admins).
+  const me = ctx.profile || { id: MAIN_ID, admin: true, kids: false, implicit: true };
+  const isAdmin = Boolean(me.admin);
+  const profileRows = [];
+  let keepRow = null; // set with the focus zone below: after the rows change, the focus on the same line
+  const profilesList = h('div', { class: 'list profiles-list' });
+  const profileTags = (p) => [p.id === (ctx.profile && ctx.profile.id) ? t('profiles.inUse') : '', p.admin ? t('profiles.admin') : '', p.kids ? t('profiles.kids') : '', p.pin ? t('profiles.withPin') : ''].filter(Boolean).join(' · ');
+  async function editProfile(p) {
+    const data = await openProfileForm(ctx, { profile: p, title: t('profiles.edit'), roles: isAdmin && p.id !== MAIN_ID, kidsAllowed: p.id !== MAIN_ID });
+    if (!data) return;
+    try {
+      const saved = await ctx.profiles.update(p.id, data);
+      if (ctx.profile && saved.id === ctx.profile.id) ctx.profile = { ...ctx.profile, ...saved };
+      ctx.notices.success(t('notice.saved'), { key: 'profile' });
+    } catch (err) {
+      ctx.notices.error(t(err && err.code === 'LAST_ADMIN' ? 'profiles.lastAdmin' : 'error.UNKNOWN'), { key: 'profile' });
+    }
+  }
+  async function profileActions(p) {
+    const options = [{ label: t('profiles.edit'), value: 'edit' }];
+    if (p.id !== MAIN_ID && p.id !== me.id) options.push({ label: t('profiles.remove'), value: 'remove' });
+    const value = await ctx.dialogs.choose({ title: p.name, options });
+    if (value === 'edit') await editProfile(p);
+    if (value === 'remove') {
+      const ok = await ctx.dialogs.confirm({ title: t('profiles.removeTitle'), message: t('profiles.removeMessage', { name: p.name }), confirmLabel: t('settings.confirmRemove'), cancelLabel: t('setup.cancel') });
+      if (!ok) return;
+      try {
+        await ctx.profiles.remove(p.id);
+        ctx.notices.success(t('notice.removed'), { key: 'profile' });
+      } catch (err) {
+        ctx.notices.error(t(err && err.code === 'LAST_ADMIN' ? 'profiles.lastAdmin' : 'error.UNKNOWN'), { key: 'profile' });
+      }
+    }
+  }
+  async function addProfile() {
+    let main = null;
+    if (!(await ctx.profiles.list()).length) {
+      // The first one: the user of always becomes the main profile (an admin) first.
+      main = await openProfileForm(ctx, { title: t('profiles.yours'), roles: false, kidsAllowed: false });
+      if (!main) return;
+    }
+    const data = await openProfileForm(ctx, { title: t('profiles.add'), roles: true });
+    if (!data) return;
+    await ctx.profiles.add(data, main);
+    if (main) {
+      ctx.profiles.choose(MAIN_ID); // this run goes on as the main profile
+      ctx.profile = await ctx.profiles.get(MAIN_ID);
+    }
+    ctx.notices.success(t('notice.added'), { key: 'profile' });
+  }
+  /** The rows of the profiles sub-page, made again after every change (the focus stays on the same line). */
+  async function renderProfiles() {
+    const all = await ctx.profiles.list();
+    const shown = isAdmin ? all : all.filter((p) => p.id === me.id);
+    const rows = shown.map((p) => ({
+      el: createListRow({ label: p.name, lead: createAvatar(p.avatar, { className: 'small' }), value: profileTags(p), className: 'profile-row' }).el,
+      refresh: async () => undefined,
+      activate: async () => {
+        if (isAdmin) await profileActions(p);
+        else await editProfile(p);
+        await renderProfiles();
+      },
+    }));
+    if (all.length) rows.push({ el: createListRow({ label: t('profiles.switch') }).el, refresh: async () => undefined, activate: async () => { await ctx.switchProfile(); } });
+    if (isAdmin) rows.push({ el: createListRow({ label: t('profiles.add') }).el, refresh: async () => undefined, activate: async () => { await addProfile(); await renderProfiles(); } });
+    profileRows.splice(0, profileRows.length, ...rows);
+    while (profilesList.firstChild) profilesList.removeChild(profilesList.firstChild);
+    rows.forEach((row) => profilesList.appendChild(row.el));
+    if (ctx.focus.activeId === ZONE_ID && keepRow) keepRow();
+  }
+  const profilesPage = { id: 'profiles', icon: 'user', label: t('profiles.title'), blocks: [createHint({ text: t('profiles.hint'), className: 'profiles-hint' }), profilesList], rows: profileRows };
+
   // Order: the overview, the groups of preferences, the external services, then Advanced (last).
   const sectionPages = sections.map((section) => ({ id: section.titleKey, icon: SECTION_ICON[section.titleKey] || 'settings', label: t(section.titleKey), blocks: blocksOf(section), rows: rowsOf(section) }));
   const advancedPage = sectionPages.filter((sub) => sub.id === 'settings.section.advanced');
-  const subpages = [
+  const fullPages = [
     { id: 'overview', icon: 'home', label: t('settings.page.overview'), blocks: [promos.el, opsPanel.el, panel.el, devicePanel.el], rows: [...catalogRows, dbUpdateRow, dbRemoveRow], ops: true },
     ...sectionPages.filter((sub) => sub.id !== 'settings.section.advanced'),
     { id: 'tmdb', icon: 'info', label: 'TMDB', blocks: [tmdbPanel.el, h('div', { class: 'fields' }, tmdbTokenRow.root), h('div', { class: 'list' }, titleSearchRow.el)], rows: [...tmdbRows, tmdbTokenRow, tmdbTokenRow.clearRow, titleSearchRow] },
     { id: 'trakt', icon: 'user', label: 'Trakt', blocks: [traktPanel.el, h('div', { class: 'fields' }, traktIdRow.root, traktSecretRow.root)], rows: [traktConnectRow, traktSyncRow, traktRemoveRow, traktIdRow, traktIdRow.clearRow, traktSecretRow, traktSecretRow.clearRow] },
     { id: 'opensubtitles', icon: 'subtitles', label: 'OpenSubtitles', blocks: [h('div', { class: 'fields' }, openSubtitlesRow.root)], rows: [openSubtitlesRow, openSubtitlesRow.clearRow] },
+    profilesPage,
     ...advancedPage,
   ];
+  // A profile that is not an admin sees only what it can change: its profile, its language (and parental PIN), its Trakt account.
+  // (Built only for such a profile: its rows are the same elements as those of the full pages.)
+  const limitedPages = () => {
+    const ownRows = [sections[0].list[0]].concat(me.kids ? [] : [pinRow]);
+    return [
+      profilesPage,
+      { id: 'own', icon: 'settings', label: t('settings.section.general'), blocks: [h('div', { class: 'list' }, ownRows.map((r) => r.el))], rows: ownRows },
+    ].concat(me.kids ? [] : [{ id: 'trakt', icon: 'user', label: 'Trakt', blocks: [traktPanel.el], rows: [traktConnectRow, traktSyncRow, traktRemoveRow] }]);
+  };
+  const subpages = isAdmin ? fullPages : limitedPages();
   let current = 0; // the sub-page on screen
   const pageTitle = createHeading({ level: 1, text: subpages[0].label, className: 'settings-title' });
   const sections_ = subpages.map((sub) => h('div', { class: 'settings-subpage', style: 'display:none' }, sub.blocks));
@@ -635,6 +721,7 @@ export function createSettingsPage(ctx) {
       all()[i].activate().catch((err) => log.warn('Setting failed', err && err.message));
     },
   });
+  keepRow = () => ctx.focus.focus(ZONE_ID, Math.max(0, Math.min(zone.index, all().length - 1)));
   // An operation ended (or started): the rows shift, keep the cursor on the same row.
   opsPanel.onChange = () => {
     if (ctx.focus.activeId !== ZONE_ID) return;
@@ -685,6 +772,7 @@ export function createSettingsPage(ctx) {
     /** Down from the top bar: the first entry of the sidebar. */
     enterFromBar: () => ctx.focus.focus(NAV_ZONE, 0),
     mount() {
+      renderProfiles().catch((err) => log.warn('Profiles failed', err && err.message));
       opsPanel.mount();
       tmdbPanel.mount();
       traktPanel.mount();

@@ -3,6 +3,8 @@ import { i18n, t, detectLocale } from './i18n/index.js';
 import { openAppDb } from './db/appDb.js';
 import { InputService, Action, isTextEditing } from './core/input.js';
 import { createPointer } from './ui/pointer.js';
+import { createProfiles, profileSettings } from './services/profiles.js';
+import { pickProfile } from './ui/profilePicker.js';
 import { startTooltips } from './ui/tooltip.js';
 import { log } from './core/logger.js';
 import { providerHiddenSections } from './services/providerTypes.js';
@@ -102,12 +104,25 @@ import { startInAppScheduling } from './app/scheduling.js';
 
 async function boot() {
   const db = await openAppDb();
-  const settings = new SettingsService(db);
+  const globalSettings = new SettingsService(db);
   const providers = new ProviderStore(db);
 
+  const globalPrefs = await globalSettings.get();
+  applyTextSize(globalPrefs.textSize);
+  const localeOf = (language) => (language === 'auto' ? detectLocale(navigator.language) : language);
+  i18n.setLocale(localeOf(globalPrefs.language));
+  // Profiles: with more than one, "who is watching?" first (every start); the data of the profile is then read from its own database.
+  const profiles = createProfiles({ db });
+  let profile = await profiles.current();
+  if (!profile) {
+    profile = await pickProfile({ profiles, list: await profiles.list() });
+    profiles.choose(profile.id);
+  }
+  const pdb = await profiles.dbFor(profile);
+  const settings = profileSettings(globalSettings, profile, profiles);
   const prefs = await settings.get();
-  applyTextSize(prefs.textSize);
-  i18n.setLocale(prefs.language === 'auto' ? detectLocale(navigator.language) : prefs.language);
+  i18n.setLocale(localeOf(prefs.language));
+  log.info(`Profile: ${profile.implicit ? 'none (single user)' : `${profile.id}${profile.kids ? ' (kids)' : ''}${profile.admin ? ' (admin)' : ''}`}`);
   document.documentElement.lang = i18n.getLocale(); // the page says which language it speaks (voices, hyphenation)
   const notices = createNoticeService();
 
@@ -128,6 +143,9 @@ async function boot() {
   const active = createActiveProvider({ providers });
   const ctx = {
     db,
+    pdb, // the database of the profile's own data (the app database for the main profile)
+    profile,
+    profiles,
     settings,
     providers,
     liveGrouping,
@@ -151,14 +169,14 @@ async function boot() {
     enrich: null,
     meta: null,
   };
-  ctx.favorites = createFavoritesService({ db });
-  ctx.collections = createCollectionsService({ db });
+  ctx.favorites = createFavoritesService({ db: pdb });
+  ctx.collections = createCollectionsService({ db: pdb });
   // The last known numbers of the entries shown only when they have something (top bar, sidebars): read before the first page.
-  ctx.navCounts = createNavCounts({ db });
+  ctx.navCounts = createNavCounts({ db: pdb });
   const navCountsReady = ctx.navCounts.load();
-  ctx.pins = createPinsService({ db });
+  ctx.pins = createPinsService({ db: pdb });
   ctx.credits = createCreditsStore({ db });
-  ctx.guideLayout = createGuideLayoutStore({ db });
+  ctx.guideLayout = createGuideLayoutStore({ db: pdb });
   // Favourites and collections are shared by all providers under keys that mean the same everywhere (the TMDB id). A title saved under its
   // provider's own key moves to the shared one as soon as the catalog gives it a TMDB id (after a sync, or at start).
   ctx.shareKeys = async () => {
@@ -184,7 +202,7 @@ async function boot() {
     ctx.search.invalidate();
     queueSearchWarm();
   };
-  ctx.parental = createParentalService({ db });
+  ctx.parental = createParentalService({ db: pdb });
   setAdultCheck((entry) => ctx.parental.isAdult(entry));
   ctx.refreshAdult = async () => {
     const current = await active.get();
@@ -193,15 +211,15 @@ async function boot() {
   ctx.apiKeys = createApiKeys({ db });
   const keysReady = ctx.apiKeys.load(); // read while the rest of the start-up is set up; awaited before the first page
   keysReady.catch(() => undefined);
-  ctx.trakt = createTraktService({ db, client: createTraktClient({ getCredentials: () => ({ clientId: ctx.apiKeys.get().traktId, clientSecret: ctx.apiKeys.get().traktSecret }) }) });
-  ctx.watch = createWatchState({ store: new WatchStore(db), trakt: ctx.trakt });
+  ctx.trakt = createTraktService({ db: pdb, client: createTraktClient({ getCredentials: () => ({ clientId: ctx.apiKeys.get().traktId, clientSecret: ctx.apiKeys.get().traktSecret }) }) });
+  ctx.watch = createWatchState({ store: new WatchStore(pdb), trakt: ctx.trakt });
   ctx.openSubtitles = createOpenSubtitles({ getKey: () => ctx.apiKeys.get().openSubtitlesKey });
   const tmdb = createTmdbService({ db, client: createTmdbClient({ getApiKey: () => ctx.apiKeys.get().tmdbKey }), getLanguage: () => i18n.getLocale(), onActivity: (count) => ctx.genres && ctx.genres.hold('ui', count > 0) });
   ctx.tmdb = tmdb;
   ctx.operations = createOperations();
   ctx.syncLog = createSyncLog({ db, operations: ctx.operations });
   // Scheduled viewing inside the app (app/scheduling.js): the notice, then the channel, while the app is open.
-  ctx.schedules = createScheduledViewing({ db });
+  ctx.schedules = createScheduledViewing({ db: pdb });
   ctx.openScheduled = startInAppScheduling({ ctx, active }).openScheduled;
   // What Settings asks (updates, rebuilds) runs one job at a time, after any catalog / genre / TMDB work already running.
   const EXCLUSIVE = ['catalog', 'tmdb', 'genres', 'rebuild'];
@@ -338,6 +356,11 @@ async function boot() {
       return;
     }
     if (ctx.parental.isAdult(entry)) {
+      // A kids profile: adult titles never open (no PIN).
+      if (ctx.profile.kids) {
+        ctx.notices.info(t('profiles.kidsBlocked'), { key: 'parental' });
+        return;
+      }
       if (gateOpen) return;
       gateOpen = true;
       try {
@@ -489,6 +512,7 @@ async function boot() {
     if (!favorites) hide.push('favorites');
     if (!collections) hide.push('collections');
     if (!suggestions || !ctx.suggestions.enabled) hide.push('suggestions');
+    if (!ctx.profile.admin) hide.push('provider'); // the providers are shared: only an admin profile manages them
     topbar.setHidden(hide.concat(providerHiddenSections(current && current.provider)));
   };
   ctx.refreshTopbar = async () => {
@@ -554,6 +578,19 @@ async function boot() {
   });
 
   const dialogs = createDialogService({ focus });
+  /**
+   * Another profile: the page starts again on "who is watching?". Leaving a kids profile takes the parental PIN of any profile that is not
+   * for kids. Resolves false when it did not happen.
+   */
+  ctx.switchProfile = async () => {
+    if (ctx.profile.kids) {
+      const pin = await dialogs.pin({ title: t('profiles.kidsExit'), message: t('profiles.kidsExitHelp'), validate: async (value) => ((await profiles.verifyParentalAny(value)) ? '' : t('parental.wrong')) });
+      if (pin === null) return false;
+    }
+    profiles.choose(null);
+    window.location.reload();
+    return true;
+  };
   ctx.dialogs = dialogs;
   ctx.notices = notices;
   // Offline: a notice that stays until the connection is back (it is also shown over a video: playback needs the network).
@@ -733,6 +770,7 @@ async function boot() {
   };
   // The parental PIN is set the first time the app opens (asked again at the next start if it was skipped).
   setTimeout(() => {
+    if (ctx.profile.kids) return; // a kids profile has no PIN of its own
     ctx.parental
       .hasPin()
       .then((has) => (has ? null : createPin({ dialogs: ctx.dialogs, parental: ctx.parental })))

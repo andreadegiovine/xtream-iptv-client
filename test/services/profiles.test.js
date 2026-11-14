@@ -1,0 +1,102 @@
+import 'fake-indexeddb/auto';
+import { openAppDb } from '../../src/db/appDb.js';
+import { kvSet, kvGet } from '../../src/db/kv.js';
+import { createProfiles, profileSettings, MAIN_ID, AVATARS, profileDbName } from '../../src/services/profiles.js';
+import { hashPin } from '../../src/services/parental.js';
+import { SettingsService } from '../../src/services/settings.js';
+
+const memoryStorage = () => {
+  const data = {};
+  return { getItem: (k) => (k in data ? data[k] : null), setItem: (k, v) => { data[k] = String(v); }, removeItem: (k) => { delete data[k]; } };
+};
+async function setup() {
+  const db = await openAppDb(`profiles-${Math.random()}`);
+  const opened = [];
+  const openDb = async (name) => {
+    const pdb = await openAppDb(`${name}-${Math.random()}`);
+    opened.push(name);
+    return pdb;
+  };
+  const removed = [];
+  const profiles = createProfiles({ db, openDb, removeDb: async (name) => removed.push(name), storage: memoryStorage() });
+  return { db, profiles, opened, removed };
+}
+
+test('without profiles: the user of always (main, admin), nothing to choose, the app database', async () => {
+  const { db, profiles } = await setup();
+  expect(await profiles.list()).toEqual([]);
+  expect(await profiles.needsChoice()).toBe(false);
+  const me = await profiles.current();
+  expect(me).toMatchObject({ id: MAIN_ID, admin: true, kids: false, implicit: true });
+  expect(await profiles.dbFor(me)).toBe(db);
+  expect(AVATARS).toHaveLength(20);
+});
+
+test('the first profile also makes the main one; a choice is asked at start; access PIN', async () => {
+  const { profiles, opened } = await setup();
+  const kid = await profiles.add({ name: 'Leo', avatar: 'robot', kids: true, admin: true, pin: '1234' }, { name: 'Andrea', avatar: 'cat' });
+  const all = await profiles.list();
+  expect(all.map((p) => p.name)).toEqual(['Andrea', 'Leo']);
+  expect(all[0]).toMatchObject({ id: MAIN_ID, admin: true, kids: false, avatar: 'cat' });
+  expect(kid).toMatchObject({ kids: true, admin: false }); // a kids profile is never an admin
+  expect(kid.pin.hash).not.toBe('1234'); // hashed
+  expect(profiles.verifyAccess(kid, '1234')).toBe(true);
+  expect(profiles.verifyAccess(kid, '0000')).toBe(false);
+  expect(profiles.verifyAccess(all[0], '')).toBe(true); // no PIN
+  expect(await profiles.needsChoice()).toBe(true);
+  expect(await profiles.current()).toBeNull(); // nothing chosen in this run
+  profiles.choose(kid.id);
+  expect((await profiles.current()).id).toBe(kid.id);
+  await profiles.dbFor(kid);
+  expect(opened).toEqual([profileDbName(kid.id)]);
+});
+
+test('update keeps or changes the PIN; the last admin stays one; removing deletes its database, back to no profiles', async () => {
+  const { profiles, removed } = await setup();
+  const other = await profiles.add({ name: 'Sara', avatar: 'fish', pin: '1111' }, { name: 'Me' });
+  const kept = await profiles.update(other.id, { name: 'Sara B', pin: undefined });
+  expect(kept.name).toBe('Sara B');
+  expect(profiles.verifyAccess(kept, '1111')).toBe(true);
+  const noPin = await profiles.update(other.id, { pin: '' });
+  expect(noPin.pin).toBeNull();
+  await expect(profiles.update(MAIN_ID, { admin: false })).rejects.toMatchObject({ code: 'LAST_ADMIN' });
+  await profiles.update(other.id, { admin: true });
+  await profiles.update(MAIN_ID, { admin: false }); // another admin exists now
+  await expect(profiles.remove(other.id)).rejects.toMatchObject({ code: 'LAST_ADMIN' });
+  await profiles.update(MAIN_ID, { admin: true });
+  expect(await profiles.remove(MAIN_ID)).toBe(false); // never the main one
+  expect(await profiles.remove(other.id)).toBe(true);
+  expect(removed).toEqual([profileDbName(other.id)]);
+  expect(await profiles.list()).toEqual([]); // only the main one left: no profiles
+});
+
+test('leaving a kids profile: the parental PIN of any profile not for kids', async () => {
+  const { db, profiles } = await setup();
+  const parent = await profiles.add({ name: 'Mum', avatar: 'dove' }, { name: 'Dad' });
+  await profiles.add({ name: 'Kid', avatar: 'frog', kids: true });
+  await kvSet(db, 'parental', { salt: 's', hash: hashPin('1111', 's') }); // Dad (main)
+  expect(parent.kids).toBe(false);
+  const name = `parent-${Math.random()}`;
+  const parentDb = await openAppDb(name);
+  await kvSet(parentDb, 'parental', { salt: 't', hash: hashPin('2222', 't') });
+  // Each check opens (and closes) the database of the profile again.
+  const verify = createProfiles({ db, openDb: () => openAppDb(name), storage: memoryStorage() });
+  expect(await verify.verifyParentalAny('1111')).toBe(true);
+  expect(await verify.verifyParentalAny('2222')).toBe(true);
+  expect(await verify.verifyParentalAny('3333')).toBe(false);
+});
+
+test('settings of a profile: its own language, everything else shared; the main profile writes the shared one', async () => {
+  const { db, profiles } = await setup();
+  const settings = new SettingsService(db);
+  await settings.update({ language: 'en-US', bufferSeconds: 10 });
+  const other = await profiles.add({ name: 'Sara', avatar: 'fish' }, { name: 'Me' });
+  const view = profileSettings(settings, other, profiles);
+  expect((await view.get()).language).toBe('en-US'); // none of its own yet
+  await view.update({ language: 'it-IT', bufferSeconds: 20 });
+  expect((await view.get())).toMatchObject({ language: 'it-IT', bufferSeconds: 20 });
+  expect((await settings.get())).toMatchObject({ language: 'en-US', bufferSeconds: 20 }); // shared stays
+  expect((await profiles.get(other.id)).language).toBe('it-IT');
+  expect(profileSettings(settings, await profiles.get(MAIN_ID), profiles)).toBe(settings);
+  expect(await kvGet(db, 'profiles', null)).toHaveLength(2);
+});

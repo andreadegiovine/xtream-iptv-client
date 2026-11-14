@@ -1,0 +1,153 @@
+// Profiles: "who is watching?" at start (src/ui/profilePicker.js), the profile form (components/profileForm.js), the rows of Settings.
+@use 'tokens' as *;
+
+.profile-picker {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: $bg-gradient;
+
+  .profile-picker-logo {
+    position: absolute;
+    top: $gutter;
+    left: $gutter;
+  }
+
+  h1 {
+    margin-bottom: 64px;
+    font-size: 3.5rem;
+  }
+}
+
+.profile-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: 1600px;
+}
+
+.profile-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 240px;
+  margin: 0 20px 40px;
+  color: $text-muted;
+  cursor: pointer;
+  transition: transform 0.12s ease-out;
+
+  .profile-tile-avatar {
+    padding: 6px;
+    border: 4px solid transparent;
+    border-radius: 50%;
+  }
+
+  .avatar {
+    width: 180px;
+    height: 180px;
+  }
+
+  .profile-tile-name {
+    margin-top: 18px;
+    font-size: 1.875rem;
+    font-weight: 600;
+  }
+
+  .profile-tile-tags {
+    display: flex;
+    align-items: center;
+    min-height: 34px;
+    margin-top: 6px;
+    font-size: 1.25rem;
+  }
+
+  .profile-lock {
+    width: 22px;
+    height: 22px;
+    margin-right: 10px;
+  }
+
+  &.focused {
+    color: $text;
+    transform: scale(1.08);
+
+    .profile-tile-avatar {
+      border-color: $text;
+    }
+  }
+}
+
+// The form: a wide dialog, the avatars in two lines of ten.
+.dialog.profile-dialog {
+  width: 1180px;
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
+
+  .form {
+    width: 100%;
+  }
+
+  .dialog-actions .btn {
+    margin-bottom: 0;
+  }
+
+  .list .row {
+    width: 100%;
+  }
+}
+
+.profile-avatars {
+  display: flex;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.profile-avatar-choice {
+  display: inline-flex;
+  margin: 0 8px 10px 0;
+  padding: 4px;
+  border: 3px solid transparent;
+  border-radius: 50%;
+  transition: transform 0.12s ease-out;
+
+  .avatar {
+    width: 84px;
+    height: 84px;
+  }
+
+  &.selected {
+    border-color: $accent;
+  }
+
+  &.focused {
+    border-color: $text;
+    transform: scale(1.08);
+  }
+}
+
+// Settings › Profiles: a small avatar before the name.
+.list .row.profile-row {
+  justify-content: flex-start;
+  align-items: center;
+
+  .avatar.small {
+    width: 48px;
+    height: 48px;
+    margin-right: 18px;
+  }
+
+  .value {
+    margin-left: auto;
+  }
+}
+
+.profiles-hint {
+  margin-bottom: 20px;
+}

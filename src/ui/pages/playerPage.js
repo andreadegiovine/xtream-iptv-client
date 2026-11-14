@@ -735,12 +735,20 @@ export function createPlayerPage(ctx, params) {
     return neighborKey(await sequence, liveEntry.key, delta, liveEntry.groupKey || null);
   }
 
+  /** A kids profile never plays adult channels (no PIN can open them): they are skipped. */
+  const blockedForKids = (entry) => Boolean(entry && ctx.profile && ctx.profile.kids && ctx.parental && ctx.parental.isAdult(entry));
+
   async function stepChannel(delta) {
-    const key = await neighbor(delta);
-    if (!key || destroyed) return;
+    let key = await neighbor(delta);
     const { db } = await ctx.active.get();
-    const entry = await getEntry(db, key).catch(() => null);
-    if (entry && !destroyed) switchTo(entry);
+    for (let hops = 0; key && hops < 50 && !destroyed; hops += 1) {
+      const entry = await getEntry(db, key).catch(() => null);
+      if (entry && !blockedForKids(entry)) {
+        switchTo(entry);
+        return;
+      }
+      key = neighborKey(await sequence, key, delta, null);
+    }
   }
 
   /** "Versions": the streams of the group playing; the chosen one plays. */
@@ -777,6 +785,10 @@ export function createPlayerPage(ctx, params) {
     const entry = page.entries[0];
     if (!entry || destroyed) return;
     live.offset = Math.max(0, live.offset + delta);
+    if (blockedForKids(entry)) {
+      changeChannel(delta); // the next one
+      return;
+    }
     switchTo(entry);
   }
 
