@@ -6,6 +6,7 @@ import { icon } from '../icons.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { ListModel } from '../focus/models.js';
 import { createLogo } from './logo.js';
+import { createAvatar } from '../atoms/avatar.js';
 import { formatClockTime, formatClockDate } from '../../core/clock.js';
 
 export const TOPBAR_ZONE = 'topbar';
@@ -27,6 +28,8 @@ export const SECTIONS = [
   { id: 'favorites', labelKey: 'nav.favorites', route: 'favorites' },
   { id: 'collections', labelKey: 'nav.collections', route: 'collections' },
   { id: 'suggestions', labelKey: 'nav.suggestions', route: 'suggestions' },
+  // The profile in use (its avatar; only with profiles): OK goes to "who's watching?".
+  { id: 'profile', labelKey: 'nav.profile', icon: 'user', iconOnly: true, end: true, action: 'profile' },
   { id: 'provider', labelKey: 'nav.provider', route: 'providers', icon: 'provider', iconOnly: true, end: true },
   { id: 'settings', labelKey: 'nav.settings', route: 'settings', icon: 'settings', iconOnly: true, end: true },
 ];
@@ -97,6 +100,10 @@ export function createTopbar(ctx, handlers = {}) {
     onBlur: (i) => nodes[i] && nodes[i].classList.remove('focused'),
     onActivate: (i) => {
       const section = items()[i];
+      if (section.action === 'profile') {
+        if (ctx.switchProfile) ctx.switchProfile();
+        return;
+      }
       if (section.action === 'search') {
         api.openSearch();
         return;
@@ -138,6 +145,12 @@ export function createTopbar(ctx, handlers = {}) {
       }
       const label = t(section.labelKey);
       const node = createTopbarItem({ label, icon: section.icon || null, iconOnly: Boolean(section.iconOnly), current: section.id === currentSection });
+      if (section.id === 'profile' && ctx.profile && ctx.profile.avatar) {
+        // The avatar of the profile in use instead of the icon.
+        while (node.firstChild) node.removeChild(node.firstChild);
+        node.appendChild(createAvatar(ctx.profile.avatar));
+        node.classList.add('topbar-profile');
+      }
       nodes.push(node);
       el.appendChild(node);
     });

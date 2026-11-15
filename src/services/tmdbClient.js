@@ -71,7 +71,7 @@ export function createTmdbClient({ getApiKey = () => '', fetcher = fetchJson } =
     // A title TMDB has only in its original language (see needsLocalTitle) gets a readable one from its translations: one more request,
     // only for those titles. Without one (or when that request fails) the title is left empty and the app shows the provider's name.
     details: async (type, id, language, { full = true } = {}) => {
-      const data = await get(`/${kind(type)}/${id}`, full ? { language, append_to_response: 'credits,videos', include_video_language: `${String(language || 'en').slice(0, 2)},en,null` } : { language });
+      const data = await get(`/${kind(type)}/${id}`, full ? { language, append_to_response: type === 'series' ? 'credits,videos,content_ratings' : 'credits,videos,release_dates', include_video_language: `${String(language || 'en').slice(0, 2)},en,null` } : { language });
       if (!needsLocalTitle(type, data, language)) return data;
       const titles = await get(`/${kind(type)}/${id}`, { language, append_to_response: 'translations,alternative_titles' }).catch(() => null);
       return { ...data, [titleField(type)]: titles ? localTitle(type, titles, language) : '' };

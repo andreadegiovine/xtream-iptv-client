@@ -23,7 +23,7 @@ const RECENT_ZONE = 'searchRecent';
  */
 export function createSearchPage(ctx, params = {}) {
   const status = createHint({ className: 'search-status' });
-  const rows = createTypedRows(ctx, { prefix: 'search', limit: PER_TYPE, linkFromField: true, onOpen: (entry) => remember() || open(entry) });
+  const rows = createTypedRows(ctx, { prefix: 'search', limit: PER_TYPE, linkFromField: true, upZone: SEARCH_BAR_ZONE, onOpen: (entry) => remember() || open(entry) });
 
   /** A collection opens its page; a programme opens its channel / group with the focus on it; the rest opens its detail page. */
   function open(entry) {

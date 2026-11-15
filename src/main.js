@@ -416,6 +416,7 @@ async function boot() {
     },
   });
   document.getElementById('topbar').appendChild(topbar.el);
+  ctx.renderTopbar = () => topbar.render(); // the profile's avatar changed
   ctx.linkSearchDown = (zoneId) => topbar.linkSearchDown(zoneId);
   ctx.setSearchText = (text) => topbar.setQuery(text);
   ctx.refreshClock = () => topbar.refreshClock();
@@ -513,6 +514,7 @@ async function boot() {
     if (!collections) hide.push('collections');
     if (!suggestions || !ctx.suggestions.enabled) hide.push('suggestions');
     if (!ctx.profile.admin) hide.push('provider'); // the providers are shared: only an admin profile manages them
+    if (ctx.profile.implicit) hide.push('profile'); // no profiles: nothing to switch to
     topbar.setHidden(hide.concat(providerHiddenSections(current && current.provider)));
   };
   ctx.refreshTopbar = async () => {

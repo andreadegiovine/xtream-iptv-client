@@ -28,6 +28,7 @@ import { addToCollection } from '../components/collectionFlows.js';
 import { log } from '../../core/logger.js';
 
 import { flattenEpisodes, pickNextEpisode, formatRuntime, seasonsLabel, episodesLabel, detailMetaParts, castFrom, tagsFrom, seasonOptionLabel, seasonIndexOf, landingIndex } from './detail/model.js';
+import { TOPBAR_ZONE } from '../components/topbar.js';
 
 export { flattenEpisodes, pickNextEpisode, formatRuntime, seasonsLabel, episodesLabel, detailMetaParts, castFrom, tagsFrom, seasonOptionLabel, seasonIndexOf, landingIndex };
 
@@ -70,6 +71,7 @@ export function createDetailPage(ctx, params) {
   const categoriesEl = h('div', { class: 'detail-categories' });
   const tagsEl = h('div', { class: 'detail-categories' });
   const directorEl = h('div', { class: 'detail-categories' });
+  const ratingEl = h('div', { class: 'detail-categories' });
   const companiesEl = h('div', { class: 'detail-categories' });
   const episodesEl = h('div', { class: 'detail-section' });
   const castEl = h('div', { class: 'detail-section' });
@@ -80,7 +82,7 @@ export function createDetailPage(ctx, params) {
     { class: 'page detail loading' },
     backdropEl,
     poster,
-    h('div', { class: 'detail-body' }, titleEl, metaEl, versionEl, actionsEl, plotEl, collectionsEl, categoriesEl, tagsEl, directorEl, companiesEl, epgEl, episodesEl, castEl, relatedEl),
+    h('div', { class: 'detail-body' }, titleEl, metaEl, versionEl, actionsEl, plotEl, collectionsEl, categoriesEl, tagsEl, ratingEl, directorEl, companiesEl, epgEl, episodesEl, castEl, relatedEl),
   );
 
   const data = () => ({
@@ -277,7 +279,8 @@ export function createDetailPage(ctx, params) {
     }
     rows.forEach((r, i) => {
       ctx.focus.register(r.zone);
-      if (i > 0) ctx.focus.link(r.id, 'up', rows[i - 1].id); // no way up to the top bar: Back is the only way out of a title
+      // Up from the first row: the top bar (Down from the bar comes back, enterFromBar).
+      ctx.focus.link(r.id, 'up', i > 0 ? rows[i - 1].id : TOPBAR_ZONE);
       if (i < rows.length - 1) ctx.focus.link(r.id, 'down', rows[i + 1].id);
     });
     const target = keep && rows.find((r) => r.id === keep.id);
@@ -336,8 +339,18 @@ export function createDetailPage(ctx, params) {
     renderChips(collectionsEl, 'detailCollections', collectionItems, 'collection', next, t('nav.collections'), (item) => ctx.router.push('collection', { id: item.id, section: params.section || 'collections' }));
     renderChips(categoriesEl, 'detailCategories', categoryItems, 'category', next, t('detail.categories'));
     renderChips(tagsEl, 'detailGenres', entry.type === 'live' ? [] : genreItems(), 'genre', next, t('detail.genres'));
+    renderRating();
     renderDirectors();
     renderCompanies();
+  }
+
+  /** The age rating (TMDB, the country of the language of the app), before the director. */
+  function renderRating() {
+    clear(ratingEl);
+    const value = entry.type === 'live' || !meta ? '' : meta.certification;
+    if (!value) return;
+    ratingEl.appendChild(createChipLabel(t('detail.certification')));
+    ratingEl.appendChild(createChip({ text: value }));
   }
 
   /** Director(s) from TMDB, shown before the production companies when known. */
@@ -808,6 +821,8 @@ export function createDetailPage(ctx, params) {
   }
 
   return {
+    /** Down from the top bar: the first row of the page (the actions), where its focus was. */
+    enterFromBar: () => rows.length > 0 && ctx.focus.focus(rows[0].id),
     el,
     mount() {
       load().catch((err) => log.warn('Detail load failed', err && err.message));

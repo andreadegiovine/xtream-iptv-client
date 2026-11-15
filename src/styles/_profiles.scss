@@ -1,24 +1,16 @@
 // Profiles: "who is watching?" at start (src/ui/profilePicker.js), the profile form (components/profileForm.js), the rows of Settings.
 @use 'tokens' as *;
 
-.profile-picker {
-  position: fixed;
+.page.setup.first-run.profile-picker .profile-choice {
+  position: absolute;
   top: 0;
   right: 0;
   bottom: 0;
   left: 0;
-  z-index: 50;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: $bg-gradient;
-
-  .profile-picker-logo {
-    position: absolute;
-    top: $gutter;
-    left: $gutter;
-  }
 
   h1 {
     margin-bottom: 64px;
@@ -150,4 +142,10 @@
 
 .profiles-hint {
   margin-bottom: 20px;
+}
+
+// The profile in use in the top bar: its avatar in the place of an icon (focused: the white box of the bar around it).
+.topbar .topbar-item.topbar-profile .avatar {
+  width: 38px;
+  height: 38px;
 }

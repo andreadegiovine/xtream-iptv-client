@@ -573,6 +573,7 @@ export function createSettingsPage(ctx) {
     try {
       const saved = await ctx.profiles.update(p.id, data);
       if (ctx.profile && saved.id === ctx.profile.id) ctx.profile = { ...ctx.profile, ...saved };
+      if (ctx.profile && saved.id === ctx.profile.id && ctx.renderTopbar) ctx.renderTopbar();
       ctx.notices.success(t('notice.saved'), { key: 'profile' });
     } catch (err) {
       ctx.notices.error(t(err && err.code === 'LAST_ADMIN' ? 'profiles.lastAdmin' : 'error.UNKNOWN'), { key: 'profile' });
@@ -609,6 +610,7 @@ export function createSettingsPage(ctx) {
       ctx.profile = await ctx.profiles.get(MAIN_ID);
     }
     ctx.notices.success(t('notice.added'), { key: 'profile' });
+    if (ctx.refreshTopbar) ctx.refreshTopbar(); // the avatar of the profile in use now shows in the bar
   }
   /** The rows of the profiles sub-page, made again after every change (the focus stays on the same line). */
   async function renderProfiles() {
@@ -637,11 +639,11 @@ export function createSettingsPage(ctx) {
   const advancedPage = sectionPages.filter((sub) => sub.id === 'settings.section.advanced');
   const fullPages = [
     { id: 'overview', icon: 'home', label: t('settings.page.overview'), blocks: [promos.el, opsPanel.el, panel.el, devicePanel.el], rows: [...catalogRows, dbUpdateRow, dbRemoveRow], ops: true },
-    ...sectionPages.filter((sub) => sub.id !== 'settings.section.advanced'),
+    // Profiles right under General.
+    ...sectionPages.filter((sub) => sub.id !== 'settings.section.advanced').reduce((out, sub) => out.concat(sub.id === 'settings.section.general' ? [sub, profilesPage] : [sub]), []),
     { id: 'tmdb', icon: 'info', label: 'TMDB', blocks: [tmdbPanel.el, h('div', { class: 'fields' }, tmdbTokenRow.root), h('div', { class: 'list' }, titleSearchRow.el)], rows: [...tmdbRows, tmdbTokenRow, tmdbTokenRow.clearRow, titleSearchRow] },
     { id: 'trakt', icon: 'user', label: 'Trakt', blocks: [traktPanel.el, h('div', { class: 'fields' }, traktIdRow.root, traktSecretRow.root)], rows: [traktConnectRow, traktSyncRow, traktRemoveRow, traktIdRow, traktIdRow.clearRow, traktSecretRow, traktSecretRow.clearRow] },
     { id: 'opensubtitles', icon: 'subtitles', label: 'OpenSubtitles', blocks: [h('div', { class: 'fields' }, openSubtitlesRow.root)], rows: [openSubtitlesRow, openSubtitlesRow.clearRow] },
-    profilesPage,
     ...advancedPage,
   ];
   // A profile that is not an admin sees only what it can change: its profile, its language (and parental PIN), its Trakt account.
@@ -649,8 +651,8 @@ export function createSettingsPage(ctx) {
   const limitedPages = () => {
     const ownRows = [sections[0].list[0]].concat(me.kids ? [] : [pinRow]);
     return [
-      profilesPage,
       { id: 'own', icon: 'settings', label: t('settings.section.general'), blocks: [h('div', { class: 'list' }, ownRows.map((r) => r.el))], rows: ownRows },
+      profilesPage,
     ].concat(me.kids ? [] : [{ id: 'trakt', icon: 'user', label: 'Trakt', blocks: [traktPanel.el], rows: [traktConnectRow, traktSyncRow, traktRemoveRow] }]);
   };
   const subpages = isAdmin ? fullPages : limitedPages();

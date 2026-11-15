@@ -85,7 +85,7 @@ test('back from a title: the focus returns to its card in the grid', async () =>
   again.destroy();
 });
 
-test('the sidebar moves Up / Down, Right only moves the focus into the grid on screen; the grid only among its cards, no Left back to the sidebar', async () => {
+test('the sidebar moves Up / Down, Right only moves the focus into the grid on screen; Left from the first column back to the sidebar', async () => {
   const { Action } = await import('../../src/core/input.js');
   const { ctx } = await setup('browse-focus-moves');
   const page = createBrowsePage(ctx, { type: 'movie', section: 'movies', fromBar: true });
@@ -105,7 +105,9 @@ test('the sidebar moves Up / Down, Right only moves the focus into the grid on s
   await tick(60);
   expect(ctx.focus.activeId).toBe('browseGrid');
   ctx.focus.handle(Action.LEFT);
-  expect(ctx.focus.activeId).toBe('browseGrid'); // the first card: no way left to the sidebar
+  expect(ctx.focus.activeId).toBe('browseCategories'); // the first column: Left goes to the sidebar
+  ctx.focus.handle(Action.RIGHT);
+  expect(ctx.focus.activeId).toBe('browseGrid');
   ctx.focus.handle(Action.UP);
   expect(ctx.focus.activeId).toBe('browseGrid'); // "Show all" has no buttons in its head: nowhere up (not the top bar)
   expect(page.onBack()).toBe(true);

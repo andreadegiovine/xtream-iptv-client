@@ -1007,6 +1007,8 @@ export function createBrowsePage(ctx, params = {}) {
     mount() {
       ctx.focus.register(catsZone);
       ctx.focus.link(CATS_ZONE, 'up', TOPBAR_ZONE); // Up from the first entry: the top bar
+      // Left from the first column of the grid (or the start of the guide, the head's first button): the sidebar.
+      [GRID_ZONE, GUIDE_ZONE, HEAD_ZONE].forEach((id) => ctx.focus.link(id, 'left', CATS_ZONE));
       ctx.focus.register(gridZone);
       ctx.focus.register(guideZone);
       ctx.focus.register(headZone);

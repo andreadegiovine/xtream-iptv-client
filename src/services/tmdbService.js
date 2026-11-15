@@ -68,6 +68,28 @@ function directorsOf(data) {
   return names.filter((n, i) => names.indexOf(n) === i).slice(0, 4);
 }
 
+/**
+ * The age rating of a title for the country of the language of the app (it-IT → IT; a language alone: its usual country), else the US:
+ * a movie's from its release dates (theatrical first), a series' from its content ratings. '' when TMDB has none.
+ */
+export function certificationOf(type, data, language = '') {
+  const parts = String(language).split('-');
+  const COUNTRY = { it: 'IT', en: 'US', es: 'ES', fr: 'FR', de: 'DE', pt: 'PT' };
+  const country = (parts[1] || COUNTRY[parts[0]] || 'US').toUpperCase();
+  const pick = (code) => {
+    if (type === 'series') {
+      const row = ((data.content_ratings && data.content_ratings.results) || []).find((r) => r.iso_3166_1 === code);
+      return row && row.rating ? String(row.rating) : '';
+    }
+    const row = ((data.release_dates && data.release_dates.results) || []).find((r) => r.iso_3166_1 === code);
+    const dates = (row && row.release_dates) || [];
+    const byType = dates.slice().sort((a, b) => (a.type === 3 ? 0 : 1) - (b.type === 3 ? 0 : 1));
+    const found = byType.find((d) => d.certification);
+    return found ? String(found.certification) : '';
+  };
+  return pick(country) || (country !== 'US' ? pick('US') : '');
+}
+
 /** TMDB payload → what the UI needs. */
 export function normalizeMeta(type, data, language = '') {
   const date = type === 'series' ? data.first_air_date : data.release_date;
@@ -85,6 +107,7 @@ export function normalizeMeta(type, data, language = '') {
     year: yearOf(date),
     seasons: Number(data.number_of_seasons) || null,
     episodes: Number(data.number_of_episodes) || null,
+    certification: certificationOf(type, data, language),
     trailerKey: trailerOf(data.videos, language).key,
     trailerLocal: trailerOf(data.videos, language).local, // in the language of the app, not subtitled: it wins over the provider's
     companies: (Array.isArray(data.production_companies) ? data.production_companies : [])
