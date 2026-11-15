@@ -944,3 +944,9 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
 - README: several providers as one catalog, title pages (age rating, Rewind), player (audio in the language of the app, live pause and Back to live, the next episode 10 s before the end, state kept when the app comes back), guide (programme tooltips, scheduled programmes highlighted, guides joined with the custom one), profiles, tooltips and navigation, the custom EPG (joined, no longer replacing), remote control keys, first steps.
 - Screenshots (`npm run screenshots`): new ones for the providers page with two active providers, a title of both, Settings › Profiles, the profile form and "Who's watching?"; the others taken again (tooltips and notices hidden). The script reaches the top bar with Back, opens the TMDB sub-page for its key, closes the search with two Backs and runs a second demo provider.
 
+### Patch 183 — Provider rows aligned, Up to the bar from Providers, Left from a Settings sub-page
+- Providers page: every provider is the same block (row + table of its lists); an inactive one hides only the table. The toggle has a fixed width ("Active" / "Not active", no wrapping) and the buttons fixed sizes, so they line up from row to row.
+- Providers page: Up from the first line reaches the top bar; Down from the bar comes back to the first toggle.
+- Settings: Right from the sidebar enters the sub-page on screen; Left from it (where no control is on that side) goes back to the sidebar on the entry of that sub-page.
+- Browser checks with two mock providers (one switched off): buttons at the same positions, only the active one with its table, Up / Down with the bar; Settings Right / Left; navigation, settings, profiles-bar, unified catalog and tooltip scripts. Not verified on the TV.
+

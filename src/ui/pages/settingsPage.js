@@ -737,7 +737,10 @@ export function createSettingsPage(ctx) {
 
 
   /** The focus into the sub-page on screen, on its first row. */
-  const enterSubpage = () => ctx.focus.focus(ZONE_ID, subpages[current].ops ? opsPanel.rows.length : 0);
+  const enterSubpage = () => {
+    navZone.index = current; // Left (or Back) from the sub-page comes back to its own entry
+    return ctx.focus.focus(ZONE_ID, subpages[current].ops ? opsPanel.rows.length : 0);
+  };
   // The sidebar, as the other pages with one: Up / Down move the focus only (Up from the first entry: the top bar); OK (a click) shows
   // the entry's sub-page and enters it; Right enters the sub-page on screen.
   const navZone = new FocusZone({
@@ -795,6 +798,7 @@ export function createSettingsPage(ctx) {
       ctx.focus.register(zone);
       ctx.focus.register(navZone);
       ctx.focus.link(NAV_ZONE, 'up', TOPBAR_ZONE); // Up from the first entry: the top bar
+      ctx.focus.link(ZONE_ID, 'left', NAV_ZONE); // Left from a sub-page (where no control is on that side): its sidebar entry
       // As the other pages with a sidebar: the sidebar Up / Down (OK enters the sub-page), the rows among themselves; Back from the rows
       // goes to the sidebar, then to its first entry, then to the top bar (main.js).
       showSubpage(restored ? restored.page || 0 : 0);
