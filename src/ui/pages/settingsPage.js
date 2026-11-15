@@ -31,10 +31,10 @@ import { createSidebarItem } from '../atoms/sidebarItem.js';
 import { runningVersions, lastCheck } from '../../services/updates.js';
 import { APP_VERSION } from '../../core/env.js';
 import { formatDateTime } from '../../core/format.js';
-import { TOPBAR_ZONE } from '../components/topbar.js';
 import { createAvatar } from '../atoms/avatar.js';
 import { openProfileForm } from '../components/profileForm.js';
 import { MAIN_ID } from '../../services/profiles.js';
+import { sidebarNavigation } from './templates.js';
 
 const ZONE_ID = 'settings';
 const NAV_ZONE = 'settingsNav';
@@ -758,11 +758,11 @@ export function createSettingsPage(ctx) {
   const body = h('div', { class: 'settings-main' }, pageTitle, sections_);
   const page = h('section', { class: 'page browse settings-page' }, h('div', { class: 'browse-body' }, nav, body));
 
+  const pageNav = sidebarNavigation(ctx, { sidebar: NAV_ZONE, contents: [ZONE_ID], entryOnScreen: () => current });
+
   return {
-    /** The bar's entry of this page pressed again: the focus comes to the sidebar (its entry of the page), nothing is loaded again. */
-    takeFocusFromBar() {
-      return ctx.focus.focus(NAV_ZONE, current);
-    },
+    // The sidebar page template (templates.js): the bar, the sidebar and the content linked the same way on every such page.
+    takeFocusFromBar: pageNav.takeFocusFromBar,
     el: page,
     /** Back from the rows goes to the sidebar (the entry on screen); from another sub-page, the overview; from there the top bar (main.js). */
     onBack() {
@@ -777,8 +777,7 @@ export function createSettingsPage(ctx) {
       }
       return false;
     },
-    /** Down from the top bar: the first entry of the sidebar. */
-    enterFromBar: () => ctx.focus.focus(NAV_ZONE, 0),
+    enterFromBar: pageNav.enterFromBar,
     mount() {
       renderProfiles().catch((err) => log.warn('Profiles failed', err && err.message));
       opsPanel.mount();
@@ -797,8 +796,7 @@ export function createSettingsPage(ctx) {
       devicePanel.refresh().catch(() => undefined);
       ctx.focus.register(zone);
       ctx.focus.register(navZone);
-      ctx.focus.link(NAV_ZONE, 'up', TOPBAR_ZONE); // Up from the first entry: the top bar
-      ctx.focus.link(ZONE_ID, 'left', NAV_ZONE); // Left from a sub-page (where no control is on that side): its sidebar entry
+      pageNav.link();
       // As the other pages with a sidebar: the sidebar Up / Down (OK enters the sub-page), the rows among themselves; Back from the rows
       // goes to the sidebar, then to its first entry, then to the top bar (main.js).
       showSubpage(restored ? restored.page || 0 : 0);

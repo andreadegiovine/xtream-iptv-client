@@ -12,7 +12,7 @@ import { FocusZone } from '../focus/FocusManager.js';
 import { ensureVisible } from '../scroll.js';
 import { log } from '../../core/logger.js';
 import { openProviderDialog } from './providerSetupPage.js';
-import { TOPBAR_ZONE } from '../components/topbar.js';
+import { standardNavigation } from './templates.js';
 
 const ZONE_ID = 'providers';
 export const ProviderAction = Object.freeze({ USE: 'use', CATEGORIES: 'categories', EDIT: 'edit', REMOVE: 'remove', ADD: 'add', REFRESH_LISTS: 'refreshLists', REMOVE_LISTS: 'removeLists' });
@@ -247,16 +247,17 @@ export function createProvidersPage(ctx, params = {}) {
     },
   });
 
+  const nav = standardNavigation(ctx, { zone: ZONE_ID, hasLines: () => cells.length > 0 });
+
   return {
     el: h('section', { class: 'page framed providers' }, h('div', { class: 'page-container' }, createHeading({ level: 1, text: t('nav.provider') }), list)),
     mount() {
       ctx.focus.register(zone);
-      ctx.focus.link(ZONE_ID, 'up', TOPBAR_ZONE); // Up from the first line: the top bar (Down from it comes back, enterFromBar)
+      nav.link(); // the standard page template: Up from the first line to the bar, Down from it back
       // Opens on the provider list: the first thing to do here is pick or edit a provider.
       render(params.focusIndex || 0);
     },
-    /** Down from the top bar: the first line (the first provider's toggle). */
-    enterFromBar: () => cells.length > 0 && ctx.focus.focus(ZONE_ID, 0),
+    enterFromBar: nav.enterFromBar,
     destroy() {
       destroyed = true;
       ctx.focus.unregister(ZONE_ID);

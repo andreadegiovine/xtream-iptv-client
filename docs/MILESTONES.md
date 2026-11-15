@@ -950,3 +950,9 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
 - Settings: Right from the sidebar enters the sub-page on screen; Left from it (where no control is on that side) goes back to the sidebar on the entry of that sub-page.
 - Browser checks with two mock providers (one switched off): buttons at the same positions, only the active one with its table, Up / Down with the bar; Settings Right / Left; navigation, settings, profiles-bar, unified catalog and tooltip scripts. Not verified on the TV.
 
+
+### Patch 184 — Page templates, Up from Favorites to the bar, providers in the title's info line
+- Page templates (`ui/pages/templates.js`): the focus behaviour of each kind of page lives in one place, the pages give only their content. Sidebar pages (Movies, TV Series, Live TV, Collections, Settings): `sidebarNavigation` (Up from the first entry to the bar, Down from the bar to the first entry, Left from the content to the sidebar, the bar entry pressed again focuses the sidebar). Carousel pages (Favorites, Suggestions): `createCarouselPage` (status line, typed rows, Up from the first row to the bar and Down back to the same card, the focus restored when coming back). Standard pages (Providers, Diagnostics): `standardNavigation` (Up from the first line to the bar, Down back). Home and Search keep their own pages with the same rules (Search: Up to its field).
+- Favorites: Up from the first row now reaches the top bar (it went nowhere).
+- Title page: the "Provider" chip line is gone; with more than one provider active, the providers that have the title are in the info line, right after the rating.
+- Tests: the info line with the providers. Browser checks: Favorites Up / Down with the bar; with two mock providers both names in the info line and no Provider line; navigation, settings and the earlier scripts. Not verified on the TV.
