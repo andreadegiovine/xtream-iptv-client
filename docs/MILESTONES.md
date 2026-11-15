@@ -956,3 +956,7 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
 - Favorites: Up from the first row now reaches the top bar (it went nowhere).
 - Title page: the "Provider" chip line is gone; with more than one provider active, the providers that have the title are in the info line, right after the rating.
 - Tests: the info line with the providers. Browser checks: Favorites Up / Down with the bar; with two mock providers both names in the info line and no Provider line; navigation, settings and the earlier scripts. Not verified on the TV.
+
+### Patch 185 — Player: moving the position always waits for the last key
+- With the controls hidden, Left / Right on a film or episode jumped 10 s at once; after a first move of the progress pointer (applied 2 s after the last key) the controls faded out and the next move was such an immediate jump. Now Left / Right with the controls hidden bring the focus to the progress pointer and move it by 30 s like the pointer itself: the position is applied with OK or 2 s after the last key. Rewind / fast forward keys and the ±30 s buttons are unchanged; live unchanged.
+- Tests: Right with the controls hidden, twice in a row: the pointer moves, nothing is applied until 2 s after the key, then one seek to +30 s. (The mock provider has no real video for a browser check.) Not verified on the TV.
