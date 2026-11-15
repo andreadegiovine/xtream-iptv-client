@@ -537,6 +537,19 @@ export function createDetailPage(ctx, params) {
     }
   }
 
+  /** An admin marks the title as adult or not: it applies to every profile (a kids profile no longer sees it). */
+  async function toggleAdult(adult) {
+    try {
+      await ctx.parental.mark(entry, !adult);
+      if (ctx.pageCache) ctx.pageCache.clear(); // the cards read again (the lock on the poster)
+      if (!destroyed) build();
+      ctx.notices.success(t(adult ? 'detail.adultUnmarked' : 'detail.adultMarked'), { key: 'adult' });
+    } catch (err) {
+      log.warn('Adult mark failed', err && err.message);
+      ctx.notices.error(t('error.UNKNOWN'), { key: 'adult' });
+    }
+  }
+
   function build() {
     if (!entry) return;
     const next = [];
@@ -606,6 +619,11 @@ export function createDetailPage(ctx, params) {
     }
     if (buttons.length && entry.isGroup && selectedMember && manualIds.has(selectedMember.id)) {
       buttons.push({ id: 'ungroup', icon: 'remove', label: t('merge.remove'), run: ungroupChannel });
+    }
+    // Only an admin: mark the title as adult, or (already adult, by the app or by hand) as not adult. Last, after the others.
+    if (buttons.length && ctx.profile && ctx.profile.admin && ctx.parental && ctx.parental.mark) {
+      const adult = ctx.parental.isAdult(entry);
+      buttons.push({ id: 'adult', icon: 'adult', active: adult, label: adult ? t('detail.unmarkAdult') : t('detail.markAdult'), run: () => toggleAdult(adult) });
     }
     buttons.note = note;
     if (buttons.length) next.push({ id: 'detailActions', zone: createActions(buttons, 0) });

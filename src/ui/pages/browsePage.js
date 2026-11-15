@@ -15,7 +15,7 @@ import { ensureVisible, revealNearest } from '../scroll.js';
 
 /** The page moves because of the pointer (wheel, finger, scrollbar), not because a key moved the focus. */
 const scrollHeldByUser = () => typeof document !== 'undefined' && document.body.classList.contains('pointer-mode');
-import { listCategories, listNetworks, pageEntries, getEntry, countEntries, LIVE_ALL } from '../../services/catalogQuery.js';
+import { listCategories, listNetworks, pageEntries, getEntry, countEntries, visibleKeys, LIVE_ALL } from '../../services/catalogQuery.js';
 import { readGuideIndex } from '../../services/guideIndex.js';
 import { genreKey } from '../../services/epgChannels.js';
 import { formatNumber } from '../../core/format.js';
@@ -589,9 +589,10 @@ export function createBrowsePage(ctx, params = {}) {
     // Counted like the genre view: rows with a programme of the category in the hours the guide shows.
     const from = floorHalfHour(Date.now()) - PAST_MS;
     const found = await ctx.epg.genreRows({ from, to: from + PAST_MS + SPAN_MS });
-    epgGenres = found.genres;
-    epgGenreKeys = found.rows;
-    epgGenres.forEach((g) => counts.set(`epgGenre:${g.key}`, found.rows.get(g.key).length));
+    // A kids profile: the adult rows are not counted (nor shown), a genre left without rows is not listed.
+    epgGenreKeys = new Map(Array.from(found.rows, ([key, keys]) => [key, visibleKeys(keys)]));
+    epgGenres = found.genres.filter((g) => epgGenreKeys.get(g.key).length);
+    epgGenres.forEach((g) => counts.set(`epgGenre:${g.key}`, epgGenreKeys.get(g.key).length));
   }
 
   /** The scheduled programmes of this provider, and the rows of their channels (the "scheduled" view). */

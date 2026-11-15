@@ -69,7 +69,7 @@ still being tested on real devices.
 - **Continue watching, favorites, collections and suggestions** (based on what you watch, from TMDB or Trakt).
 - **Profiles**: each with its avatar (20 to choose from), progress, favorites, collections, pins, scheduled viewing, Trakt account,
   language and guide order. "Who's watching?" at every start (an access PIN is optional), switch from the avatar in the top bar. Kids
-  profiles never open adult content (leaving one takes the parental PIN of an adult profile); only admin profiles see all the settings
+  profiles never see adult content anywhere (an admin marks any title as adult, or not, from its page; leaving a kids profile takes the parental PIN of an adult profile); only admin profiles see all the settings
   and the providers. Until a second profile is made, nothing changes.
 - **Trakt sync with a QR code**: history and progress shared with your other devices.
 - **Several providers**, each with its own database and its table of counts; favorites, collections and pins follow you between them.
