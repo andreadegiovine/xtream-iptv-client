@@ -59,10 +59,11 @@ export function ratingAge(rating) {
 export const hasRange = (limits) => Boolean(limits) && ((limits.minAge !== null && limits.minAge !== undefined) || (limits.maxAge !== null && limits.maxAge !== undefined));
 
 /** Rated outside the range the profile may see (below the minimum or above the maximum)? Unknown ratings never are. */
-export function outOfRange(rating, limits) {
-  if (!hasRange(limits)) return false;
-  const age = ratingAge(rating);
-  if (age === null) return false;
+export const outOfRange = (rating, limits) => ageOutOfRange(ratingAge(rating), limits);
+
+/** An age (null: unknown) outside the range? */
+export function ageOutOfRange(age, limits) {
+  if (!hasRange(limits) || age === null || age === undefined) return false;
   if (limits.minAge !== null && limits.minAge !== undefined && age < limits.minAge) return true;
   return limits.maxAge !== null && limits.maxAge !== undefined && age > limits.maxAge;
 }

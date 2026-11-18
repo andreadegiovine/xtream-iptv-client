@@ -134,8 +134,8 @@ test('a rating range hides the films and series rated outside it (unknown rating
   ]);
   const svc = createParentalService({ db });
   await svc.loadCategories(providerDb, 'p');
-  const certifications = new Map([['movie:1', 'T'], ['movie:2', 'VM14'], ['series:3', 'TV-MA']]);
-  expect(Array.from((await svc.hiddenFor(providerDb, { range: { minAge: null, maxAge: 12 }, certifications })).keys).sort()).toEqual(['movie:t2', 'series:t3']);
-  expect(Array.from((await svc.hiddenFor(providerDb, { range: { minAge: 6, maxAge: 14 }, certifications })).keys).sort()).toEqual(['movie:t1', 'series:t3']);
-  expect(Array.from((await svc.hiddenFor(providerDb, { range: null, certifications })).keys)).toEqual([]);
+  const ages = new Map([['movie:t1', 0], ['movie:t2', 14], ['series:t3', 17]]);
+  expect(Array.from((await svc.hiddenFor(providerDb, { range: { minAge: null, maxAge: 12 }, ages })).keys).sort()).toEqual(['movie:t2', 'series:t3']);
+  expect(Array.from((await svc.hiddenFor(providerDb, { range: { minAge: 6, maxAge: 14 }, ages })).keys).sort()).toEqual(['movie:t1', 'series:t3']);
+  expect(Array.from((await svc.hiddenFor(providerDb, { range: null, ages })).keys)).toEqual([]);
 });

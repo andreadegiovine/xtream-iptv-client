@@ -20,6 +20,7 @@ import { focusRowAt, savedRowFocus } from '../rowFocus.js';
 import { createCarousel } from '../components/carousel.js';
 import { createSelectField } from '../atoms/selectField.js';
 import { getEntry, listCategories, listNetworks, createMergeSearch } from '../../services/catalogQuery.js';
+import { ratingAge } from '../../services/kidsLimits.js';
 import { rebuildLive } from '../../services/rebuildLive.js';
 import { watchKey, shouldResume, isWatched } from '../../services/watchStore.js';
 import { formatClock } from '../../services/playerController.js';
@@ -354,18 +355,24 @@ export function createDetailPage(ctx, params) {
       renderChips(line, slot ? `detailCategories${slot}` : 'detailCategories', bySlot.get(slot), 'category', next, label);
     });
     renderChips(tagsEl, 'detailGenres', entry.type === 'live' ? [] : genreItems(), 'genre', next, t('detail.genres'));
-    renderRating();
+    renderRating(next);
     renderDirectors();
     renderCompanies();
   }
 
-  /** The age rating (TMDB, the country of the language of the app), before the director. */
-  function renderRating() {
+  /**
+   * The age rating (TMDB, the country of the language of the app), before the director. Clickable when its age is known: the sidebar page
+   * of the type, with the focus on that rating of its "Rating" group and its grid.
+   */
+  function renderRating(next) {
     clear(ratingEl);
     const value = entry.type === 'live' || !meta ? '' : meta.certification;
     if (!value) return;
-    ratingEl.appendChild(createChipLabel(t('detail.certification')));
-    ratingEl.appendChild(createChip({ text: value }));
+    const age = ratingAge(value);
+    renderChips(ratingEl, 'detailRating', [{ id: age === null ? undefined : String(age), name: value }], 'rating', next, t('detail.certification'), (item) => {
+      const section = { movie: 'movies', series: 'series' }[entry.type];
+      ctx.router.push('browse', { type: entry.type, section, filter: { kind: 'rating', id: item.id }, focusSidebar: true });
+    });
   }
 
   /** Director(s) from TMDB, shown before the production companies when known. */

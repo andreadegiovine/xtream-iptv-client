@@ -12,6 +12,7 @@ import { ensureVisible } from '../scroll.js';
 import { AVATARS } from '../../services/profiles.js';
 import { AGES, cleanLimits, normalizeTime } from '../../services/kidsLimits.js';
 import { icon } from '../icons.js';
+import { ageLabel } from '../ageLabel.js';
 
 const COLUMNS = 10;
 
@@ -59,8 +60,6 @@ function toggleRow(label, on) {
   return { el: row.el, value, get: () => value.classList.contains('on'), set: (next) => setToggle(value, next) };
 }
 
-/** The label of an age rating of the range (null: no limit). */
-export const ageLabel = (age) => (age === null || age === undefined ? t('profiles.noLimit') : age === 0 ? t('profiles.allAges') : `${age}+`);
 
 /**
  * Adding or editing a profile, in a dialog: avatar, name, kids, admin (`roles`: only an admin sets them), access PIN (4 digits, optional).

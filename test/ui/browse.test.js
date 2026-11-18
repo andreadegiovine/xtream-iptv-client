@@ -92,3 +92,12 @@ test('sidebar: pinned categories sit after the favourites on Live TV', () => {
   expect(items.map((i) => i.kind)).toEqual(['guide', 'all', 'favorites', 'category', 'toggle']);
   expect(items[3]).toMatchObject({ pinned: true, id: '3' });
 });
+
+test('sidebar: "Rating" after the categories, with the ages of the catalog (open by default); none for Live TV', () => {
+  const labels = { all: 'All', continue: 'C', favorites: 'F', suggestions: 'S', genres: 'G', categories: 'Cat', ratings: 'Rating' };
+  const ratings = [{ age: 0, name: 'All ages' }, { age: 14, name: '14+' }];
+  const items = sidebarItems({ type: 'movie', categories: [{ id: '1', name: 'Action' }], ratings, labels });
+  expect(items.slice(-4).map((i) => `${i.kind}:${i.id || i.name}`)).toEqual(['toggle:Cat', 'ratingsToggle:Rating', 'rating:0', 'rating:14']);
+  expect(sidebarItems({ type: 'movie', ratings, ratingsExpanded: false, labels }).filter((i) => i.kind === 'rating')).toHaveLength(0);
+  expect(sidebarItems({ type: 'live', ratings, labels }).some((i) => i.kind === 'ratingsToggle')).toBe(false);
+});

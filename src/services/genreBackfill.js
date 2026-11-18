@@ -7,6 +7,7 @@ import { mergeGenres } from './genres.js';
 import { openAppDb } from '../db/appDb.js';
 import { normalizeMeta, gridMeta, metaKey, META_TTL_MS, NOT_FOUND_TTL_MS } from './tmdbService.js';
 import { createPacer } from './pacer.js';
+import { buildRatings } from './ratingBuild.js';
 
 const STORE = 'entry_genre_tmdb';
 export const GENRE_BATCH = 60;
@@ -235,7 +236,8 @@ export async function restoreTmdbGenres({ db, appDb, titles = null, fresh = null
 
 /**
  * Shared by the worker and the main-thread fallback. `phase`: "tmdb" downloads the metadata, "genres" asks the
- * provider for the genres of titles still without any.
+ * provider for the genres of titles still without any, "restore" writes TMDB's genres again from the saved metadata, "ratings" works out
+ * the age ratings of the catalog from it (ratingBuild.js).
  */
 export async function runGenreBackfillForProvider({ provider, others = [], tmdbKey, language, signal, gate, emit = () => {}, limit, phase = 'genres', force = false }) {
   let db = null;
@@ -244,7 +246,11 @@ export async function runGenreBackfillForProvider({ provider, others = [], tmdbK
   try {
     db = await openProviderDb(provider.id);
     const tmdb = createTmdbClient({ getApiKey: () => tmdbKey });
-    if (phase === 'restore') {
+    if (phase === 'ratings') {
+      // The age ratings of the catalog, from the TMDB metadata saved (no request).
+      appDb = await openAppDb();
+      done = await buildRatings({ db, appDb, language, signal, gate, emit });
+    } else if (phase === 'restore') {
       appDb = await openAppDb();
       done = await restoreTmdbGenres({ db, appDb, language, signal, gate, emit });
     } else if (phase === 'tmdb') {

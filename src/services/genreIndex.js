@@ -2,6 +2,7 @@ import { dbGetAllKeys, dbDeleteMany, dbGetAll, dbPutMany, dbDelete } from '../co
 import { buildEntryGenreRows } from './grouping.js';
 import { bumpGenresRev } from './derivedStore.js';
 import { listGenres, genreEntryKeys, genreCounts } from './catalogQuery.js';
+import { removeRatings } from './ratingBuild.js';
 /** The genre work on the main thread (no worker): its code is loaded only then. */
 const runGenreBackfillForProvider = (args) => import(/* webpackChunkName: "genres-local" */ './genreBackfill.js').then((m) => m.runGenreBackfillForProvider(args));
 import { createGate } from '../core/gate.js';
@@ -144,6 +145,8 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
   /** One phase on its own (the "update metadata" operations). */
   const download = (force = false) => phase('tmdb', force);
   const findGenres = () => phase('genres', false);
+  /** The age ratings of the catalog worked out again from the saved TMDB metadata (no request): the "Rating" group of the sidebar. */
+  const findRatings = () => phase('ratings', false);
   /** The TMDB genres written again from the metadata already saved (no request), also when a download is not due. */
   function restore() {
     if (running) return Promise.resolve(0);
@@ -166,6 +169,8 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
     let done = 0;
     try {
       if (getTmdbKey()) done += await track('tmdb', force);
+      // The ratings of the metadata just downloaded (also of titles added by a sync).
+      if (!cancelled && getTmdbKey()) await track('ratings', false);
       // The provider's genre search only without TMDB: with a key TMDB's genres replace the provider's, asking the provider is wasted.
       if (!cancelled && !getTmdbKey()) done += await track('genres', false);
     } finally {
@@ -222,6 +227,7 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
     restart,
     download,
     findGenres,
+    findRatings,
     restore,
     hold,
     stop,
@@ -237,6 +243,11 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
     async entryKeys(type, genreKey) {
       const current = await active.get();
       return current ? genreEntryKeys(current.db, type, genreKey) : [];
+    },
+    /** Forgets the age ratings worked out (the "Rating" group goes until they are worked out again). */
+    async clearRatings() {
+      const current = await active.get();
+      if (current) await removeRatings(current.db);
     },
     /** A new TMDB key makes the "nothing found" markers stale: forget them so the next run asks TMDB again. */
     async forgetMisses() {

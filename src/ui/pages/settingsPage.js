@@ -276,6 +276,14 @@ export function createSettingsPage(ctx) {
     ctx.notices.success(t('notice.removed'));
     tmdbPanel.refresh().catch(() => undefined);
   }
+  async function removeRatings() {
+    if (!(await confirmRemove(t('settings.ratingsRemove'), t('settings.ratingsRemoveConfirm')))) return;
+    await ctx.genres.clearRatings();
+    await ctx.syncLog.clear('ratings');
+    ctx.catalogChanged(); // the "Rating" group goes
+    ctx.notices.success(t('notice.removed'));
+    tmdbPanel.refresh().catch(() => undefined);
+  }
   async function removeTitleInfo() {
     if (!ctx.titleInfo || !(await confirmRemove(t('settings.infoRemove'), t('settings.infoRemoveConfirm')))) return;
     ctx.titleInfo.run({ forget: true });
@@ -285,6 +293,13 @@ export function createSettingsPage(ctx) {
     rowOf(tmdbPanel.tmdbButtons.remove, removeMetadata, 'left'),
     rowOf(tmdbPanel.genreButtons.refresh, async () => queueJob('genres', t('operations.genres'), () => runMetadata(['genres']))),
     rowOf(tmdbPanel.genreButtons.remove, removeGenres, 'left'),
+    // Age ratings: worked out again from the saved metadata (no request), in the genre worker.
+    rowOf(tmdbPanel.ratingButtons.refresh, async () => queueJob('ratings', t('operations.ratings'), async () => {
+      await ctx.genres.findRatings();
+      ctx.catalogChanged(); // the sidebar reads them again
+      tmdbPanel.refresh().catch(() => undefined);
+    })),
+    rowOf(tmdbPanel.ratingButtons.remove, removeRatings, 'left'),
     // Title details (titles listed without a TMDB id): ask again now (the ones due), or forget what was learned (the ids it gave go).
     rowOf(tmdbPanel.infoButtons.refresh, async () => {
       if (ctx.titleInfo) ctx.titleInfo.run();

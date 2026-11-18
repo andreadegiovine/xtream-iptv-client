@@ -312,17 +312,6 @@ export function createTmdbService({ db, client, getLanguage, now = Date.now, onA
       }
       return records.length;
     },
-    /** The age rating of every title with metadata in the language of the app: Map(`type:tmdbId` → rating). */
-    async certifications() {
-      const suffix = `:${getLanguage()}`;
-      const out = new Map();
-      (await dbGetAll(db, 'tmdb')).forEach((r) => {
-        const key = String(r && r.key);
-        if (key.indexOf('meta:') !== 0 || !key.endsWith(suffix) || !r.value || !r.value.certification) return;
-        out.set(key.slice(5, key.length - suffix.length), r.value.certification); // meta:<type>:<tmdbId>:<language>
-      });
-      return out;
-    },
     /** Forgets every cached answer (metadata, matches, genres, recommendations). */
     async clearAll() {
       memory.clear();

@@ -6,11 +6,11 @@ import { GridModel } from '../../focus/models.js';
 import { decodeCategory } from '../../../services/catalogUnion.js';
 
 /** Icon before the label of the fixed sidebar entries (genres and categories get an empty slot to stay aligned). */
-export const SIDEBAR_ICON = { guide: 'clock', scheduled: 'scheduled', all: 'all', continue: 'continue', favorites: 'heart', suggestions: 'suggestions', genresToggle: 'genres', epgGenresToggle: 'genres', toggle: 'categories', networksToggle: 'network' };
+export const SIDEBAR_ICON = { guide: 'clock', scheduled: 'scheduled', all: 'all', continue: 'continue', favorites: 'heart', suggestions: 'suggestions', genresToggle: 'genres', epgGenresToggle: 'genres', toggle: 'categories', networksToggle: 'network', ratingsToggle: 'adult' };
 /** Placeholder rows shown while the genres load: enough that the "Categories" entry stays below the screen. */
 export const GENRE_SKELETONS = 12;
 /** Views that are loaded as one in-memory list and paged locally. */
-export const LIST_KINDS = ['continue', 'favorites', 'suggestions', 'genre', 'network'];
+export const LIST_KINDS = ['continue', 'favorites', 'suggestions', 'genre', 'network', 'rating'];
 /** Sidebar entries shown as a programme guide instead of a grid: the guide, the scheduled programmes, a genre of the guide. */
 export const isGuideKind = (kind) => kind === 'guide' || kind === 'scheduled' || kind === 'epgGenre';
 /** Views read from the catalog only (so their first page can be cached); continue, favourites and suggestions come from the user. */
@@ -61,11 +61,12 @@ export function createGrowingGridModel({ columns, getCount, hasMore, more }) {
 
 /**
  * Sidebar entries. Movies and series: show all, continue watching, favourites, suggestions, a "Genres"
- * entry (open by default) with the genres, then a "Categories" entry that expands into the provider categories. Channels: show all, favourites, pinned categories,
+ * entry (open by default) with the genres, then a "Categories" entry that expands into the provider categories, then "Rating" (open) with the
+ * age ratings of the catalog. Channels: show all, favourites, pinned categories,
  * the "Genres" entry of the guide's categories (open, only when the guide has them), the "Networks" entry (open, closed when the guide genres
  * are there) and the categories (closed).
  */
-export function sidebarItems({ type, hidden = null, genres = [], epgGenres = [], epgGenresExpanded = true, categories = [], pinned = [], networks = [], networksExpanded = true, expanded = false, expandedOthers = new Set(), genresExpanded = true, genresLoading = false, scheduled = false, labels }) {
+export function sidebarItems({ type, hidden = null, genres = [], epgGenres = [], epgGenresExpanded = true, categories = [], pinned = [], networks = [], networksExpanded = true, expanded = false, expandedOthers = new Set(), genresExpanded = true, genresLoading = false, scheduled = false, ratings = [], ratingsExpanded = true, labels }) {
   // Live TV opens on the programme guide; "show all" follows it.
   // "Scheduled" (programmes whose viewing is scheduled) follows the guide when there are any.
   // The programme guide (Live TV) is listed only when it has rows (a channel with programmes in the hours shown).
@@ -96,6 +97,11 @@ export function sidebarItems({ type, hidden = null, genres = [], epgGenres = [],
     if (genresExpanded) genres.forEach((g) => items.push({ kind: 'genre', id: String(g.key), name: g.name, depth: 1 }));
   }
   pushCategories(items, categories, expanded, expandedOthers, labels);
+  // After the categories: "Rating", the age ratings the titles of the catalog have (`ratings`: [{ age, name }], youngest first).
+  if (ratings.length) {
+    items.push({ kind: 'ratingsToggle', name: labels.ratings, expanded: ratingsExpanded });
+    if (ratingsExpanded) ratings.forEach((r) => items.push({ kind: 'rating', id: String(r.age), name: r.name, depth: 1 }));
+  }
   return items;
 }
 

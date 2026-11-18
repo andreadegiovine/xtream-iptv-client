@@ -41,7 +41,7 @@ describe('genre index', () => {
     const again = index.restart(); // waits for the first run, then starts a new one
     expect(await first).toBe(0);
     expect(await again).toBe(0);
-    expect(calls).toBe(2); // with a TMDB key only the TMDB phase runs (no provider genre search): once, then again after the restart
+    expect(calls).toBe(3); // with a TMDB key: the TMDB phase (stopped by the restart, so no ratings), then TMDB and the ratings again
   });
   test('the provider is asked at an adaptive pace, without a daily cap; failures in a row stop the run (tried again next time)', async () => {
     const { db } = await setup([item(1, ''), item(2, ''), item(3, '')]);

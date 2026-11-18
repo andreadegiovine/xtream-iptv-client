@@ -53,6 +53,7 @@ import { createSyncLog } from './services/syncLog.js';
 import { createOperations } from './services/operations.js';
 import { countEntries, getEntry, setHidden } from './services/catalogQuery.js';
 import { createKidsLimits, outOfRange, rangeOf, hasRange } from './services/kidsLimits.js';
+import { createRatingIndex } from './services/ratingIndex.js';
 import { continueWatching } from './services/continueWatching.js';
 import { isEmptySeries, markUnavailable } from './services/unavailable.js';
 import { createGenreIndex } from './services/genreIndex.js';
@@ -201,6 +202,7 @@ async function boot() {
     ctx.pageCache.clear();
     if (ctx.suggestions && ctx.suggestions.invalidate) ctx.suggestions.invalidate(); // the titles to suggest are found in the catalog
     ctx.search.invalidate();
+    if (ctx.ratings) ctx.ratings.invalidate(); // the "Rating" group of the sidebar
     queueSearchWarm();
   };
   // A kids profile's hours and daily minutes (the player keeps to them); `ctx.profile` is read each time (an admin may change them).
@@ -222,8 +224,8 @@ async function boot() {
       if (ctx.profile.kids) {
         // A rating range: the films and series rated outside it too (the ratings TMDB gave, in the language of the app).
         const range = rangeOf(ctx.profile);
-        const certifications = range && ctx.tmdb && ctx.tmdb.enabled ? await ctx.tmdb.certifications().catch(() => null) : null;
-        setHidden(await ctx.parental.hiddenFor(current.db, { range, certifications }));
+        const ages = range && ctx.ratings ? await ctx.ratings.ages().catch(() => null) : null;
+        setHidden(await ctx.parental.hiddenFor(current.db, { range, ages }));
       }
     } catch (err) {
       log.warn('Adult categories failed', err && err.message);
@@ -237,6 +239,7 @@ async function boot() {
   ctx.openSubtitles = createOpenSubtitles({ getKey: () => ctx.apiKeys.get().openSubtitlesKey });
   const tmdb = createTmdbService({ db, client: createTmdbClient({ getApiKey: () => ctx.apiKeys.get().tmdbKey }), getLanguage: () => i18n.getLocale(), onActivity: (count) => ctx.genres && ctx.genres.hold('ui', count > 0) });
   ctx.tmdb = tmdb;
+  ctx.ratings = createRatingIndex({ active, getLanguage: () => i18n.getLocale() }); // the titles by age rating (worked out by the genre worker)
   ctx.operations = createOperations();
   ctx.syncLog = createSyncLog({ db, operations: ctx.operations });
   // Scheduled viewing inside the app (app/scheduling.js): the notice, then the channel, while the app is open.
@@ -758,7 +761,8 @@ async function boot() {
           await kvSet(db, 'tmdbCertifications', true).catch(() => undefined);
         }
         await ctx.genres.backfill().catch(() => undefined);
-        // A kids profile with a rating range: the ratings just downloaded hide more titles.
+        ctx.ratings.invalidate(); // the ratings just worked out (the backfill's last phase) join the "Rating" group
+        // A kids profile with a rating range: the ratings just worked out hide more titles.
         if (rangeOf(ctx.profile)) await ctx.refreshAdult().then(() => ctx.catalogChanged());
       },
     });

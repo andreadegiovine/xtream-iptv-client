@@ -215,15 +215,20 @@ function createTable(title, buttons, rows) {
   return { el, rows: status };
 }
 
-/** "TMDB" table: metadata download (with the titles in the database) and genre search, each with its remove and update buttons. */
+/**
+ * "TMDB" table: metadata download (with the titles in the database), genre search, age ratings (worked out from the metadata, the
+ * sidebar's "Rating" group) and title details, each with its remove and update buttons.
+ */
 export function createTmdbPanel(ctx) {
   const ready = () => Boolean(ctx.tmdb && ctx.tmdb.enabled);
   const tmdbButtons = rowButtons(t('settings.metaRemove'), t('settings.metaUpdate'));
   const genreButtons = rowButtons(t('settings.genresRemove'), t('settings.genresUpdate'));
   const infoButtons = rowButtons(t('settings.infoRemove'), t('settings.infoUpdate'));
+  const ratingButtons = rowButtons(t('settings.ratingsRemove'), t('settings.ratingsUpdate'));
   const table = createTable(t('tmdb.title'), [], [
     { name: 'tmdb', label: t('tmdb.download'), buttons: tmdbButtons },
     { name: 'genres', label: t('detail.genres'), buttons: genreButtons },
+    { name: 'ratings', label: t('detail.certification'), buttons: ratingButtons },
     { name: 'info', label: t('tmdb.info'), buttons: infoButtons },
   ]);
   const TYPE_LABEL = { movie: 'nav.movies', series: 'nav.series' };
@@ -238,7 +243,7 @@ export function createTmdbPanel(ctx) {
         row.status.textContent = await describeInfo(log.info, locale, active.get('info'));
         continue;
       }
-      const text = describeMeta(log[row.name], locale, row.name === 'genres' || ready(), active.get(row.name));
+      const text = describeMeta(log[row.name], locale, row.name === 'genres' || ready(), active.get(row.name)); // ratings: how many titles have one
       row.status.textContent = row.name === 'tmdb' && ready() ? `${formatNumber(await ctx.tmdb.countMeta(), locale)} ${t('tmdb.count').toLowerCase()} · ${text}` : text;
     }
   }
@@ -268,6 +273,7 @@ export function createTmdbPanel(ctx) {
     tmdbButtons,
     genreButtons,
     infoButtons,
+    ratingButtons,
     refresh,
     /** Follows the operations: a row says "running since…" while it works and shows the new result when it ends. */
     mount() {

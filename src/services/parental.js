@@ -2,7 +2,7 @@ import { kvGet, kvSet } from '../db/kv.js';
 import { requestToPromise } from '../core/idb.js';
 import { listCategories } from './catalogQuery.js';
 import { isNetworkKey } from './liveGrouping.js';
-import { outOfRange } from './kidsLimits.js';
+import { ageOutOfRange } from './kidsLimits.js';
 
 const KEY = 'parental';
 const MARKS_KEY = 'adultMarks'; // app database: { [providerId]: { [entryKey]: true (adult) | false (not adult) } }, set by an admin
@@ -96,9 +96,10 @@ export function createParentalService({ db, appDb = db, random = Math.random }) 
     /**
      * What a kids profile must not see in this catalog: { keys, categories }. Keys: every adult title and channel group, every network
      * left without a channel; categories (`type:id`): those whose name marks them as adult. With `range` (the profile's minimum / maximum rating)
-     * also the films and series whose age rating (`certifications`: Map `type:tmdbId` → rating, see tmdbService) is outside it.
+     * also the films and series whose age (`ages`: Map entry key → age, the ratings worked out in the background, ratingIndex.js) is
+     * outside it.
      */
-    async hiddenFor(providerDb, { range = null, certifications = null } = {}) {
+    async hiddenFor(providerDb, { range = null, ages = null } = {}) {
       const keys = new Set();
       const categories = new Set();
       TYPES.forEach((type) => adultIds[type].forEach((id) => categories.add(`${type}:${id}`)));
@@ -107,8 +108,8 @@ export function createParentalService({ db, appDb = db, random = Math.random }) 
         requestToPromise(providerDb.transaction('groups', 'readonly').objectStore('groups').getAll()),
       ]);
       const rated = (entry) => {
-        if (!range || !certifications || !entry.tmdbId || (entry.type !== 'movie' && entry.type !== 'series')) return false;
-        return outOfRange(certifications.get(`${entry.type}:${entry.tmdbId}`), range);
+        if (!range || !ages || (entry.type !== 'movie' && entry.type !== 'series')) return false;
+        return ageOutOfRange(ages.get(entry.key), range);
       };
       entries.concat(groups.filter((g) => !isNetworkKey(g.key))).forEach((entry) => {
         if (isAdultEntry(entry) || rated(entry)) keys.add(entry.key);
