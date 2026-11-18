@@ -52,7 +52,7 @@ import { platform } from './platform/index.js';
 import { createSyncLog } from './services/syncLog.js';
 import { createOperations } from './services/operations.js';
 import { countEntries, getEntry, setHidden } from './services/catalogQuery.js';
-import { createKidsLimits, aboveAge } from './services/kidsLimits.js';
+import { createKidsLimits, outOfRange, rangeOf, hasRange } from './services/kidsLimits.js';
 import { continueWatching } from './services/continueWatching.js';
 import { isEmptySeries, markUnavailable } from './services/unavailable.js';
 import { createGenreIndex } from './services/genreIndex.js';
@@ -220,10 +220,10 @@ async function boot() {
     try {
       await ctx.parental.loadCategories(current.db, current.provider.id);
       if (ctx.profile.kids) {
-        // A maximum rating: the films and series rated above it too (the ratings TMDB gave, in the language of the app).
-        const maxAge = ctx.profile.limits ? ctx.profile.limits.maxAge : null;
-        const certifications = maxAge !== null && ctx.tmdb && ctx.tmdb.enabled ? await ctx.tmdb.certifications().catch(() => null) : null;
-        setHidden(await ctx.parental.hiddenFor(current.db, { maxAge, certifications }));
+        // A rating range: the films and series rated outside it too (the ratings TMDB gave, in the language of the app).
+        const range = rangeOf(ctx.profile);
+        const certifications = range && ctx.tmdb && ctx.tmdb.enabled ? await ctx.tmdb.certifications().catch(() => null) : null;
+        setHidden(await ctx.parental.hiddenFor(current.db, { range, certifications }));
       }
     } catch (err) {
       log.warn('Adult categories failed', err && err.message);
@@ -305,8 +305,8 @@ async function boot() {
   const epg = createEpgService({ active, providers, createWorker: createEpgWorker, operations: ctx.operations, customUrl: () => ctx.settings.get().then((s) => s.customEpgUrl),
     // The programme titles are read and searched in the search worker.
     programmeSearch: { warm: () => ctx.search.warmProgrammes(), search: (query, options) => ctx.search.searchProgrammes(query, options), invalidate: () => ctx.search.invalidateProgrammes() },
-    // A kids profile with a maximum rating: the programmes the guide rates above it are not listed (guide, channel page, search).
-    hideProgramme: (p) => Boolean(p.rating) && ctx.profile.kids && Boolean(ctx.profile.limits) && aboveAge(p.rating, ctx.profile.limits.maxAge),
+    // A kids profile with a rating range: the programmes the guide rates outside it are not listed (guide, channel page, search).
+    hideProgramme: (p) => Boolean(p.rating) && outOfRange(p.rating, rangeOf(ctx.profile)),
   });
   ctx.epg = epg;
   // The guide is the last start-up task (after the catalog, metadata, Trakt and the search index), at most once a day: `maybeSync`
@@ -392,11 +392,11 @@ async function boot() {
         gateOpen = false;
       }
     }
-    // A kids profile with a maximum rating: a title whose rating was not known yet (its metadata not downloaded) is checked now.
-    const maxAge = ctx.profile.kids && ctx.profile.limits ? ctx.profile.limits.maxAge : null;
-    if (maxAge !== null && (entry.type === 'movie' || entry.type === 'series') && ctx.tmdb.enabled) {
+    // A kids profile with a rating range: a title whose rating was not known yet (its metadata not downloaded) is checked now.
+    const range = rangeOf(ctx.profile);
+    if (range && (entry.type === 'movie' || entry.type === 'series') && ctx.tmdb.enabled) {
       const meta = await Promise.race([ctx.tmdb.forEntry(entry).catch(() => null), new Promise((resolve) => setTimeout(() => resolve(null), 5000))]);
-      if (meta && aboveAge(meta.certification, maxAge)) {
+      if (meta && outOfRange(meta.certification, range)) {
         ctx.notices.info(t('kids.blockedRating'), { key: 'parental' });
         return;
       }
@@ -750,16 +750,16 @@ async function boot() {
           if (count) log.info(`TMDB: ${count} titles in another script to download again`);
           await kvSet(db, 'tmdbTitlesLocalized', true).catch(() => undefined);
         }
-        // Once a kids profile has a maximum rating: the metadata saved without the age rating is downloaded again by this run (patch 187).
-        const rated = (await profiles.list().catch(() => [])).some((p) => p.kids && p.limits && p.limits.maxAge !== null);
+        // Once a kids profile has a rating range: the metadata saved without the age rating is downloaded again by this run (patch 187).
+        const rated = (await profiles.list().catch(() => [])).some((p) => p.kids && hasRange(p.limits));
         if (rated && !(await kvGet(db, 'tmdbCertifications', false).catch(() => true))) {
           const count = await tmdb.expireWithoutCertification().catch(() => 0);
           if (count) log.info(`TMDB: ${count} titles to download again for their age rating`);
           await kvSet(db, 'tmdbCertifications', true).catch(() => undefined);
         }
         await ctx.genres.backfill().catch(() => undefined);
-        // A kids profile with a maximum rating: the ratings just downloaded hide more titles.
-        if (ctx.profile.kids && ctx.profile.limits && ctx.profile.limits.maxAge !== null) await ctx.refreshAdult().then(() => ctx.catalogChanged());
+        // A kids profile with a rating range: the ratings just downloaded hide more titles.
+        if (rangeOf(ctx.profile)) await ctx.refreshAdult().then(() => ctx.catalogChanged());
       },
     });
     // The series of "continue watching" the provider no longer serves (details without episodes) leave the catalog (details cached a day).

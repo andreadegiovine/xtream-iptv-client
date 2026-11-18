@@ -6,7 +6,7 @@ import { t, i18n } from '../../i18n/index.js';
 import { Action } from '../../core/input.js';
 import { log } from '../../core/logger.js';
 import { platform } from '../../platform/index.js';
-import { aboveAge } from '../../services/kidsLimits.js';
+import { outOfRange, rangeOf } from '../../services/kidsLimits.js';
 import { createPlayerController, formatClock, neighborEpisode, subtitleLabel, nextAspect, scrubTarget, positionFromPointer, preferredAudioTrack } from '../../services/playerController.js';
 import { ASPECT_MODES } from '../../services/playerEngines.js';
 import { youtubeStreamUrl } from '../../services/trailer.js';
@@ -205,8 +205,7 @@ export function createPlayerPage(ctx, params) {
   }
 
   // A kids profile with limits (kidsLimits.js): playback stops outside the hours allowed, once the minutes of the day are used, and on a
-  // live programme the guide rates above the maximum of the profile. The time played counts towards the day.
-  const kidsMaxAge = () => (ctx.profile && ctx.profile.kids && ctx.profile.limits ? ctx.profile.limits.maxAge : null);
+  // live programme the guide rates outside the rating range of the profile. The time played counts towards the day.
   const kidsLimited = () => Boolean(ctx.kidsLimits && ctx.kidsLimits.active());
   let kidsTimer = null;
   let kidsTick = 0;
@@ -237,7 +236,7 @@ export function createPlayerPage(ctx, params) {
         if (destroyed || token !== loadToken) return;
         liveProgramme = n && n.now ? n.now : null;
         nowEl.textContent = liveProgramme ? liveProgramme.title : '';
-        if (liveProgramme && aboveAge(liveProgramme.rating, kidsMaxAge())) leaveForKids('rating'); // the guide rates it above the profile's limit
+        if (liveProgramme && outOfRange(liveProgramme.rating, rangeOf(ctx.profile))) leaveForKids('rating'); // the guide rates it outside the profile's range
         drawProgress(lastState.position, lastState.duration);
         const next = liveProgramme ? liveProgramme.stop : n && n.next ? n.next.start : null;
         if (next) programmeTimer = setTimeout(() => loadProgramme(token), Math.max(1000, next - Date.now() + 1000));

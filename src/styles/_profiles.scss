@@ -149,3 +149,15 @@
   width: 38px;
   height: 38px;
 }
+
+// The rating drop-downs of a kids profile: the value with a chevron, as the other drop-downs.
+.profile-limits .select-value {
+  display: inline-flex;
+  align-items: center;
+
+  .select-chevron {
+    width: 18px;
+    height: 18px;
+    margin-left: 12px;
+  }
+}

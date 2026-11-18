@@ -12,6 +12,7 @@ import { icon } from '../icons.js';
 const PIN_LENGTH = 4;
 
 export const DIALOG_ZONE = 'dialog';
+const SUB_ZONE = 'dialog-sub'; // a list opened from inside a dialog (a drop-down of a form)
 
 /**
  * Modal confirmation dialog. It traps focus (its zone has no links) and gives focus back to the
@@ -41,6 +42,17 @@ export function listThenButtons(listCount, buttons) {
 
 export function createDialogService({ focus, root = document.body }) {
   let current = null;
+  let sub = null; // a list over the dialog: { overlay, previous, resolve, promise }
+
+  function closeSub(result) {
+    if (!sub) return;
+    const { overlay, previous, resolve } = sub;
+    sub = null;
+    overlay.remove();
+    focus.unregister(SUB_ZONE);
+    if (previous.id && focus.zones.has(previous.id)) focus.focus(previous.id, previous.index);
+    resolve(result);
+  }
 
   /** Where the focus goes back to when the dialog closes. */
   function snapshot() {
@@ -49,6 +61,7 @@ export function createDialogService({ focus, root = document.body }) {
 
   function close(result) {
     if (!current) return;
+    if (sub) closeSub(null); // its list goes with it
     const { overlay, previous, resolve, cleanup } = current;
     current = null;
     if (cleanup) cleanup();
@@ -89,9 +102,16 @@ export function createDialogService({ focus, root = document.body }) {
     return promise;
   }
 
-  /** Modal list of options (custom dropdown). Resolves with the chosen value, or null when dismissed. */
-  function choose({ title, options, selected }) {
-    if (current) return current.promise;
+  /**
+   * Modal list of options (custom dropdown). Resolves with the chosen value, or null when dismissed. `nested`: opened from inside an open
+   * dialog (a drop-down of a form), over it; Back or a choice closes only the list.
+   */
+  function choose({ title, options, selected, nested = false }) {
+    const over = nested && current !== null;
+    if (over && sub) return sub.promise;
+    if (current && !over) return current.promise;
+    const zoneId = over ? SUB_ZONE : DIALOG_ZONE;
+    const done = (value) => (over ? closeSub(value) : close(value));
     const previous = snapshot();
     // An option can carry an icon (`option.icon`) before its label: the actions of a programme, say.
     const nodes = options.map((option, i) => createChoice({ label: option.label, icon: option.icon || null, current: option.value === selected, index: i }));
@@ -100,7 +120,7 @@ export function createDialogService({ focus, root = document.body }) {
     root.appendChild(overlay);
     const start = Math.max(0, options.findIndex((o) => o.value === selected));
     const zone = new FocusZone({
-      id: DIALOG_ZONE,
+      id: zoneId,
       nodes: () => nodes,
       model: new ListModel({ orientation: 'vertical', getCount: () => options.length }),
       onFocus: (i) => {
@@ -108,14 +128,17 @@ export function createDialogService({ focus, root = document.body }) {
         revealNearest(nodes[i]);
       },
       onBlur: (i) => nodes[i].classList.remove('focused'),
-      onActivate: (i) => close(options[i].value),
+      onActivate: (i) => done(options[i].value),
     });
     focus.register(zone);
+    let record = null;
     const promise = new Promise((resolve) => {
-      current = { overlay, previous, resolve, promise: null, cancelValue: null };
+      record = { overlay, previous, resolve, promise: null, cancelValue: null };
     });
-    current.promise = promise;
-    focus.focus(DIALOG_ZONE, start);
+    record.promise = promise;
+    if (over) sub = record;
+    else current = record;
+    focus.focus(zoneId, start);
     return promise;
   }
 
@@ -364,6 +387,6 @@ export function createDialogService({ focus, root = document.body }) {
     pin,
     isOpen: () => current !== null,
     /** Back key: closes the dialog as "cancel". */
-    dismiss: () => close(current && 'cancelValue' in current ? current.cancelValue : false),
+    dismiss: () => (sub ? closeSub(null) : close(current && 'cancelValue' in current ? current.cancelValue : false)),
   };
 }

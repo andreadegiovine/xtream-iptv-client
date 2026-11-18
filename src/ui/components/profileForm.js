@@ -10,7 +10,8 @@ import { FocusZone } from '../focus/FocusManager.js';
 import { Dir } from '../focus/models.js';
 import { ensureVisible } from '../scroll.js';
 import { AVATARS } from '../../services/profiles.js';
-import { MAX_AGES, cleanLimits, normalizeTime } from '../../services/kidsLimits.js';
+import { AGES, cleanLimits, normalizeTime } from '../../services/kidsLimits.js';
+import { icon } from '../icons.js';
 
 const COLUMNS = 10;
 
@@ -58,13 +59,13 @@ function toggleRow(label, on) {
   return { el: row.el, value, get: () => value.classList.contains('on'), set: (next) => setToggle(value, next) };
 }
 
-/** The label of a maximum age rating (null: no limit). */
-export const maxAgeLabel = (age) => (age === null || age === undefined ? t('profiles.noLimit') : age === 0 ? t('profiles.allAges') : `${age}+`);
+/** The label of an age rating of the range (null: no limit). */
+export const ageLabel = (age) => (age === null || age === undefined ? t('profiles.noLimit') : age === 0 ? t('profiles.allAges') : `${age}+`);
 
 /**
  * Adding or editing a profile, in a dialog: avatar, name, kids, admin (`roles`: only an admin sets them), access PIN (4 digits, optional).
- * A kids profile also has its limits (an admin sets them): no watching before / after a time, daily minutes, maximum age rating (OK on it
- * goes to the next one).
+ * A kids profile also has its limits (an admin sets them): no watching before / after a time, daily minutes, minimum and maximum age rating
+ * (drop-downs).
  * Resolves with { name, avatar, kids, admin, pin, limits } (`pin`: undefined unchanged, '' removed, the new one) or null when cancelled.
  * `profile`: the one edited (null: a new one); `title`.
  */
@@ -93,10 +94,22 @@ export function openProfileForm(ctx, { profile = null, title, roles = true, kids
       const before = limitField(t('profiles.lockBefore'), limits.before, { inputmode: 'numeric', placeholder: t('profiles.timeHint') });
       const after = limitField(t('profiles.lockAfter'), limits.after, { inputmode: 'numeric', placeholder: t('profiles.timeHint') });
       const minutes = limitField(t('profiles.dailyMinutes'), limits.minutes ? String(limits.minutes) : '', { inputmode: 'numeric' });
-      let maxAge = limits.maxAge;
-      const ageValue = h('span', { class: 'value', text: maxAgeLabel(maxAge) });
-      const ageRow = createListRow({ label: t('profiles.maxRating'), valueEl: ageValue });
-      const limitsEl = h('div', { class: 'profile-limits' }, before.root, after.root, minutes.root, h('div', { class: 'list' }, ageRow.el));
+      // The rating range: two drop-downs (a list over the form), each optional.
+      const ageSelect = (label, start) => {
+        const select = { age: start };
+        const valueEl = h('span', { class: 'value select-value' }, h('span', { text: ageLabel(start) }), icon('chevron', 'select-chevron'));
+        select.row = createListRow({ label, valueEl });
+        select.open = async () => {
+          const value = await ctx.dialogs.choose({ title: label, nested: true, selected: select.age === null ? 'none' : select.age, options: AGES.map((age) => ({ label: ageLabel(age), value: age === null ? 'none' : age })) });
+          if (value === null) return; // closed without a choice
+          select.age = value === 'none' ? null : value;
+          valueEl.firstChild.textContent = ageLabel(select.age);
+        };
+        return select;
+      };
+      const minSelect = ageSelect(t('profiles.minRating'), limits.minAge);
+      const maxSelect = ageSelect(t('profiles.maxRating'), limits.maxAge);
+      const limitsEl = h('div', { class: 'profile-limits' }, before.root, after.root, minutes.root, h('div', { class: 'list' }, minSelect.row.el, maxSelect.row.el));
       const kidsOn = () => roles && kidsAllowed && kids.get();
       const showLimits = () => { limitsEl.style.display = kidsOn() ? '' : 'none'; };
       const status = h('div', { class: 'status', role: 'status' });
@@ -107,10 +120,7 @@ export function openProfileForm(ctx, { profile = null, title, roles = true, kids
       if (roles && kidsAllowed) allRows.push({ el: kids.el, run: () => { kids.set(!kids.get()); if (kids.get()) admin.set(false); showLimits(); } });
       if (roles) allRows.push({ el: admin.el, run: () => { admin.set(!admin.get()); if (admin.get()) kids.set(false); showLimits(); } });
       [before, after, minutes].forEach((field) => allRows.push({ el: field.el, run: () => field.focus(), kidsOnly: true }));
-      allRows.push({ el: ageRow.el, kidsOnly: true, run: () => {
-        maxAge = MAX_AGES[(MAX_AGES.indexOf(maxAge) + 1) % MAX_AGES.length];
-        ageValue.textContent = maxAgeLabel(maxAge);
-      } });
+      [minSelect, maxSelect].forEach((select) => allRows.push({ el: select.row.el, kidsOnly: true, run: () => select.open() }));
       allRows.push({ el: pin.el, run: () => pin.focus() });
       if (removePin) allRows.push({ el: removePin.el, run: () => removePin.set(!removePin.get()) });
       const rows = () => allRows.filter((r) => !r.kidsOnly || kidsOn());
@@ -145,7 +155,11 @@ export function openProfileForm(ctx, { profile = null, title, roles = true, kids
             status.textContent = t('profiles.minutesFormat');
             return;
           }
-          nextLimits = { before: times[0], after: times[1], minutes: Number(typedMinutes) || 0, maxAge };
+          if (minSelect.age !== null && maxSelect.age !== null && minSelect.age > maxSelect.age) {
+            status.textContent = t('profiles.rangeFormat');
+            return;
+          }
+          nextLimits = { before: times[0], after: times[1], minutes: Number(typedMinutes) || 0, minAge: minSelect.age, maxAge: maxSelect.age };
         }
         close({ name: typedName, avatar, kids: roles ? kids.get() : Boolean(profile && profile.kids), admin: roles ? admin.get() : Boolean(profile && profile.admin), pin: nextPin, limits: nextLimits });
       }

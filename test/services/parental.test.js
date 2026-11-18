@@ -123,7 +123,7 @@ test('admin marks: either way, shared by every profile, a mark equal to the app 
   expect(Array.from(all.keys).sort()).toEqual(['live:n1', 'movie:t2', 'movie:t3']); // n1: its only channel hidden
 });
 
-test('a maximum rating hides the films and series rated above it (unknown ratings stay)', async () => {
+test('a rating range hides the films and series rated outside it (unknown ratings stay)', async () => {
   const db = await newDb();
   const providerDb = await openProviderDb(`parental-provider-rating-${n}`);
   await dbPutMany(providerDb, 'entries', [
@@ -135,6 +135,7 @@ test('a maximum rating hides the films and series rated above it (unknown rating
   const svc = createParentalService({ db });
   await svc.loadCategories(providerDb, 'p');
   const certifications = new Map([['movie:1', 'T'], ['movie:2', 'VM14'], ['series:3', 'TV-MA']]);
-  expect(Array.from((await svc.hiddenFor(providerDb, { maxAge: 12, certifications })).keys).sort()).toEqual(['movie:t2', 'series:t3']);
-  expect(Array.from((await svc.hiddenFor(providerDb, { maxAge: null, certifications })).keys)).toEqual([]);
+  expect(Array.from((await svc.hiddenFor(providerDb, { range: { minAge: null, maxAge: 12 }, certifications })).keys).sort()).toEqual(['movie:t2', 'series:t3']);
+  expect(Array.from((await svc.hiddenFor(providerDb, { range: { minAge: 6, maxAge: 14 }, certifications })).keys).sort()).toEqual(['movie:t1', 'series:t3']);
+  expect(Array.from((await svc.hiddenFor(providerDb, { range: null, certifications })).keys)).toEqual([]);
 });

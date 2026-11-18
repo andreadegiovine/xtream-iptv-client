@@ -153,3 +153,34 @@ describe('PIN dialog', () => {
     expect(await promise).toBeNull();
   });
 });
+
+test('a drop-down opened from inside a dialog: over it, Back closes only the list, the focus back on the form', async () => {
+  const { root, focus, dialogs } = setup();
+  let zoneOf = null;
+  const form = dialogs.panel({
+    mount: ({ body, zoneId, close }) => {
+      zoneOf = zoneId;
+      body.appendChild(document.createElement('div'));
+      focus.register(new FocusZone({ id: zoneId, model: new ListModel({ orientation: 'vertical', getCount: () => 4 }), onActivate: (i) => close(i) }));
+      focus.focus(zoneId, 2);
+      return () => focus.unregister(zoneId);
+    },
+  });
+  const list = dialogs.choose({ title: 'Age', nested: true, options: [{ label: 'A', value: 1 }, { label: 'B', value: 2 }], selected: 2 });
+  expect(root.querySelectorAll('.dialog-backdrop')).toHaveLength(2);
+  expect(focus.activeId).toBe('dialog-sub');
+  dialogs.dismiss(); // Back
+  expect(await list).toBe(null);
+  expect(dialogs.isOpen()).toBe(true);
+  expect(focus.activeId).toBe(zoneOf);
+  expect(focus.active.index).toBe(2);
+  const again = dialogs.choose({ title: 'Age', nested: true, options: [{ label: 'A', value: 1 }, { label: 'B', value: 2 }], selected: 2 });
+  focus.handle(Action.ENTER);
+  expect(await again).toBe(2);
+  focus.handle(Action.ENTER); // the form closes with the row
+  expect(await form).toBe(2);
+  // Without `nested`, a second list while one is open is the same one (a double OK press opens one list only).
+  const one = dialogs.choose({ title: 'X', options: [{ label: 'A', value: 1 }] });
+  expect(dialogs.choose({ title: 'X', options: [{ label: 'A', value: 1 }] })).toBe(one);
+  dialogs.dismiss();
+});

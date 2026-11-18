@@ -103,8 +103,8 @@ test('settings of a profile: its own language, everything else shared; the main 
 
 test('kids limits: kept for a kids profile (cleaned), dropped when it stops being one', async () => {
   const { profiles } = await setup();
-  const kid = await profiles.add({ name: 'Leo', kids: true, limits: { before: '7:30', after: '20:00', minutes: '60', maxAge: 6 } }, { name: 'Me' });
-  expect(kid.limits).toEqual({ before: '07:30', after: '20:00', minutes: 60, maxAge: 6 });
+  const kid = await profiles.add({ name: 'Leo', kids: true, limits: { before: '7:30', after: '20:00', minutes: '60', minAge: 0, maxAge: 6 } }, { name: 'Me' });
+  expect(kid.limits).toEqual({ before: '07:30', after: '20:00', minutes: 60, minAge: 0, maxAge: 6 });
   const grown = await profiles.update(kid.id, { kids: false });
   expect(grown.limits).toBeUndefined();
   const adult = await profiles.add({ name: 'Ann', limits: { minutes: 10 } });

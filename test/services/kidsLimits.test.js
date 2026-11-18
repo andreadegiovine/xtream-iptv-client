@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { openAppDb } from '../../src/db/appDb.js';
-import { normalizeTime, cleanLimits, outsideHours, ratingAge, aboveAge, createKidsLimits, MAX_AGES } from '../../src/services/kidsLimits.js';
+import { normalizeTime, cleanLimits, outsideHours, ratingAge, outOfRange, hasRange, rangeOf, createKidsLimits, AGES } from '../../src/services/kidsLimits.js';
 import { createXmltvParser } from '../../src/services/xmltv.js';
 
 test('times: hh:mm kept, h:mm padded, anything else refused, empty allowed', () => {
@@ -12,10 +12,10 @@ test('times: hh:mm kept, h:mm padded, anything else refused, empty allowed', () 
 });
 
 test('limits cleaned: bad values dropped, only the ages offered', () => {
-  expect(cleanLimits({ before: '7:00', after: 'x', minutes: '90', maxAge: 12 })).toEqual({ before: '07:00', after: '', minutes: 90, maxAge: 12 });
-  expect(cleanLimits({ maxAge: 11, minutes: -5 })).toEqual({ before: '', after: '', minutes: 0, maxAge: null });
+  expect(cleanLimits({ before: '7:00', after: 'x', minutes: '90', minAge: 6, maxAge: 12 })).toEqual({ before: '07:00', after: '', minutes: 90, minAge: 6, maxAge: 12 });
+  expect(cleanLimits({ maxAge: 11, minutes: -5 })).toEqual({ before: '', after: '', minutes: 0, minAge: null, maxAge: null });
   expect(cleanLimits(null).maxAge).toBe(null);
-  expect(MAX_AGES[0]).toBe(null);
+  expect(AGES[0]).toBe(null);
 });
 
 test('hours: before the first allowed time, and from the last one on', () => {
@@ -33,10 +33,18 @@ test('age of a rating, whatever the country; unknown ones never hide', () => {
   expect(['VM14', 'VM18', '6+', 'M/12', '16', 'PG-13', 'TV-MA', 'R'].map(ratingAge)).toEqual([14, 18, 6, 12, 16, 13, 17, 17]);
   expect(ratingAge('')).toBe(null);
   expect(ratingAge('NR')).toBe(null);
-  expect(aboveAge('VM14', 12)).toBe(true);
-  expect(aboveAge('12', 12)).toBe(false);
-  expect(aboveAge('NR', 0)).toBe(false);
-  expect(aboveAge('VM18', null)).toBe(false);
+  const upTo12 = { minAge: null, maxAge: 12 };
+  expect(outOfRange('VM14', upTo12)).toBe(true);
+  expect(outOfRange('12', upTo12)).toBe(false);
+  expect(outOfRange('NR', { minAge: 6, maxAge: 6 })).toBe(false); // unknown: never out
+  expect(outOfRange('VM18', { minAge: null, maxAge: null })).toBe(false);
+  // A minimum too: below it is out (a profile for older kids without the toddler titles)
+  const sixToTwelve = { minAge: 6, maxAge: 12 };
+  expect(['T', 'TV-Y', '6+', '10', 'PG-13', 'VM14'].map((r) => outOfRange(r, sixToTwelve))).toEqual([true, true, false, false, true, true]);
+  expect(hasRange({ minAge: 0, maxAge: null })).toBe(true);
+  expect(hasRange({ minAge: null, maxAge: null })).toBe(false);
+  expect(rangeOf({ kids: false, limits: sixToTwelve })).toBe(null);
+  expect(rangeOf({ kids: true, limits: sixToTwelve })).toBe(sixToTwelve);
 });
 
 test('daily minutes: counted in the profile database, a new day starts from zero; hours checked too', async () => {
