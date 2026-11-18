@@ -5,7 +5,8 @@ import { openDb, deleteDb } from '../core/idb.js';
 // v3/v4: genre stores (provider genres rebuilt at every sync, other sources filled as they arrive); added without a rebuild.
 // v5: `groups` (versions of the same live channel, merged at every sync).
 // v6: `enrich` (what the details of titles listed without a TMDB id gave, see catalogEnrich.js); added without a rebuild.
-export const PROVIDER_DB_VERSION = 6;
+// v7: `people` (the cast and directors the provider's details name, see peopleIndex.js); added without a rebuild.
+export const PROVIDER_DB_VERSION = 7;
 export const providerDbName = (providerId) => `provider_${providerId}`;
 
 function createGenreStores(db) {
@@ -13,6 +14,11 @@ function createGenreStores(db) {
   ['entry_genre', 'entry_genre_tmdb'].forEach((name) => {
     db.createObjectStore(name, { keyPath: 'key' }).createIndex('byGenreAdded', ['type', 'genreKey', 'added']);
   });
+}
+
+function createPeopleStore(db) {
+  // `entryKey` → { type, added, names: ['cast:<folded name>', 'director:<folded name>'] } (empty: asked, nothing named).
+  db.createObjectStore('people', { keyPath: 'key' }).createIndex('byName', 'names', { multiEntry: true });
 }
 
 function createSchema(db) {
@@ -36,6 +42,7 @@ function createSchema(db) {
   db.createObjectStore('meta', { keyPath: 'key' });
   db.createObjectStore('enrich', { keyPath: 'key' }); // `${type}:${id}`
   createGenreStores(db);
+  createPeopleStore(db);
 }
 
 /** Provider databases only hold data derived from the provider: on schema change, rebuild from scratch. */
@@ -48,6 +55,7 @@ export function openProviderDb(providerId) {
         createGenreStores(db);
         if (!db.objectStoreNames.contains('groups')) db.createObjectStore('groups', { keyPath: 'key' });
         if (!db.objectStoreNames.contains('enrich')) db.createObjectStore('enrich', { keyPath: 'key' });
+        if (!db.objectStoreNames.contains('people')) createPeopleStore(db);
         return;
       }
       Array.from(db.objectStoreNames).forEach((name) => db.deleteObjectStore(name));

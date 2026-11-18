@@ -21,6 +21,7 @@ import { createCarousel } from '../components/carousel.js';
 import { createSelectField } from '../atoms/selectField.js';
 import { getEntry, listCategories, listNetworks, createMergeSearch } from '../../services/catalogQuery.js';
 import { ratingAge } from '../../services/kidsLimits.js';
+import { peopleFromInfo, writePeople } from '../../services/peopleIndex.js';
 import { rebuildLive } from '../../services/rebuildLive.js';
 import { watchKey, shouldResume, isWatched } from '../../services/watchStore.js';
 import { formatClock } from '../../services/playerController.js';
@@ -356,8 +357,8 @@ export function createDetailPage(ctx, params) {
     });
     renderChips(tagsEl, 'detailGenres', entry.type === 'live' ? [] : genreItems(), 'genre', next, t('detail.genres'));
     renderRating(next);
-    renderDirectors();
-    renderCompanies();
+    renderDirectors(next);
+    renderCompanies(next);
   }
 
   /**
@@ -375,22 +376,22 @@ export function createDetailPage(ctx, params) {
     });
   }
 
-  /** Director(s) from TMDB, shown before the production companies when known. */
-  function renderDirectors() {
-    clear(directorEl);
-    const list = entry.type === 'live' || !meta || !meta.directors ? [] : meta.directors;
-    if (!list.length) return;
-    directorEl.appendChild(createChipLabel(t('detail.director')));
-    list.forEach((name) => directorEl.appendChild(createChip({ text: name })));
+  /** The person page of someone of this title (`kind`: 'person' | 'company'; `id`: TMDB's, or null: found by name in the provider's details). */
+  function openPerson(kind, id, name, role = 'cast') {
+    ctx.router.push('person', { kind, id: id || null, name, role, section: params.section });
   }
 
-  /** Production companies: names as chips, same style as categories and genres but not clickable. */
-  function renderCompanies() {
-    clear(companiesEl);
+  /** Director(s), before the production companies: TMDB's, otherwise the provider's details. Clickable: their person page. */
+  function renderDirectors(next) {
+    const fromTmdb = entry.type === 'live' || !meta ? [] : meta.directorPeople || (meta.directors || []).map((name) => ({ id: null, name }));
+    const list = entry.type === 'live' ? [] : fromTmdb.length ? fromTmdb : peopleFromInfo(info).director.map((name) => ({ id: null, name }));
+    renderChips(directorEl, 'detailDirectors', list.map((p) => ({ id: p.id || p.name, name: p.name, tmdbId: p.id })), 'director', next, t('detail.director'), (item) => openPerson('person', item.tmdbId, item.name, 'director'));
+  }
+
+  /** Production companies (TMDB): clickable, their page. */
+  function renderCompanies(next) {
     const list = entry.type === 'live' || !meta || !meta.companies ? [] : meta.companies;
-    if (!list.length) return;
-    companiesEl.appendChild(createChipLabel(t('detail.companies')));
-    list.forEach((company) => companiesEl.appendChild(createChip({ text: company.name })));
+    renderChips(companiesEl, 'detailCompanies', list.map((c) => ({ id: c.id || c.name, name: c.name, tmdbId: c.id })), 'company', next, t('detail.companies'), (item) => openPerson('company', item.tmdbId, item.name));
   }
 
   function renderCast(next) {
@@ -401,8 +402,8 @@ export function createDetailPage(ctx, params) {
       id: 'detailCast',
       title: t('detail.cast'),
       className: 'cast',
-      items: people.map((p) => ({ entry: { name: p.name, icon: p.photo }, type: 'cast', meta: { subtitle: p.character, placeholder: 'user' } })),
-      onOpen: null, // not clickable yet
+      items: people.map((p) => ({ entry: { name: p.name, icon: p.photo, personId: p.id || null }, type: 'cast', meta: { subtitle: p.character, placeholder: 'user' } })),
+      onOpen: (item) => openPerson('person', item.entry.personId, item.entry.name, 'cast'), // their page
     });
     castEl.appendChild(carousel.el);
     next.push({ id: 'detailCast', zone: carousel.zone, fill: carousel.fill });
@@ -738,6 +739,8 @@ export function createDetailPage(ctx, params) {
     // Slow parts arrive later and refresh the page in place.
     try {
       info = { ...(await detailsJob) };
+      // The people the provider names (the person page without TMDB): kept for this title at once.
+      if (db && (entry.type === 'movie' || entry.type === 'series')) writePeople(db, entry, info).catch(() => undefined);
     } catch (err) {
       log.warn('Details failed', err && err.message);
       info = info || {};

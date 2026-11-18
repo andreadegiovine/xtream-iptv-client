@@ -1,0 +1,81 @@
+// The person page (src/ui/pages/personPage.js): picture and facts at the top, then the carousels of the Favorites template.
+@use 'tokens' as *;
+
+.page.person {
+  .person-header {
+    display: flex;
+    align-items: flex-start;
+    margin-bottom: $gutter;
+  }
+
+  .person-picture {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 240px;
+    height: 360px;
+    margin-right: $gutter;
+    overflow: hidden;
+    border-radius: 8px;
+    background: $bg-raised;
+
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .person-placeholder {
+      width: 96px;
+      height: 96px;
+      opacity: 0.35;
+    }
+
+    &.logo {
+      width: 360px;
+      height: 200px;
+      padding: 24px;
+      background: #fff; // most company logos are drawn for a light background
+
+      img {
+        object-fit: contain;
+      }
+    }
+  }
+
+  .person-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .person-name {
+    margin: 0 0 8px;
+    font-size: 3rem;
+  }
+
+  .person-role {
+    margin-bottom: 16px;
+    font-size: 1.4rem;
+  }
+
+  .person-facts div {
+    margin-bottom: 6px;
+    font-size: 1.3rem;
+  }
+
+  .person-bio {
+    max-width: 1100px;
+    margin: 16px 0;
+    font-size: 1.3rem;
+    line-height: 1.45;
+  }
+}
+
+.person-bio-full {
+  max-height: 60vh;
+  overflow-y: auto;
+  font-size: 1.25rem;
+  line-height: 1.5;
+  white-space: pre-line;
+}

@@ -36,7 +36,7 @@ export const SECTIONS = [
 
 // Shown only while a page offers it (a category or genre grid): adds / removes the open grid from the favourites.
 
-const SECTION_OF_ROUTE = { categories: 'settings', browse: 'home', search: 'search', suggestions: 'suggestions', favorites: 'favorites', collections: 'collections', collection: 'collections', network: 'live', detail: 'home', player: 'home', home: 'home', settings: 'settings', diagnostics: 'settings', providers: 'provider', providerSetup: 'provider' };
+const SECTION_OF_ROUTE = { categories: 'settings', browse: 'home', search: 'search', suggestions: 'suggestions', favorites: 'favorites', collections: 'collections', collection: 'collections', network: 'live', detail: 'home', player: 'home', home: 'home', settings: 'settings', diagnostics: 'settings', person: 'home', providers: 'provider', providerSetup: 'provider' };
 
 /** Section a router entry belongs to: explicit `params.section`, otherwise derived from the route name. */
 export function sectionForEntry(entry) {

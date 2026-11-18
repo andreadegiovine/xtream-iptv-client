@@ -8,6 +8,7 @@ import { openAppDb } from '../db/appDb.js';
 import { normalizeMeta, gridMeta, metaKey, META_TTL_MS, NOT_FOUND_TTL_MS } from './tmdbService.js';
 import { createPacer } from './pacer.js';
 import { buildRatings } from './ratingBuild.js';
+import { writePeople, runPeopleBackfill } from './peopleIndex.js';
 
 const STORE = 'entry_genre_tmdb';
 export const GENRE_BATCH = 60;
@@ -79,6 +80,7 @@ export async function runGenreBackfill({ db, xtream, tmdb, language, signal, gat
       try {
         const raw = await pace.run(() => (entry.type === 'series' ? xtream.getSeriesInfo(entry.defaultId) : xtream.getVodInfo(entry.defaultId)));
         failures = 0;
+        await writePeople(db, entry, raw && raw.info).catch(() => undefined); // the people it names too (the person page without TMDB)
         const text = raw && raw.info && raw.info.genre;
         if (text) return { names: text, source: 'info' };
       } catch (err) {
@@ -237,7 +239,8 @@ export async function restoreTmdbGenres({ db, appDb, titles = null, fresh = null
 /**
  * Shared by the worker and the main-thread fallback. `phase`: "tmdb" downloads the metadata, "genres" asks the
  * provider for the genres of titles still without any, "restore" writes TMDB's genres again from the saved metadata, "ratings" works out
- * the age ratings of the catalog from it (ratingBuild.js).
+ * the age ratings of the catalog from it (ratingBuild.js), "people" asks the provider the details of every title not asked yet for the
+ * people they name (peopleIndex.js: the person page without TMDB).
  */
 export async function runGenreBackfillForProvider({ provider, others = [], tmdbKey, language, signal, gate, emit = () => {}, limit, phase = 'genres', force = false }) {
   let db = null;
@@ -265,7 +268,7 @@ export async function runGenreBackfillForProvider({ provider, others = [], tmdbK
       // Several providers active: each title is asked to the provider it comes from (playlists have no details: left as they are).
       const more = others.filter((o) => o.type !== 'm3u').map((o) => ({ slot: o.slot, client: new XtreamClient({ baseUrl: o.baseUrl, username: o.username, password: o.password }) }));
       const xtream = more.length ? createUnionClient(own, more) : own;
-      done = await runGenreBackfill({ db, xtream, tmdb: null, language, signal, gate, emit, limit });
+      done = phase === 'people' ? await runPeopleBackfill({ db, xtream, signal, gate, emit, limit }) : await runGenreBackfill({ db, xtream, tmdb: null, language, signal, gate, emit, limit });
     }
   } finally {
     if (db) db.close();

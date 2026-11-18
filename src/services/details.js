@@ -32,7 +32,8 @@ export function parseSeriesInfo(data) {
   return {
     plot: String(info.plot || ''),
     genre: String(info.genre || ''),
-    cast: String(info.cast || ''),
+    cast: String(info.cast || info.actors || ''),
+    director: String(info.director || ''),
     cover: String(info.cover || ''),
     backdrop: firstBackdrop(info.backdrop_path),
     trailer: String(info.youtube_trailer || info.trailer || ''),

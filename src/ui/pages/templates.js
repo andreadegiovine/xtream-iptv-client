@@ -11,8 +11,10 @@ import { TOPBAR_ZONE } from '../components/topbar.js';
  * - Sidebar pages (Movies, TV Series, Live TV, Collections, Settings): `sidebarNavigation`. Up from the first sidebar entry: the top
  *   bar; Down from the bar: the first entry; Right from the sidebar: the content on screen (sidebarModel); Left from the content
  *   (its first column, where nothing else is on that side): the sidebar; the bar entry of the page on screen only gives it the focus.
- * - Carousel pages (Home, Search, Favorites, Suggestions): Up from the first row: the top bar (the search field for Search); Down from
- *   the bar: back to that row, on the card it was left from. `createCarouselPage` is the whole page for a list of typed rows.
+ * - Carousel pages (Home, Search, Favorites, Suggestions, a person): Up from the first row: the top bar (the search field for Search);
+ *   Down from the bar: back to that row, on the card it was left from. `createCarouselPage` is the whole page for a list of typed rows;
+ *   with a `header` (the person page: picture and facts) it sits above the rows, and its buttons (`headerZone`) come between the bar and
+ *   the first row.
  * - Standard pages (Providers, Diagnostics): `standardNavigation`. Up from the first line: the top bar; Down from the bar: that line.
  */
 
@@ -43,11 +45,12 @@ export function standardNavigation(ctx, { zone, hasLines = () => true }) {
  * A carousel page made of typed rows (one carousel per kind of entry): the status line, the rows, the focus where it was when the page
  * comes back (a title opened from here, then Back), the bar left alone when the page was left from it, Up / Down with the bar.
  * `load()` resolves with { entries, status } (status: the text above the rows, '' for none); `onError(err)` gives the text shown when it
- * fails. `options` go to createTypedRows.
+ * fails. `options` go to createTypedRows. `header`: an element above the rows; `headerZone`: its focus zone (buttons), if any.
  */
-export function createCarouselPage(ctx, { className, loadingText, load, onError = () => '', ...options }) {
+export function createCarouselPage(ctx, { className, loadingText, load, onError = () => '', header = null, headerZone = null, ...options }) {
   const status = createHint({ text: loadingText, className: 'search-status' });
-  const rows = createTypedRows(ctx, { upZone: TOPBAR_ZONE, ...options });
+  const rows = createTypedRows(ctx, { upZone: headerZone ? headerZone.id : TOPBAR_ZONE, ...options });
+  const headerHasFocus = () => Boolean(headerZone && headerZone.model.getCount() > 0);
   let destroyed = false;
   let restored = null;
   let onBar = false;
@@ -57,15 +60,22 @@ export function createCarouselPage(ctx, { className, loadingText, load, onError 
     if (destroyed || !result) return;
     rows.set(result.entries);
     status.textContent = result.status || '';
+    if (headerZone) {
+      ctx.focus.link(headerZone.id, 'up', TOPBAR_ZONE);
+      if (rows.firstZoneId()) ctx.focus.link(headerZone.id, 'down', rows.firstZoneId());
+      if (!headerHasFocus() && rows.firstZoneId()) ctx.focus.link(rows.firstZoneId(), 'up', TOPBAR_ZONE); // no button: the bar, as without a header
+    }
     if (onBar) onBar = false;
     else if (restored) rows.focusSaved(restored);
+    else if (!rows.firstZoneId() && headerHasFocus()) ctx.focus.focus(headerZone.id, 0);
     else rows.focusFirst();
     restored = null;
   }
 
   return {
-    el: h('section', { class: `page ${className}` }, status, rows.el),
+    el: h('section', { class: `page ${className}` }, header, status, rows.el),
     mount() {
+      if (headerZone) ctx.focus.register(headerZone);
       fill().catch((err) => {
         const text = onError(err);
         if (!destroyed && text) status.textContent = text;
@@ -74,9 +84,10 @@ export function createCarouselPage(ctx, { className, loadingText, load, onError 
     destroy() {
       destroyed = true;
       rows.destroy();
+      if (headerZone) ctx.focus.unregister(headerZone.id);
     },
     /** Down from the top bar: the first row, on the card it was left from. */
-    enterFromBar: () => rows.focusTop(),
+    enterFromBar: () => (headerHasFocus() ? ctx.focus.focus(headerZone.id, 0) : rows.focusTop()),
     saveState: () => ({ focus: rows.savedFocus(), onBar: focusOnBar(ctx.focus) }),
     restoreState(state) {
       restored = (state && state.focus) || null;

@@ -42,7 +42,7 @@ still being tested on real devices.
 - **Clean titles and smart filters.** Language prefixes, quality tags and year suffixes are removed (optional). Provider and TMDB
   genres are merged, categories can be hidden per provider, and genres and categories can be pinned to the sidebar or added to the favorites.
 - **Search everything** from the top bar: movies, series, channels, collections and the programmes on TV in the next 24 hours.
-- **Title pages** with plot, cast, director, production companies, the age rating of your country, related titles, and **Rewind**: the
+- **Title pages** with plot, cast, director, production companies (each opens its **person page**: photo, biography, dates and the films and series of your catalog they are in), the age rating of your country, related titles, and **Rewind**: the
   progress of a movie (or of a whole series) back to the start, also on Trakt, without starting the player.
 
 **Player**

@@ -46,7 +46,8 @@ export function createTypedRows(ctx, { prefix, onOpen, limit = 500, hideFavorite
           items: group.entries.map((entry) => {
             if (entry.type === 'collection') return { entry, type: 'movie', meta: { placeholder: 'folder', subtitle: entry.subtitle } }; // cards of a collection look like titles
             if (entry.type === 'programme') return { entry, type: 'live', meta: { subtitle: entry.subtitle } }; // a guide programme: the channel's picture, its hours
-            return isFilterEntry(entry) ? { entry, type: group.type, meta: filterCardMeta(entry) } : { entry, type: group.type };
+            if (isFilterEntry(entry)) return { entry, type: group.type, meta: filterCardMeta(entry) };
+            return entry.roleText ? { entry, type: group.type, meta: { subtitle: entry.roleText } } : { entry, type: group.type }; // the person page: the role(s) under the card
           }),
           onOpen: (item) => onOpen(item.entry),
           revealTop: index === 0,
@@ -69,6 +70,8 @@ export function createTypedRows(ctx, { prefix, onOpen, limit = 500, hideFavorite
       if (linkFromField && ctx.linkSearchDown && carousels.length) ctx.linkSearchDown(carousels[0].zone.id);
     },
     count: () => carousels.length,
+    /** The focus zone of the first row (null without rows). */
+    firstZoneId: () => (carousels.length ? carousels[0].zone.id : null),
     focusFirst: () => carousels.length > 0 && ctx.focus.focus(carousels[0].zone.id, 0),
     /** The first row, on the card it was left from (Down from the top bar). */
     focusTop: () => carousels.length > 0 && ctx.focus.focus(carousels[0].zone.id),

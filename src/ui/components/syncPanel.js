@@ -225,10 +225,13 @@ export function createTmdbPanel(ctx) {
   const genreButtons = rowButtons(t('settings.genresRemove'), t('settings.genresUpdate'));
   const infoButtons = rowButtons(t('settings.infoRemove'), t('settings.infoUpdate'));
   const ratingButtons = rowButtons(t('settings.ratingsRemove'), t('settings.ratingsUpdate'));
+  const peopleButtons = rowButtons(t('settings.peopleRemove'), t('settings.peopleUpdate'));
   const table = createTable(t('tmdb.title'), [], [
     { name: 'tmdb', label: t('tmdb.download'), buttons: tmdbButtons },
     { name: 'genres', label: t('detail.genres'), buttons: genreButtons },
     { name: 'ratings', label: t('detail.certification'), buttons: ratingButtons },
+    // The cast and directors the provider names (the person page without TMDB).
+    { name: 'people', label: t('settings.people'), buttons: peopleButtons },
     { name: 'info', label: t('tmdb.info'), buttons: infoButtons },
   ]);
   const TYPE_LABEL = { movie: 'nav.movies', series: 'nav.series' };
@@ -241,6 +244,11 @@ export function createTmdbPanel(ctx) {
       row.status.classList.toggle('in-progress', active.has(row.name));
       if (row.name === 'info') {
         row.status.textContent = await describeInfo(log.info, locale, active.get('info'));
+        continue;
+      }
+      if (row.name === 'people') {
+        const asked = ctx.genres && ctx.genres.countPeople ? await ctx.genres.countPeople() : 0;
+        row.status.textContent = `${formatNumber(asked, locale)} ${t('tmdb.count').toLowerCase()} · ${describeMeta(log.people, locale, true, active.get('people'))}`;
         continue;
       }
       const text = describeMeta(log[row.name], locale, row.name === 'genres' || ready(), active.get(row.name)); // ratings: how many titles have one
@@ -274,6 +282,7 @@ export function createTmdbPanel(ctx) {
     genreButtons,
     infoButtons,
     ratingButtons,
+    peopleButtons,
     refresh,
     /** Follows the operations: a row says "running since…" while it works and shows the new result when it ends. */
     mount() {

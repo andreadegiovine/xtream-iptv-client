@@ -3,6 +3,7 @@ import { buildEntryGenreRows } from './grouping.js';
 import { bumpGenresRev } from './derivedStore.js';
 import { listGenres, genreEntryKeys, genreCounts } from './catalogQuery.js';
 import { removeRatings } from './ratingBuild.js';
+import { removePeople, countPeople } from './peopleIndex.js';
 /** The genre work on the main thread (no worker): its code is loaded only then. */
 const runGenreBackfillForProvider = (args) => import(/* webpackChunkName: "genres-local" */ './genreBackfill.js').then((m) => m.runGenreBackfillForProvider(args));
 import { createGate } from '../core/gate.js';
@@ -147,6 +148,8 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
   const findGenres = () => phase('genres', false);
   /** The age ratings of the catalog worked out again from the saved TMDB metadata (no request): the "Rating" group of the sidebar. */
   const findRatings = () => phase('ratings', false);
+  /** The people the provider names in its details (the person page without TMDB): every title not asked yet. */
+  const findPeople = () => phase('people', false);
   /** The TMDB genres written again from the metadata already saved (no request), also when a download is not due. */
   function restore() {
     if (running) return Promise.resolve(0);
@@ -173,6 +176,8 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
       if (!cancelled && getTmdbKey()) await track('ratings', false);
       // The provider's genre search only without TMDB: with a key TMDB's genres replace the provider's, asking the provider is wasted.
       if (!cancelled && !getTmdbKey()) done += await track('genres', false);
+      // Without TMDB the person page reads the cast and directors the provider names: every title asked once, slowly.
+      if (!cancelled && !getTmdbKey()) await track('people', false);
     } finally {
       running = false;
     }
@@ -228,6 +233,7 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
     download,
     findGenres,
     findRatings,
+    findPeople,
     restore,
     hold,
     stop,
@@ -243,6 +249,16 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
     async entryKeys(type, genreKey) {
       const current = await active.get();
       return current ? genreEntryKeys(current.db, type, genreKey) : [];
+    },
+    /** Forgets the people found in the provider's details (asked again at the next run). */
+    async clearPeople() {
+      const current = await active.get();
+      if (current) await removePeople(current.db);
+    },
+    /** How many titles were asked for their people. */
+    async countPeople() {
+      const current = await active.get();
+      return current ? countPeople(current.db).catch(() => 0) : 0;
     },
     /** Forgets the age ratings worked out (the "Rating" group goes until they are worked out again). */
     async clearRatings() {

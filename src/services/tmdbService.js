@@ -5,6 +5,7 @@ import { posterUrl } from './tmdbClient.js';
 export const META_TTL_MS = 120 * 24 * 3600 * 1000;
 export const NOT_FOUND_TTL_MS = 7 * 24 * 3600 * 1000;
 export const RECOMMENDATIONS_TTL_MS = 24 * 3600 * 1000;
+const COMPANY_PAGES = 10; // a production company: its 200 most popular films and as many series (TMDB lists them 20 a page)
 
 /** Cache key of the metadata of one title in one language: independent of the provider. */
 export const metaKey = (type, tmdbId, language) => `meta:${type}:${tmdbId}:${language}`;
@@ -63,10 +64,14 @@ export function gridMeta(meta) {
 
 /** Movie directors (crew job "Director"); for series the creators, falling back to directors of the crew. */
 function directorsOf(data) {
-  const crew = ((data.credits && data.credits.crew) || []).filter((c) => c.job === 'Director' && c.name).map((c) => c.name);
-  const creators = (Array.isArray(data.created_by) ? data.created_by : []).map((c) => c.name).filter(Boolean);
-  const names = creators.length ? creators : crew;
-  return names.filter((n, i) => names.indexOf(n) === i).slice(0, 4);
+  return directorPeopleOf(data).map((p) => p.name);
+}
+/** The same, with their TMDB ids (the person page): [{ id, name }]. */
+function directorPeopleOf(data) {
+  const crew = ((data.credits && data.credits.crew) || []).filter((c) => c.job === 'Director' && c.name).map((c) => ({ id: c.id || null, name: c.name }));
+  const creators = (Array.isArray(data.created_by) ? data.created_by : []).filter((c) => c && c.name).map((c) => ({ id: c.id || null, name: c.name }));
+  const people = creators.length ? creators : crew;
+  return people.filter((p, i) => people.findIndex((q) => q.name === p.name) === i).slice(0, 4);
 }
 
 /**
@@ -115,9 +120,10 @@ export function normalizeMeta(type, data, language = '') {
       .map((c) => ({ id: c.id, name: c.name || '', logo: posterUrl(c.logo_path, 'w185') }))
       .filter((c) => c.name),
     directors: directorsOf(data),
+    directorPeople: directorPeopleOf(data),
     castList: ((data.credits && data.credits.cast) || [])
       .slice(0, 20)
-      .map((c) => ({ name: c.name || '', character: c.character || '', photo: posterUrl(c.profile_path, 'w185') }))
+      .map((c) => ({ id: c.id || null, name: c.name || '', character: c.character || '', photo: posterUrl(c.profile_path, 'w185') }))
       .filter((c) => c.name),
   };
 }
@@ -278,6 +284,57 @@ export function createTmdbService({ db, client, getLanguage, now = Date.now, onA
     return record.value || [];
   }
 
+  /**
+   * A person for the person page (kept a day): { kind: 'person', id, name, photo, biography, birthday, deathday, placeOfBirth,
+   * department, credits: [{ type, tmdbId, role }] } (role: the character, or the job). Null when TMDB does not know them.
+   */
+  async function person(id) {
+    if (!client.enabled || !id) return null;
+    const language = getLanguage();
+    const record = await cached('tmdb', `person:${id}:${language}`, () => RECOMMENDATIONS_TTL_MS, async () => {
+      const data = await client.person(id, language);
+      let biography = (data && data.biography) || '';
+      if (!biography && String(language).slice(0, 2) !== 'en') biography = ((await client.person(id, 'en-US').catch(() => null)) || {}).biography || ''; // none in the language of the app
+      const credits = [];
+      const add = (list, field) => (list || []).forEach((c) => {
+        const type = c.media_type === 'tv' ? 'series' : c.media_type === 'movie' ? 'movie' : null;
+        if (type && c.id) credits.push({ type, tmdbId: c.id, role: String(c[field] || '').trim() });
+      });
+      add(data.combined_credits && data.combined_credits.cast, 'character');
+      add(data.combined_credits && data.combined_credits.crew, 'job');
+      return {
+        kind: 'person', id: data.id, name: data.name || '', photo: posterUrl(data.profile_path, 'w342'), biography,
+        birthday: data.birthday || '', deathday: data.deathday || '', placeOfBirth: data.place_of_birth || '', department: data.known_for_department || '', credits,
+      };
+    });
+    return record.value || null;
+  }
+
+  /**
+   * A production company for the person page (kept a day): { kind: 'company', id, name, logo, description, headquarters, country,
+   * homepage, parent, credits: [{ type, tmdbId }] } (its most popular films and series, COMPANY_PAGES pages of each).
+   */
+  async function company(id) {
+    if (!client.enabled || !id) return null;
+    const language = getLanguage();
+    const record = await cached('tmdb', `company:${id}:${language}`, () => RECOMMENDATIONS_TTL_MS, async () => {
+      const data = await client.company(id);
+      const credits = [];
+      for (const type of ['movie', 'series']) {
+        for (let page = 1; page <= COMPANY_PAGES; page += 1) {
+          const found = await client.companyTitles(type, id, language, page).catch(() => null);
+          ((found && found.results) || []).forEach((r) => r.id && credits.push({ type, tmdbId: r.id, role: '' }));
+          if (!found || page >= (Number(found.total_pages) || 1)) break;
+        }
+      }
+      return {
+        kind: 'company', id: data.id, name: data.name || '', logo: posterUrl(data.logo_path, 'w300'), description: data.description || '',
+        headquarters: data.headquarters || '', country: data.origin_country || '', homepage: data.homepage || '', parent: (data.parent_company && data.parent_company.name) || '', credits,
+      };
+    });
+    return record.value || null;
+  }
+
   return {
     get enabled() {
       return client.enabled;
@@ -320,6 +377,8 @@ export function createTmdbService({ db, client, getLanguage, now = Date.now, onA
       await dbClear(db, 'tmdb_match');
     },
     recommendations,
+    person,
+    company,
     matchTmdbId,
     /** Metadata for a detail page: provider tmdb id first, otherwise a conservative title match. */
     forEntry(entry) {

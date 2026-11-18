@@ -284,6 +284,14 @@ export function createSettingsPage(ctx) {
     ctx.notices.success(t('notice.removed'));
     tmdbPanel.refresh().catch(() => undefined);
   }
+  async function removePeople() {
+    if (!(await confirmRemove(t('settings.peopleRemove'), t('settings.peopleRemoveConfirm')))) return;
+    ctx.genres.stop();
+    await ctx.genres.clearPeople();
+    await ctx.syncLog.clear('people');
+    ctx.notices.success(t('notice.removed'));
+    tmdbPanel.refresh().catch(() => undefined);
+  }
   async function removeTitleInfo() {
     if (!ctx.titleInfo || !(await confirmRemove(t('settings.infoRemove'), t('settings.infoRemoveConfirm')))) return;
     ctx.titleInfo.run({ forget: true });
@@ -300,6 +308,12 @@ export function createSettingsPage(ctx) {
       tmdbPanel.refresh().catch(() => undefined);
     })),
     rowOf(tmdbPanel.ratingButtons.remove, removeRatings, 'left'),
+    // People named by the provider: asked now for the titles not asked yet (slowly, at the provider's pace).
+    rowOf(tmdbPanel.peopleButtons.refresh, async () => queueJob('people', t('operations.people'), async () => {
+      await ctx.genres.findPeople();
+      tmdbPanel.refresh().catch(() => undefined);
+    })),
+    rowOf(tmdbPanel.peopleButtons.remove, removePeople, 'left'),
     // Title details (titles listed without a TMDB id): ask again now (the ones due), or forget what was learned (the ids it gave go).
     rowOf(tmdbPanel.infoButtons.refresh, async () => {
       if (ctx.titleInfo) ctx.titleInfo.run();

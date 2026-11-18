@@ -88,6 +88,7 @@ const LAZY_PAGES = {
   browse: () => import(/* webpackChunkName: "page-browse" */ './ui/pages/browsePage.js').then((m) => m.createBrowsePage),
   collections: () => import(/* webpackChunkName: "page-collections" */ './ui/pages/collectionsPage.js').then((m) => m.createCollectionsPage),
   collection: () => import(/* webpackChunkName: "page-collection" */ './ui/pages/collectionPage.js').then((m) => m.createCollectionPage),
+  person: () => import(/* webpackChunkName: "page-person" */ './ui/pages/personPage.js').then((m) => m.createPersonPage),
   network: () => import(/* webpackChunkName: "page-network" */ './ui/pages/networkPage.js').then((m) => m.createNetworkPage),
   providers: () => import(/* webpackChunkName: "page-providers" */ './ui/pages/providersPage.js').then((m) => m.createProvidersPage),
   categories: () => import(/* webpackChunkName: "page-categories" */ './ui/pages/categoriesPage.js').then((m) => m.createCategoriesPage),
@@ -467,6 +468,7 @@ async function boot() {
       favorites: () => createFavoritesPage(ctx),
       collections: (params) => lazy('collections', ctx, params),
       collection: (params) => lazy('collection', ctx, params),
+      person: (params) => lazy('person', ctx, params), // a person or a production company (the title page's cast, director, companies)
       network: (params) => lazy('network', ctx, params),
       detail: (params) => createLazyPage(LAZY_PAGES.detail, (create) => create(ctx, params), { errorText: t('error.UNKNOWN') }),
       player: (params) => createLazyPage(LAZY_PAGES.player, (create) => create(ctx, params), { errorText: t('error.UNKNOWN') }),

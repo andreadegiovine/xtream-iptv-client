@@ -80,6 +80,12 @@ export function createTmdbClient({ getApiKey = () => '', fetcher = fetchJson } =
       get(`/search/${kind(type)}`, { query, language, ...(year ? { [type === 'series' ? 'first_air_date_year' : 'year']: year } : {}) }),
     recommendations: (type, id, language, page = 1) => get(`/${kind(type)}/${id}/recommendations`, { language, page }),
     trending: (type, language, page = 1) => get(`/trending/${kind(type)}/week`, { language, page }),
+    /** A person (the person page): details and every film / series they are in or made. */
+    person: (id, language) => get(`/person/${id}`, { language, append_to_response: 'combined_credits' }),
+    /** A production company: its details. */
+    company: (id) => get(`/company/${id}`),
+    /** One page of the films (or series) of a production company, most popular first. */
+    companyTitles: (type, id, language, page = 1) => get(`/discover/${kind(type)}`, { with_companies: String(id), language, page, sort_by: 'popularity.desc' }),
   };
 }
 
