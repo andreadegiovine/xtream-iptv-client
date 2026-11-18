@@ -290,8 +290,11 @@ export function createTmdbPanel(ctx) {
   };
 }
 
-/** "Trakt" table: connected account and sync state; connect, remove and sync buttons (the last two only when connected). */
-export function createTraktPanel(ctx) {
+/**
+ * "Trakt" table: connected account and sync state; connect, remove and sync buttons (the last two only when connected).
+ * `compact` (a profile that is not an admin): only its account, with the connect / remove buttons.
+ */
+export function createTraktPanel(ctx, { compact = false } = {}) {
   const mk = (variant, name, label) => createButton({ label, icon: name, variant, iconOnly: true, className: 'panel-button' });
   const connectButton = mk('primary', 'user', t('settings.traktConnect'));
   const removeButton = mk('danger', 'remove', t('settings.traktRemove'));
@@ -329,7 +332,8 @@ export function createTraktPanel(ctx) {
     }
     connectButton.style.display = connected ? 'none' : '';
     removeButton.style.display = connected ? '' : 'none';
-    syncButton.style.display = connected ? '' : 'none';
+    syncButton.style.display = connected && !compact ? '' : 'none';
+    if (compact) [sync, watchedRow, progressRow].forEach((row) => { row.el.style.display = 'none'; });
   }
   let unsubscribe = null;
   return {

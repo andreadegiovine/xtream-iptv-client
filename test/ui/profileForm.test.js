@@ -16,3 +16,13 @@ test('profile form focus: the avatars in two lines of ten, the rows, then Cancel
   expect(go('up', 24)).toEqual({ type: 'move', index: 23 });
   expect(go('right', 21)).toEqual({ type: 'exit', dir: 'right' });
 });
+
+test('profile form focus: rows that come and go (the limits of a kids profile) move Cancel / Save', () => {
+  let rows = 4;
+  const m = profileFormModel({ avatars: 20, rows: () => rows, back: () => 0 });
+  expect(m.getCount()).toBe(26);
+  rows = 8;
+  expect(m.getCount()).toBe(30);
+  expect(m.navigate('down', 27)).toEqual({ type: 'move', index: 29 }); // last row → Save
+  expect(m.navigate('up', 28)).toEqual({ type: 'move', index: 27 });
+});

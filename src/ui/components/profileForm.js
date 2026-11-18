@@ -10,6 +10,7 @@ import { FocusZone } from '../focus/FocusManager.js';
 import { Dir } from '../focus/models.js';
 import { ensureVisible } from '../scroll.js';
 import { AVATARS } from '../../services/profiles.js';
+import { MAX_AGES, cleanLimits, normalizeTime } from '../../services/kidsLimits.js';
 
 const COLUMNS = 10;
 
@@ -20,13 +21,14 @@ const COLUMNS = 10;
 export function profileFormModel({ avatars, rows, back }) {
   const lines = Math.ceil(avatars / COLUMNS);
   const first = avatars;
-  const cancel = avatars + rows;
-  const total = cancel + 2;
+  const rowCount = typeof rows === 'function' ? rows : () => rows; // rows can come and go (the limits of a kids profile)
   const move = (index) => ({ type: 'move', index });
   const exit = (dir) => ({ type: 'exit', dir });
   return {
-    getCount: () => total,
+    getCount: () => avatars + rowCount() + 2,
     navigate(dir, i) {
+      const cancel = avatars + rowCount();
+      const total = cancel + 2;
       if (i < avatars) {
         const col = i % COLUMNS;
         const line = Math.floor(i / COLUMNS);
@@ -56,9 +58,14 @@ function toggleRow(label, on) {
   return { el: row.el, value, get: () => value.classList.contains('on'), set: (next) => setToggle(value, next) };
 }
 
+/** The label of a maximum age rating (null: no limit). */
+export const maxAgeLabel = (age) => (age === null || age === undefined ? t('profiles.noLimit') : age === 0 ? t('profiles.allAges') : `${age}+`);
+
 /**
  * Adding or editing a profile, in a dialog: avatar, name, kids, admin (`roles`: only an admin sets them), access PIN (4 digits, optional).
- * Resolves with { name, avatar, kids, admin, pin } (`pin`: undefined unchanged, '' removed, the new one) or null when cancelled.
+ * A kids profile also has its limits (an admin sets them): no watching before / after a time, daily minutes, maximum age rating (OK on it
+ * goes to the next one).
+ * Resolves with { name, avatar, kids, admin, pin, limits } (`pin`: undefined unchanged, '' removed, the new one) or null when cancelled.
  * `profile`: the one edited (null: a new one); `title`.
  */
 export function openProfileForm(ctx, { profile = null, title, roles = true, kidsAllowed = true }) {
@@ -75,17 +82,40 @@ export function openProfileForm(ctx, { profile = null, title, roles = true, kids
       const hasPin = Boolean(profile && profile.pin);
       const pin = createField({ label: t('profiles.pin'), type: 'password', inputmode: 'numeric', placeholder: hasPin ? t('profiles.pinKeep') : t('profiles.pinNone'), onSubmit: () => ctx.focus.focus(zoneId, cancelIndex() + 1), onLeave: () => undefined, clearable: false });
       const removePin = hasPin ? toggleRow(t('profiles.pinRemove'), false) : null;
+      // The limits of a kids profile, shown while "Kids profile" is on.
+      const limits = cleanLimits(profile && profile.limits);
+      const limitField = (label, value, extra = {}) => {
+        // Done: the next row of the form.
+        const field = createField({ label, placeholder: t('profiles.optional'), onSubmit: () => ctx.focus.focus(zoneId, AVATARS.length + rows().findIndex((r) => r.el === field.el) + 1), onLeave: () => undefined, clearable: false, ...extra });
+        field.setValue(value);
+        return field;
+      };
+      const before = limitField(t('profiles.lockBefore'), limits.before, { inputmode: 'numeric', placeholder: t('profiles.timeHint') });
+      const after = limitField(t('profiles.lockAfter'), limits.after, { inputmode: 'numeric', placeholder: t('profiles.timeHint') });
+      const minutes = limitField(t('profiles.dailyMinutes'), limits.minutes ? String(limits.minutes) : '', { inputmode: 'numeric' });
+      let maxAge = limits.maxAge;
+      const ageValue = h('span', { class: 'value', text: maxAgeLabel(maxAge) });
+      const ageRow = createListRow({ label: t('profiles.maxRating'), valueEl: ageValue });
+      const limitsEl = h('div', { class: 'profile-limits' }, before.root, after.root, minutes.root, h('div', { class: 'list' }, ageRow.el));
+      const kidsOn = () => roles && kidsAllowed && kids.get();
+      const showLimits = () => { limitsEl.style.display = kidsOn() ? '' : 'none'; };
       const status = h('div', { class: 'status', role: 'status' });
       const cancelBtn = createButton({ label: t('setup.cancel') });
       const saveBtn = createButton({ label: t('profiles.save'), variant: 'primary' });
       // The rows under the avatars, in focus order.
-      const rows = [{ el: name.el, run: () => name.focus() }];
-      if (roles && kidsAllowed) rows.push({ el: kids.el, run: () => { kids.set(!kids.get()); if (kids.get()) admin.set(false); } });
-      if (roles) rows.push({ el: admin.el, run: () => { admin.set(!admin.get()); if (admin.get()) kids.set(false); } });
-      rows.push({ el: pin.el, run: () => pin.focus() });
-      if (removePin) rows.push({ el: removePin.el, run: () => removePin.set(!removePin.get()) });
-      const cancelIndex = () => AVATARS.length + rows.length;
-      const nodes = avatarNodes.concat(rows.map((r) => r.el), [cancelBtn, saveBtn]);
+      const allRows = [{ el: name.el, run: () => name.focus() }];
+      if (roles && kidsAllowed) allRows.push({ el: kids.el, run: () => { kids.set(!kids.get()); if (kids.get()) admin.set(false); showLimits(); } });
+      if (roles) allRows.push({ el: admin.el, run: () => { admin.set(!admin.get()); if (admin.get()) kids.set(false); showLimits(); } });
+      [before, after, minutes].forEach((field) => allRows.push({ el: field.el, run: () => field.focus(), kidsOnly: true }));
+      allRows.push({ el: ageRow.el, kidsOnly: true, run: () => {
+        maxAge = MAX_AGES[(MAX_AGES.indexOf(maxAge) + 1) % MAX_AGES.length];
+        ageValue.textContent = maxAgeLabel(maxAge);
+      } });
+      allRows.push({ el: pin.el, run: () => pin.focus() });
+      if (removePin) allRows.push({ el: removePin.el, run: () => removePin.set(!removePin.get()) });
+      const rows = () => allRows.filter((r) => !r.kidsOnly || kidsOn());
+      const cancelIndex = () => AVATARS.length + rows().length;
+      const nodes = () => avatarNodes.concat(rows().map((r) => r.el), [cancelBtn, saveBtn]);
 
       function pick(i) {
         avatar = AVATARS[i];
@@ -103,26 +133,45 @@ export function openProfileForm(ctx, { profile = null, title, roles = true, kids
           return;
         }
         const nextPin = removePin && removePin.get() ? '' : typedPin || undefined;
-        close({ name: typedName, avatar, kids: roles ? kids.get() : Boolean(profile && profile.kids), admin: roles ? admin.get() : Boolean(profile && profile.admin), pin: nextPin });
+        let nextLimits = profile && profile.limits; // kept as they are by a form without the limits (the kids profile itself)
+        if (kidsOn()) {
+          const times = [before, after].map((field) => normalizeTime(field.getValue()));
+          const typedMinutes = minutes.getValue().trim();
+          if (times.some((time) => time === null)) {
+            status.textContent = t('profiles.timeFormat');
+            return;
+          }
+          if (typedMinutes && !/^\d{1,4}$/.test(typedMinutes)) {
+            status.textContent = t('profiles.minutesFormat');
+            return;
+          }
+          nextLimits = { before: times[0], after: times[1], minutes: Number(typedMinutes) || 0, maxAge };
+        }
+        close({ name: typedName, avatar, kids: roles ? kids.get() : Boolean(profile && profile.kids), admin: roles ? admin.get() : Boolean(profile && profile.admin), pin: nextPin, limits: nextLimits });
       }
 
-      const list = h('div', { class: 'list profile-form-rows' }, rows.filter((r) => r.el !== name.el && r.el !== pin.el).map((r) => r.el));
+      const list = h('div', { class: 'list profile-form-rows' }, [roles && kidsAllowed ? kids.el : null, roles ? admin.el : null].filter(Boolean));
       body.appendChild(createHeading({ text: title }));
       body.appendChild(h('div', { class: 'profile-avatars' }, avatarNodes));
-      body.appendChild(h('div', { class: 'form' }, name.root, list, pin.root, removePin ? h('div', { class: 'list' }, removePin.el) : null, status, h('div', { class: 'dialog-actions' }, cancelBtn, saveBtn)));
+      showLimits();
+      body.appendChild(h('div', { class: 'form' }, name.root, list, limitsEl, pin.root, removePin ? h('div', { class: 'list' }, removePin.el) : null, status, h('div', { class: 'dialog-actions' }, cancelBtn, saveBtn)));
 
       ctx.focus.register(new FocusZone({
         id: zoneId,
-        nodes: () => nodes,
-        model: profileFormModel({ avatars: AVATARS.length, rows: rows.length, back: () => Math.max(0, AVATARS.indexOf(avatar)) }),
+        nodes,
+        model: profileFormModel({ avatars: AVATARS.length, rows: () => rows().length, back: () => Math.max(0, AVATARS.indexOf(avatar)) }),
         onFocus: (i) => {
-          nodes[i].classList.add('focused');
-          ensureVisible(nodes[i], { first: i < COLUMNS });
+          const node = nodes()[i];
+          node.classList.add('focused');
+          ensureVisible(node, { first: i < COLUMNS });
         },
-        onBlur: (i) => nodes[i] && nodes[i].classList.remove('focused'),
+        onBlur: (i) => {
+          const node = nodes()[i];
+          if (node) node.classList.remove('focused');
+        },
         onActivate: (i) => {
           if (i < AVATARS.length) pick(i);
-          else if (i < cancelIndex()) rows[i - AVATARS.length].run();
+          else if (i < cancelIndex()) rows()[i - AVATARS.length].run();
           else if (i === cancelIndex()) close(null);
           else save();
         },

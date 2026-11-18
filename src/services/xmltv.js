@@ -92,7 +92,8 @@ export function createXmltvParser({ now, horizonMs = 48 * 3600 * 1000, channels 
         if (!isPlaceholderTitle(title)) {
           kept += 1;
           const categories = allTags(body, 'category').slice(0, 4);
-          onProgramme({ channelId: attrs.channel, start, stop, title, desc: firstTag(body, 'desc').slice(0, 400), ...(categories.length ? { categories } : {}) });
+          const rating = firstTag(firstTag(body, 'rating'), 'value'); // the age rating, when the guide gives one ("VM14", "TV-PG"…)
+          onProgramme({ channelId: attrs.channel, start, stop, title, desc: firstTag(body, 'desc').slice(0, 400), ...(categories.length ? { categories } : {}), ...(rating ? { rating } : {}) });
         }
       }
       match = re.exec(buffer);

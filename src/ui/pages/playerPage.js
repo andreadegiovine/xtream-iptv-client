@@ -6,6 +6,7 @@ import { t, i18n } from '../../i18n/index.js';
 import { Action } from '../../core/input.js';
 import { log } from '../../core/logger.js';
 import { platform } from '../../platform/index.js';
+import { aboveAge } from '../../services/kidsLimits.js';
 import { createPlayerController, formatClock, neighborEpisode, subtitleLabel, nextAspect, scrubTarget, positionFromPointer, preferredAudioTrack } from '../../services/playerController.js';
 import { ASPECT_MODES } from '../../services/playerEngines.js';
 import { youtubeStreamUrl } from '../../services/trailer.js';
@@ -23,6 +24,7 @@ const NEXT_COUNTDOWN_S = 10;
 const NEXT_OFFER_S = NEXT_COUNTDOWN_S;
 const NEXT_MIN_DURATION_S = 240;
 const SEEK_LONG = 30;
+const KIDS_CHECK_MS = 15000; // a kids profile with limits: the time played is counted and the limits checked this often
 const SCRUB_STEP = 30;
 const SCRUB_CONFIRM_MS = 2000; // the moved position is applied after this long without a key
 export { syncSteps } from './player/subtitles.js';
@@ -202,6 +204,28 @@ export function createPlayerPage(ctx, params) {
     return ` · ${t('player.endsAt', { time: formatClockTime(new Date(p.stop), timeFormat, i18n.getLocale()) })}`;
   }
 
+  // A kids profile with limits (kidsLimits.js): playback stops outside the hours allowed, once the minutes of the day are used, and on a
+  // live programme the guide rates above the maximum of the profile. The time played counts towards the day.
+  const kidsMaxAge = () => (ctx.profile && ctx.profile.kids && ctx.profile.limits ? ctx.profile.limits.maxAge : null);
+  const kidsLimited = () => Boolean(ctx.kidsLimits && ctx.kidsLimits.active());
+  let kidsTimer = null;
+  let kidsTick = 0;
+  let leaving = false;
+  function leaveForKids(reason) {
+    if (leaving || destroyed) return;
+    leaving = true;
+    const text = t(reason === 'hours' ? 'kids.blockedHours' : reason === 'minutes' ? 'kids.blockedMinutes' : 'kids.blockedRating');
+    ctx.router.back();
+    setTimeout(() => ctx.notices.info(text, { key: 'kids' }), 0); // once the player is gone (it shows only playback notices)
+  }
+  async function kidsCheck() {
+    const at = Date.now();
+    if (controller.getState().status === 'playing' && kidsTick) await ctx.kidsLimits.add(at - kidsTick).catch(() => undefined);
+    kidsTick = at;
+    const reason = await ctx.kidsLimits.blocked().catch(() => '');
+    if (reason) leaveForKids(reason);
+  }
+
   /** Reads the programme on (title on top, end after LIVE) and reads it again when it ends. */
   function loadProgramme(token) {
     clearTimeout(programmeTimer);
@@ -213,6 +237,7 @@ export function createPlayerPage(ctx, params) {
         if (destroyed || token !== loadToken) return;
         liveProgramme = n && n.now ? n.now : null;
         nowEl.textContent = liveProgramme ? liveProgramme.title : '';
+        if (liveProgramme && aboveAge(liveProgramme.rating, kidsMaxAge())) leaveForKids('rating'); // the guide rates it above the profile's limit
         drawProgress(lastState.position, lastState.duration);
         const next = liveProgramme ? liveProgramme.stop : n && n.next ? n.next.start : null;
         if (next) programmeTimer = setTimeout(() => loadProgramme(token), Math.max(1000, next - Date.now() + 1000));
@@ -942,7 +967,19 @@ export function createPlayerPage(ctx, params) {
       document.addEventListener('visibilitychange', onVisibility);
       controller.onChange(render);
       saveTimer = setInterval(() => saveProgress(), SAVE_EVERY_MS);
-      play(index);
+      if (!kidsLimited()) play(index);
+      else {
+        // A kids profile with limits: nothing plays outside them.
+        ctx.kidsLimits.blocked().catch(() => '').then((reason) => {
+          if (destroyed) return;
+          if (reason) leaveForKids(reason);
+          else {
+            kidsTick = Date.now();
+            kidsTimer = setInterval(() => kidsCheck(), KIDS_CHECK_MS);
+            play(index);
+          }
+        });
+      }
       if (isLive && params.entryKey) {
         ctx.active
           .get()
@@ -966,6 +1003,10 @@ export function createPlayerPage(ctx, params) {
       subtitles.stop();
       clearTimeout(programmeTimer);
       clearInterval(saveTimer);
+      if (kidsTimer) {
+        clearInterval(kidsTimer);
+        if (controller.getState().status === 'playing' && kidsTick) ctx.kidsLimits.add(Date.now() - kidsTick).catch(() => undefined);
+      }
       saveProgress(true);
       controller.stop();
       ctx.catalog.resume();

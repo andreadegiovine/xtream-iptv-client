@@ -208,7 +208,7 @@ export function createSettingsPage(ctx) {
   // Catalog and metadata tables at the top; the "update the catalog" button is the first row of the list.
   const panel = createSyncPanel(ctx);
   const tmdbPanel = createTmdbPanel(ctx);
-  const traktPanel = createTraktPanel(ctx);
+  const traktPanel = createTraktPanel(ctx, { compact: !(ctx.profile ? ctx.profile.admin : true) }); // not an admin: only its own account
   const devicePanel = createDevicePanel(ctx);
   const opsPanel = createOperationsPanel(ctx);
   let metaBusy = false;
@@ -649,14 +649,15 @@ export function createSettingsPage(ctx) {
     { id: 'opensubtitles', icon: 'subtitles', label: 'OpenSubtitles', blocks: [h('div', { class: 'fields' }, openSubtitlesRow.root)], rows: [openSubtitlesRow, openSubtitlesRow.clearRow] },
     ...advancedPage,
   ];
-  // A profile that is not an admin sees only what it can change: its profile, its language (and parental PIN), its Trakt account.
+  // A profile that is not an admin sees only what it can change: its profile, its language (and parental PIN), its Trakt account (only
+  // its account, when an admin set Trakt up).
   // (Built only for such a profile: its rows are the same elements as those of the full pages.)
   const limitedPages = () => {
     const ownRows = [sections[0].list[0]].concat(me.kids ? [] : [pinRow]);
     return [
       { id: 'own', icon: 'settings', label: t('settings.section.general'), blocks: [h('div', { class: 'list' }, ownRows.map((r) => r.el))], rows: ownRows },
       profilesPage,
-    ].concat(me.kids ? [] : [{ id: 'trakt', icon: 'user', label: 'Trakt', blocks: [traktPanel.el], rows: [traktConnectRow, traktSyncRow, traktRemoveRow] }]);
+    ].concat(ctx.trakt && ctx.trakt.enabled ? [{ id: 'trakt', icon: 'user', label: 'Trakt', blocks: [traktPanel.el], rows: [traktConnectRow, traktSyncRow, traktRemoveRow] }] : []); // every profile (kids too) connects its own account, when Trakt is set up
   };
   const subpages = isAdmin ? fullPages : limitedPages();
   let current = 0; // the sub-page on screen

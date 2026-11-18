@@ -102,7 +102,7 @@ describe('tmdb service', () => {
     expect(c.details.mock.calls[1][3]).toBeUndefined(); // full answer
     await svc.getFull('movie', 5);
     expect(c.details).toHaveBeenCalledTimes(2); // the detail answer is kept for the session
-    expect(Object.keys(gridMeta(full)).sort()).toEqual(['episodes', 'genre', 'genreList', 'poster', 'rating', 'seasons', 'title', 'tmdbId', 'year']);
+    expect(Object.keys(gridMeta(full)).sort()).toEqual(['certification', 'episodes', 'genre', 'genreList', 'poster', 'rating', 'seasons', 'title', 'tmdbId', 'year']);
   });
 
   test('forEntry: provider tmdb id wins; no id → conservative match; live → nothing', async () => {

@@ -57,6 +57,7 @@ export function gridMeta(meta) {
     year: meta.year,
     seasons: meta.seasons,
     episodes: meta.episodes,
+    certification: meta.certification || '', // the age rating (country of the language of the app): kids profiles with a maximum
   };
 }
 
@@ -298,6 +299,29 @@ export function createTmdbService({ db, client, getLanguage, now = Date.now, onA
         memory.delete(record.key);
       }
       return records.length;
+    },
+    /**
+     * The metadata saved before it carried the age rating (patch 187): marked expired, so the background download fetches it again (kept
+     * until then). Needed once a kids profile has a maximum rating. Resolves with how many.
+     */
+    async expireWithoutCertification() {
+      const records = (await dbGetAll(db, 'tmdb')).filter((r) => r && String(r.key).indexOf('meta:') === 0 && r.value && r.value.certification === undefined && (r.expiresAt || 0) > now());
+      for (const record of records) {
+        await dbPut(db, 'tmdb', { ...record, expiresAt: 0 });
+        memory.delete(record.key);
+      }
+      return records.length;
+    },
+    /** The age rating of every title with metadata in the language of the app: Map(`type:tmdbId` → rating). */
+    async certifications() {
+      const suffix = `:${getLanguage()}`;
+      const out = new Map();
+      (await dbGetAll(db, 'tmdb')).forEach((r) => {
+        const key = String(r && r.key);
+        if (key.indexOf('meta:') !== 0 || !key.endsWith(suffix) || !r.value || !r.value.certification) return;
+        out.set(key.slice(5, key.length - suffix.length), r.value.certification); // meta:<type>:<tmdbId>:<language>
+      });
+      return out;
     },
     /** Forgets every cached answer (metadata, matches, genres, recommendations). */
     async clearAll() {

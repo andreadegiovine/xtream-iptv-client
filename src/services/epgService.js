@@ -21,7 +21,7 @@ async function programmesFor(db, channelId, now) {
   return all.filter((p) => p.stop > now && isReal(p)).sort((a, b) => a.start - b.start);
 }
 
-export function createEpgService({ active, providers, createWorker, runLocal = runEpgForProvider, now = Date.now, readyTimeoutMs = 4000, operations = null, customUrl = () => Promise.resolve(''), programmeSearch = null }) {
+export function createEpgService({ active, providers, createWorker, runLocal = runEpgForProvider, now = Date.now, readyTimeoutMs = 4000, operations = null, customUrl = () => Promise.resolve(''), programmeSearch = null, hideProgramme = () => false }) {
   let running = false;
   let cancelJob = null;
   const updated = new Set();
@@ -71,7 +71,7 @@ export function createEpgService({ active, providers, createWorker, runLocal = r
     const current = await active.get();
     if (!current) return [];
     const t = now();
-    return (await programmesFor(current.db, channelId, t)).filter((p) => p.start < t + hours * 3600 * 1000);
+    return (await programmesFor(current.db, channelId, t)).filter((p) => p.start < t + hours * 3600 * 1000 && !hideProgramme(p));
   }
 
   /**
@@ -86,7 +86,7 @@ export function createEpgService({ active, providers, createWorker, runLocal = r
     await Promise.all(
       channelIds.map(async (id) => {
         const list = await requestToPromise(store.getAll(IDBKeyRange.bound([id, from - 12 * 3600 * 1000], [id, to])));
-        out.set(id, list.filter((p) => p.stop > from && isReal(p)).sort((a, b) => a.start - b.start));
+        out.set(id, list.filter((p) => p.stop > from && isReal(p) && !hideProgramme(p)).sort((a, b) => a.start - b.start)); // a kids profile: no programme rated above its limit
       }),
     );
     return out;
@@ -222,9 +222,9 @@ export function createEpgService({ active, providers, createWorker, runLocal = r
       if (makeSearchKey(query).length < 2) return [];
       if (programmeSearch) {
         const found = await programmeSearch.search(query, { limit, now: now() }).catch(() => null);
-        if (found) return found;
+        if (found) return found.filter((p) => !hideProgramme(p));
       }
-      return searchProgrammeRows(await programmeRows(), query, { limit, now: now() });
+      return searchProgrammeRows(await programmeRows(), query, { limit, now: now() }).filter((p) => !hideProgramme(p));
     },
     /**
      * The genres of the guide that some Live TV row has (between `from` and `to` when given), with those rows (groups and channels in no

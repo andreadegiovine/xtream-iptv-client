@@ -20,7 +20,7 @@ export async function loadProgrammeRows(db, now) {
         return;
       }
       const p = cursor.value;
-      if (p.stop > now && !isPlaceholderTitle(p.title)) titles.push({ key: makeSearchKey(p.title), title: p.title, start: p.start, stop: p.stop, channelId: p.channelId });
+      if (p.stop > now && !isPlaceholderTitle(p.title)) titles.push({ key: makeSearchKey(p.title), title: p.title, start: p.start, stop: p.stop, channelId: p.channelId, ...(p.rating ? { rating: p.rating } : {}) });
       cursor.continue();
     };
     request.onerror = () => reject(request.error);
@@ -53,7 +53,7 @@ export function searchProgrammeRows(data, query, { limit = 20, now = Date.now() 
     const id = `${p.channelId}|${p.key}`;
     if (seen.has(id)) continue;
     seen.add(id);
-    out.push({ title: p.title, start: p.start, stop: p.stop, channelId: p.channelId, rowKey: data.rowOf.get(p.channelId) });
+    out.push({ title: p.title, start: p.start, stop: p.stop, channelId: p.channelId, rowKey: data.rowOf.get(p.channelId), ...(p.rating ? { rating: p.rating } : {}) });
     if (out.length >= limit) break;
   }
   return out;

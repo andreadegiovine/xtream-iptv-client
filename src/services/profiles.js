@@ -2,6 +2,7 @@ import { kvGet, kvSet } from '../db/kv.js';
 import { deleteDb } from '../core/idb.js';
 import { openAppDb, APP_DB_NAME } from '../db/appDb.js';
 import { hashPin } from './parental.js';
+import { cleanLimits } from './kidsLimits.js';
 
 /**
  * Profiles (Netflix style). Until a second profile is created there is none to choose and the app is as it always was: that user is the
@@ -10,7 +11,7 @@ import { hashPin } from './parental.js';
  * entries, scheduled viewing, its Trakt account, its parental PIN, the order of the guide rows. Shared by all: providers and catalog,
  * API keys (TMDB, OpenSubtitles, Trakt's), the other settings. The language of the app is per profile (the main one keeps the setting).
  *
- * A profile: { id, name, avatar, kids, admin, language, pin: { salt, hash } | null }. Kept in the app database (`kv` PROFILES_KEY).
+ * A profile: { id, name, avatar, kids, admin, language, pin: { salt, hash } | null, limits (kids only: kidsLimits.js) }. Kept in the app database (`kv` PROFILES_KEY).
  * The profile in use lives in sessionStorage for this run only (a switch reloads the page): with more than one profile the app asks at
  * every start.
  */
@@ -50,7 +51,7 @@ export function createProfiles({ db, openDb = openAppDb, removeDb = deleteDb, ra
     const salt = String(Math.floor(random() * 1e9));
     return { salt, hash: hashPin(pin, salt) };
   };
-  const clean = (p) => ({ id: p.id, name: String(p.name || '').trim(), avatar: AVATARS.indexOf(p.avatar) >= 0 ? p.avatar : AVATARS[0], kids: Boolean(p.kids), admin: Boolean(p.admin) && !p.kids, language: p.language || null, pin: p.pin || null });
+  const clean = (p) => ({ id: p.id, name: String(p.name || '').trim(), avatar: AVATARS.indexOf(p.avatar) >= 0 ? p.avatar : AVATARS[0], kids: Boolean(p.kids), admin: Boolean(p.admin) && !p.kids, language: p.language || null, pin: p.pin || null, ...(p.kids ? { limits: cleanLimits(p.limits) } : {}) });
 
   const service = {
     /** Every profile; empty while there is only the user of always (no profiles made yet). */

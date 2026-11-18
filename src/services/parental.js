@@ -2,6 +2,7 @@ import { kvGet, kvSet } from '../db/kv.js';
 import { requestToPromise } from '../core/idb.js';
 import { listCategories } from './catalogQuery.js';
 import { isNetworkKey } from './liveGrouping.js';
+import { aboveAge } from './kidsLimits.js';
 
 const KEY = 'parental';
 const MARKS_KEY = 'adultMarks'; // app database: { [providerId]: { [entryKey]: true (adult) | false (not adult) } }, set by an admin
@@ -94,9 +95,10 @@ export function createParentalService({ db, appDb = db, random = Math.random }) 
     },
     /**
      * What a kids profile must not see in this catalog: { keys, categories }. Keys: every adult title and channel group, every network
-     * left without a channel; categories (`type:id`): those whose name marks them as adult.
+     * left without a channel; categories (`type:id`): those whose name marks them as adult. With `maxAge` (the profile's maximum rating)
+     * also the films and series whose age rating (`certifications`: Map `type:tmdbId` → rating, see tmdbService) is above it.
      */
-    async hiddenFor(providerDb) {
+    async hiddenFor(providerDb, { maxAge = null, certifications = null } = {}) {
       const keys = new Set();
       const categories = new Set();
       TYPES.forEach((type) => adultIds[type].forEach((id) => categories.add(`${type}:${id}`)));
@@ -104,8 +106,12 @@ export function createParentalService({ db, appDb = db, random = Math.random }) 
         requestToPromise(providerDb.transaction('entries', 'readonly').objectStore('entries').getAll()),
         requestToPromise(providerDb.transaction('groups', 'readonly').objectStore('groups').getAll()),
       ]);
+      const rated = (entry) => {
+        if (maxAge === null || !certifications || !entry.tmdbId || (entry.type !== 'movie' && entry.type !== 'series')) return false;
+        return aboveAge(certifications.get(`${entry.type}:${entry.tmdbId}`), maxAge);
+      };
       entries.concat(groups.filter((g) => !isNetworkKey(g.key))).forEach((entry) => {
-        if (isAdultEntry(entry)) keys.add(entry.key);
+        if (isAdultEntry(entry) || rated(entry)) keys.add(entry.key);
       });
       groups.filter((g) => isNetworkKey(g.key)).forEach((network) => {
         const members = network.memberKeys || [];
