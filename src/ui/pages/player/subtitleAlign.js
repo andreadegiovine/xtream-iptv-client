@@ -12,11 +12,20 @@ export const WINDOW_MS = 120000;
 /** The points needed to end the procedure (delay and speed). */
 export const MIN_POINTS = 2;
 const LEAD_MS = 5000; // playing the portion: from this long before the anchor
-const STEP_MS = 500; // Left / Right on the video bar move the anchor by this much
+const STEP_MS = 500; // Left / Right on the video bar move the anchor by this much (a key held: faster, see dragStep)
+const HOLD_MS = 300; // presses closer than this are a key held down
 const SEEK_WAIT_MS = 500; // the video jumps once the keys stop
 const TICK_MS = 200;
 const SUGGEST_GAP_MS = 10 * 60000; // the next line suggested: about ten minutes from the last point (the speed needs points far apart)
 const MAX_SEGMENTS = 400;
+
+/** How far one press moves the anchor: half a second, more and more while the key is held (up to 10 s). */
+export function dragStep(held) {
+  if (held < 4) return STEP_MS;
+  if (held < 10) return 2 * STEP_MS;
+  if (held < 20) return 6 * STEP_MS;
+  return 20 * STEP_MS;
+}
 
 /** The window of the zoomed bars around `center` (within the video). */
 export function zoomWindow(center, durationMs, size = WINDOW_MS) {
@@ -57,7 +66,8 @@ export function createSubtitleAligner({ root, cues, timing: startTiming, points:
   let fit = fitAlignment(points);
   const timingNow = () => (points.length ? fit : startTiming);
   const startPosition = Number(getTime()) || 0; // where the video was: back there at the end
-  let index = points.length ? suggestLine(cues, points[points.length - 1].cue) : lineAt(cues, startPosition, startTiming);
+  // The line to start from: about ten minutes after the last point; without points the start of the film.
+  let index = points.length ? suggestLine(cues, points[points.length - 1].cue) : 0;
   let confirmed = false; // the line is chosen (its cursor green): the video bar sets its anchor
   let anchor = null; // the moment of the video matched with the line (ms)
   let playing = false; // the portion plays (video and subtitles together)
@@ -69,6 +79,9 @@ export function createSubtitleAligner({ root, cues, timing: startTiming, points:
   let pointIndex = 0;
   let pointButton = 0; // 0 Edit, 1 Remove
   let seekTimer = null;
+  let dragWindow = null; // while the anchor is being moved the bars stay still; at the end they center on it again
+  let lastMove = 0;
+  let held = 0; // presses in a row of a key held down
   let closed = false;
 
   // The timing with the point being made (the anchor matched with the line): what the bars and the portion played show.
@@ -80,10 +93,9 @@ export function createSubtitleAligner({ root, cues, timing: startTiming, points:
   const subsTrack = h('div', { class: 'align-track' });
   const subsCursor = h('div', { class: 'align-cursor' });
   const subsBar = h('div', { class: 'align-bar subs' }, h('span', { class: 'align-label', text: t('align.subtitles') }), h('div', { class: 'align-rail' }, subsTrack, subsCursor));
-  const videoMarks = h('div', { class: 'align-track' });
   const anchorEl = h('div', { class: 'align-anchor' });
   const playheadEl = h('div', { class: 'align-cursor' });
-  const videoBar = h('div', { class: 'align-bar video' }, h('span', { class: 'align-label', text: t('align.video') }), h('div', { class: 'align-rail' }, videoMarks, anchorEl, playheadEl));
+  const videoBar = h('div', { class: 'align-bar video' }, h('span', { class: 'align-label', text: t('align.video') }), h('div', { class: 'align-rail line' }, anchorEl, playheadEl));
   const fromEl = h('span', { class: 'align-time' });
   const toEl = h('span', { class: 'align-time' });
   const bars = h('div', { class: 'align-bars' }, lineEl, subsBar, videoBar, h('div', { class: 'align-times' }, fromEl, toEl));
@@ -137,7 +149,7 @@ export function createSubtitleAligner({ root, cues, timing: startTiming, points:
       const cue = cueAt(cues, toCue(playhead, timing));
       lineEl.textContent = cue ? cleanSubtitle(cue.text) : '';
     } else lineEl.textContent = cleanSubtitle(cues[index].text);
-    const win = playing && playWindow ? playWindow : zoomWindow(confirmed && anchor !== null ? anchor : cueVideo, durationMs());
+    const win = playing && playWindow ? playWindow : dragWindow || zoomWindow(confirmed && anchor !== null ? anchor : cueVideo, durationMs());
     fromEl.textContent = formatClock(win.start / 1000);
     toEl.textContent = formatClock(win.end / 1000);
     while (subsTrack.firstChild) subsTrack.removeChild(subsTrack.firstChild);
@@ -160,13 +172,6 @@ export function createSubtitleAligner({ root, cues, timing: startTiming, points:
     if (anchor !== null) anchorEl.style.left = pct(anchor, win);
     playheadEl.style.display = playing ? '' : 'none';
     playheadEl.style.left = pct(playhead, win);
-    while (videoMarks.firstChild) videoMarks.removeChild(videoMarks.firstChild);
-    points.forEach((p) => {
-      if (p.video < win.start || p.video > win.end) return;
-      const mark = h('div', { class: 'align-mark' });
-      mark.style.left = pct(p.video, win);
-      videoMarks.appendChild(mark);
-    });
     // The panel: how many points (red until enough, then green), the points, a problem if any, the buttons.
     const enough = points.length >= MIN_POINTS;
     countEl.textContent = enough ? t('align.countDone', { count: points.length }) : t('align.count', { count: points.length, min: MIN_POINTS });
@@ -197,11 +202,17 @@ export function createSubtitleAligner({ root, cues, timing: startTiming, points:
   }, TICK_MS);
 
   /** The video goes to `ms` once the keys stop (each jump of a stream costs a buffering). */
-  function seekSoon(ms) {
+  function seekSoon(ms, recenter = false) {
     clearTimeout(seekTimer);
     seekTimer = setTimeout(() => {
       seekTimer = null;
       seek(ms);
+      // The end of the move: the bars center on the anchor again (its frame on screen).
+      if (recenter && dragWindow) {
+        dragWindow = null;
+        held = 0;
+        render();
+      }
     }, SEEK_WAIT_MS);
   }
 
@@ -225,6 +236,7 @@ export function createSubtitleAligner({ root, cues, timing: startTiming, points:
     if (!canAdd()) return;
     clearTimeout(seekTimer);
     seekTimer = null;
+    dragWindow = null; // the bars center on the anchor again
     playWindow = zoomWindow(anchor, durationMs());
     playhead = Math.max(playWindow.start, anchor - LEAD_MS);
     playing = true;
@@ -240,11 +252,16 @@ export function createSubtitleAligner({ root, cues, timing: startTiming, points:
     if (anchor !== null) seek(anchor);
   }
 
+  /** Left / Right on the video bar: the anchor moves, faster while the key is held; the bars stay still until the keys stop. */
   function moveAnchor(delta) {
     if (!canAdd()) return;
     if (playing) stopPortion();
-    anchor = Math.max(0, anchor + delta * STEP_MS);
-    seekSoon(anchor);
+    const now = Date.now();
+    held = now - lastMove < HOLD_MS ? held + 1 : 0;
+    lastMove = now;
+    if (!dragWindow) dragWindow = zoomWindow(anchor, durationMs());
+    anchor = Math.max(0, Math.min(durationMs() || Infinity, anchor + delta * dragStep(held)));
+    seekSoon(anchor, true);
   }
 
   async function persist() {
@@ -285,7 +302,10 @@ export function createSubtitleAligner({ root, cues, timing: startTiming, points:
     if (!points[i]) return;
     points.splice(i, 1);
     persist();
-    if (!points.length) panelArea = 'buttons';
+    if (!points.length) {
+      panelArea = 'buttons';
+      if (!confirmed) index = 0; // no points left: from the start of the film again
+    }
   }
 
   function conclude() {

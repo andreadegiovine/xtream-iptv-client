@@ -1042,3 +1042,10 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
 - The rows of the points: only "Point 1 · 0:21" and two icon buttons with their tooltip, as in the rest of the app: Edit (pen) and Remove (bin), the latter with the colour and behaviour of the remove buttons of the Settings tables (`panel-button`, `danger`).
 - The cursor of the bar of the subtitles is green, as the anchor of the video bar; once the line is confirmed it glows.
 - Tests: the row (only point and time), the icon buttons (labels, the remove one as Settings'). Browser check with a real video. Not verified on the TV.
+
+### Patch 201 — Subtitle alignment: moving the anchor, the video line, where it starts; the README by feature
+- Video bar of the alignment: the green anchor moves faster while Left / Right are held (half a second, then 1, 3 and 10 seconds a press); while it moves the bars stay still, and once the keys stop (or on OK) they center on it again and the picture shows its frame.
+- The zoomed video bar is a full line again, with the green anchor (and the playhead while the portion plays); the marks of the points are gone from it.
+- Without points (or once all are removed) the line chosen starts from the beginning of the film; every new point suggests the line about ten minutes after the last.
+- README: a section per feature — how it works, its settings, what it gives — for the unified catalog, huge catalogs, titles / genres / categories, age ratings, search, title pages, people and companies, player, subtitles and their alignment, Live TV, the guide, Home and favourites, profiles, parental control, Trakt, look and language, remote / mouse / touch, privacy and updates.
+- Tests: the step while a key is held, the bars still during the move and centered after it, the first line without points. Browser check with a real video. Not verified on the TV.

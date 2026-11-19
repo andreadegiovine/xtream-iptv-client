@@ -372,3 +372,38 @@ test('no TMDB id at all: a notice says nothing was found (it used to end in sile
   expect(noticeTexts().some((text) => /no subtitles|not found|No subtitles/i.test(text))).toBe(true);
   s.page.destroy();
 }, 10000);
+
+test('alignment: a key held moves the anchor faster, the bars stay still until the keys stop, then center on it; no points: from the start of the film', async () => {
+  const cues = [{ start: 1000, end: 3000, text: 'Ciao' }, { start: 200000, end: 202000, text: 'Mezzo' }, { start: 800000, end: 802000, text: 'Fine' }];
+  const s = setup({ fetch: async () => ({ language: 'it', fileId: 9, cues }) });
+  s.ctx.subtitleAlign = { get: async () => ({ points: [{ cue: 200000, video: 202000 }], offset: 2000, scale: 1 }), save: jest.fn(async () => undefined) };
+  await wait();
+  s.start();
+  s.setTime(300000);
+  await wait(1300); // the clock read: the player knows the duration
+  const answers = [() => 'download', () => 'align'];
+  s.ctx.dialogs.choose.mockImplementation(async () => answers.shift()());
+  pressSubtitles(s);
+  await wait(300);
+  const ui = s.page.el.querySelector('.align-ui');
+  const key = (action, n = 1) => { for (let i = 0; i < n; i += 1) s.page.onAction(action); };
+  // A point saved: the line about ten minutes after it ("Fine", 800 s); removing it, the start of the film.
+  expect(ui.querySelector('.align-line').textContent).toBe('Fine');
+  key(Action.UP, 2); // the buttons, the point
+  key(Action.RIGHT); // Remove
+  key(Action.ENTER);
+  expect(ui.querySelector('.align-count').textContent).toBe('Points defined 0 of at least 2');
+  key(Action.DOWN); // the buttons
+  key(Action.DOWN); // the subtitles
+  expect(ui.querySelector('.align-line').textContent).toBe('Ciao');
+  key(Action.RIGHT); // "Mezzo" (200 s)
+  key(Action.ENTER); // its anchor where the alignment of now puts it: 200 s (one saved point is not an alignment)
+  const from = () => ui.querySelector('.align-times').firstChild.textContent;
+  expect(from()).toBe('2:20');
+  key(Action.RIGHT, 12); // held: 4 × 0.5 s, 6 × 1 s, 2 × 3 s = 14 s
+  expect(from()).toBe('2:20'); // the bars still
+  await wait(700);
+  expect(from()).toBe('2:34'); // centered on the anchor (214 s) once the keys stopped
+  expect(s.engine.seekTo).toHaveBeenLastCalledWith(214000); // its frame
+  s.page.destroy();
+}, 10000);

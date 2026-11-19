@@ -42,3 +42,8 @@ test('the zoomed bars: two minutes around the cursor, inside the video; the line
   expect(suggestLine(cues, 1000)).toBe(2); // about ten minutes later
   expect(suggestLine(cues, 900000)).toBe(1); // near the end: ten minutes before
 });
+
+test('the anchor moves faster while the key is held', async () => {
+  const { dragStep } = await import('../../src/ui/pages/player/subtitleAlign.js');
+  expect([0, 3, 4, 9, 10, 19, 20, 50].map(dragStep)).toEqual([500, 500, 1000, 1000, 3000, 3000, 10000, 10000]);
+});
