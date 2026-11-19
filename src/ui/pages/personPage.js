@@ -2,10 +2,10 @@ import { h } from '../dom.js';
 import { t, i18n } from '../../i18n/index.js';
 import { createHeading } from '../atoms/heading.js';
 import { createChip } from '../atoms/chip.js';
+import { createIconButton, setIconButtonActive, setIconButtonLabel } from '../atoms/iconButton.js';
 import { createPlaceholder } from '../atoms/placeholder.js';
 import { createMetaSeparator, createMetaText } from '../atoms/metaParts.js';
 import { FocusZone } from '../focus/FocusManager.js';
-import { ListModel } from '../focus/models.js';
 import { createCarouselPage } from './templates.js';
 import { getEntry } from '../../services/catalogQuery.js';
 import { titlesByName } from '../../services/peopleIndex.js';
@@ -103,19 +103,66 @@ export function createPersonPage(ctx, params = {}) {
   const moreChip = createChip({ text: t('person.showMore'), link: true });
   const moreRow = h('div', { class: 'detail-categories person-more' }, moreChip);
   moreRow.style.display = 'none';
-  const buttons = () => (moreRow.style.display === 'none' ? [] : [moreChip]);
+  // The heart, right under the info line as on a title page: the person (or company) in the favourites (the Favorites page lists them).
+  const heart = createIconButton({ icon: 'heart', label: t('detail.favorite') });
+  const actionsEl = h('div', { class: 'detail-actions' }, heart);
+  let favorite = false;
+  let favoriteTarget = { kind, id: params.id || null, name: params.name || '', photo: '' };
+  function paintHeart() {
+    setIconButtonActive(heart, favorite);
+    setIconButtonLabel(heart, favorite ? t('detail.unfavorite') : t('detail.favorite'));
+  }
+  async function toggleFavorite() {
+    try {
+      favorite = await ctx.favorites.togglePerson(favoriteTarget);
+      paintHeart();
+      ctx.notices.success(t(favorite ? 'notice.added' : 'notice.removed'), { key: 'favorite' });
+    } catch {
+      ctx.notices.error(t('error.UNKNOWN'), { key: 'favorite' });
+    }
+  }
+  const buttons = () => [heart].concat(moreRow.style.display === 'none' ? [] : [moreChip]);
+  // A long biography opened: Down / Up on "Show less" scroll it a few lines at a time; past its end Down goes on to the carousels.
+  const SCROLL_STEP = 120;
+  const bioOpen = () => !bioEl.classList.contains('clamped');
+  const headerModel = {
+    getCount: () => buttons().length,
+    navigate(dir, i) {
+      const onMore = buttons()[i] === moreChip;
+      if (dir === 'down') {
+        if (onMore && bioOpen() && bioEl.scrollTop + bioEl.clientHeight < bioEl.scrollHeight - 2) {
+          bioEl.scrollTop += SCROLL_STEP;
+          return { type: 'move', index: i };
+        }
+        return i + 1 < buttons().length ? { type: 'move', index: i + 1 } : { type: 'exit', dir };
+      }
+      if (dir === 'up') {
+        if (onMore && bioOpen() && bioEl.scrollTop > 0) {
+          bioEl.scrollTop = Math.max(0, bioEl.scrollTop - SCROLL_STEP);
+          return { type: 'move', index: i };
+        }
+        return i > 0 ? { type: 'move', index: i - 1 } : { type: 'exit', dir };
+      }
+      return { type: 'exit', dir };
+    },
+  };
   const headerZone = new FocusZone({
     id: ZONE,
     nodes: buttons,
-    model: new ListModel({ orientation: 'horizontal', getCount: () => buttons().length }),
+    model: headerModel,
     onFocus: (i) => buttons()[i] && buttons()[i].classList.add('focused'),
     onBlur: (i) => buttons()[i] && buttons()[i].classList.remove('focused'),
-    onActivate: () => {
+    onActivate: (i) => {
+      if (buttons()[i] === heart) {
+        toggleFavorite();
+        return;
+      }
       const open = bioEl.classList.toggle('clamped') === false;
+      if (!open) bioEl.scrollTop = 0;
       moreChip.textContent = t(open ? 'person.showLess' : 'person.showMore');
     },
   });
-  const header = h('div', { class: 'person-top' }, poster, h('div', { class: 'detail-body' }, nameEl, metaEl, factsEl, bioEl, moreRow));
+  const header = h('div', { class: 'person-top' }, poster, h('div', { class: 'detail-body' }, nameEl, metaEl, actionsEl, factsEl, bioEl, moreRow));
 
   function setMeta(parts) {
     while (metaEl.firstChild) metaEl.removeChild(metaEl.firstChild);
@@ -133,6 +180,7 @@ export function createPersonPage(ctx, params = {}) {
     nameEl.textContent = info.name || params.name || '';
     setMeta([kind === 'company' ? t('detail.companies') : departmentLabel(info.department)]);
     const image = kind === 'company' ? info.logo : info.photo;
+    favoriteTarget = { kind, id: info.id || params.id || null, name: info.name || params.name || '', photo: image || '' };
     if (image) {
       // Shown once loaded (the placeholder stays until then, and when the picture cannot be loaded).
       const img = h('img', { alt: '', referrerpolicy: 'no-referrer' });
@@ -148,6 +196,7 @@ export function createPersonPage(ctx, params = {}) {
     // "Show more" only when the text goes past the lines shown.
     setTimeout(() => {
       moreRow.style.display = bioEl.scrollHeight > bioEl.clientHeight + 2 ? '' : 'none';
+      if (ctx.focus.activeId !== ZONE) headerZone.index = buttons().length - 1; // Up from the carousels: the nearest, "Show more"
     }, 0);
   }
 
@@ -161,6 +210,8 @@ export function createPersonPage(ctx, params = {}) {
     async load() {
       const current = await ctx.active.get();
       if (!current) return null;
+      favorite = await ctx.favorites.hasPerson(favoriteTarget).catch(() => false);
+      paintHeart();
       const tmdb = ctx.tmdb && ctx.tmdb.enabled && params.id ? ctx.tmdb : null;
       const info = tmdb ? await (kind === 'company' ? tmdb.company(params.id) : tmdb.person(params.id)).catch(() => null) : null;
       fillHeader(info);

@@ -13,6 +13,7 @@ export function createFavoritesPage(ctx) {
     prefix: 'favorites',
     onOpen: (entry) => {
       if (entry.collectionId) ctx.router.push('collection', { id: entry.collectionId, section: 'favorites' });
+      else if (entry.person) ctx.router.push('person', { kind: entry.person.kind, id: entry.person.id, name: entry.person.name, section: 'favorites' }); // a person / company: its page
       else if (entry.filterKind) openFilter(ctx, entry, { push: true });
       else ctx.openEntry(entry, { section: 'favorites' });
     },

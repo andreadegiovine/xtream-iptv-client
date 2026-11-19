@@ -89,3 +89,23 @@ test('the provider database gains the people store without a rebuild', async () 
   const db = await openProviderDb(`people-upgrade-${Math.random()}`);
   expect(db.objectStoreNames.contains('people')).toBe(true);
 });
+
+test('favourite people and companies: by TMDB id (else by name), for every provider, listed on the Favorites page only', async () => {
+  const { createFavoritesService, personKey } = await import('../../src/services/favorites.js');
+  const { visibleFavorites } = await import('../../src/services/favoriteEntries.js');
+  const db = await openAppDb(`people-fav-${Math.random()}`);
+  const favorites = createFavoritesService({ db });
+  expect(personKey({ kind: 'person', id: 31, name: 'Will Smith' })).toBe('person:t31');
+  expect(personKey({ kind: 'person', id: null, name: 'Attore Uno' })).toBe('person:nattore uno');
+  expect(await favorites.togglePerson({ kind: 'person', id: 31, name: 'Will Smith', photo: 'p.jpg' })).toBe(true);
+  expect(await favorites.togglePerson({ kind: 'company', id: 5, name: 'Studio' })).toBe(true);
+  expect(await favorites.hasPerson({ kind: 'person', id: 31 })).toBe(true);
+  expect(await favorites.hasPerson({ kind: 'person', id: null, name: 'Will Smith' })).toBe(false); // the key is the TMDB id
+  const ctx = { favorites, epg: null, collections: null };
+  const current = { provider: { id: 'p2' }, db: await openProviderDb(`people-fav-p-${Math.random()}`) };
+  const shown = await visibleFavorites(ctx, current); // another provider: still there
+  expect(shown.map((e) => `${e.type}:${e.name}`).sort()).toEqual(['company:Studio', 'person:Will Smith']);
+  expect(shown.find((e) => e.type === 'person').person).toEqual({ kind: 'person', id: 31, name: 'Will Smith', photo: 'p.jpg' });
+  expect(await favorites.togglePerson({ kind: 'person', id: 31, name: 'Will Smith' })).toBe(false);
+  expect(await favorites.hasPerson({ kind: 'person', id: 31 })).toBe(false);
+});

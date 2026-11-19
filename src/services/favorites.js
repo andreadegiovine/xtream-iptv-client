@@ -1,15 +1,21 @@
 import { dbGet, dbPut } from '../core/idb.js';
 import { filterId, isPortableKey } from './shareKeys.js';
+import { makeSearchKey } from './titleNormalizer.js';
 
 const KEY = 'favorites';
 
 /** Key of a favourite category / genre: `category:movie:<folded name>`, `genre:series:drama`. */
 export const filterKey = (kind, type, id) => `${kind}:${type}:${id}`;
 
+/** Key of a favourite person / company: `person:t31` (TMDB id), or `person:n<folded name>` without it. */
+export const personKey = ({ kind, id = null, name = '' }) => `${kind === 'company' ? 'company' : 'person'}:${id ? `t${id}` : `n${makeSearchKey(name)}`}`;
+
 /**
  * Favourites, kept in the app database (`kv`) and shared by all providers. Two kinds of record:
  * - a title:   { providerId, entryKey, type, addedAt }
  * - a filter:  { providerId, entryKey: filterKey(), kind: 'category' | 'genre', type, refId, name, addedAt }
+ * - a person:  { providerId: '', entryKey: personKey(), type: 'person' | 'company', person: { kind, id, name, photo }, addedAt } (only the
+ *   Favorites page lists them)
  *   (a category or a genre of one media type: it opens the matching grid)
  * `providerId` is '' when the key means the same in every provider (a title with a TMDB id, a group, a genre, a category — saved by name);
  * it is the provider's id for its own titles (no TMDB id), which only that provider shows. A provider that does not carry a favourite
@@ -84,6 +90,20 @@ export function createFavoritesService({ db, now = Date.now }) {
       const index = all.findIndex((item) => same(item, providerId, entryKey));
       if (index >= 0) all.splice(index, 1);
       else all.push({ providerId: scopeOf(providerId, entryKey), entryKey, type, addedAt: now() });
+      await save(all);
+      return index < 0;
+    },
+    /** A person or a production company (the person page): saved for every provider, by TMDB id or else by name. */
+    hasPerson(target) {
+      return this.has('', personKey(target));
+    },
+    /** Adds or removes a person / company: { kind: 'person' | 'company', id (TMDB) | null, name, photo }; resolves with the new state. */
+    async togglePerson({ kind, id = null, name = '', photo = '' }) {
+      const all = await load();
+      const entryKey = personKey({ kind, id, name });
+      const index = all.findIndex((item) => item.entryKey === entryKey);
+      if (index >= 0) all.splice(index, 1);
+      else all.push({ providerId: '', entryKey, type: kind === 'company' ? 'company' : 'person', person: { kind, id: id || null, name: String(name || ''), photo: String(photo || '') }, addedAt: now() });
       await save(all);
       return index < 0;
     },

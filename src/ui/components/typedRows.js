@@ -3,8 +3,10 @@ import { t } from '../../i18n/index.js';
 import { focusRowAt, savedRowFocus } from '../rowFocus.js';
 import { createCarousel } from './carousel.js';
 
-const ORDER = ['collection', 'movie', 'series', 'live', 'programme'];
-const LABEL = { collection: 'nav.collections', movie: 'nav.movies', series: 'nav.series', live: 'nav.live', programme: 'search.programmes' };
+const ORDER = ['collection', 'movie', 'series', 'live', 'programme', 'person', 'company'];
+const LABEL = { collection: 'nav.collections', movie: 'nav.movies', series: 'nav.series', live: 'nav.live', programme: 'search.programmes', person: 'favorites.people', company: 'favorites.companies' };
+// Cards that are not titles: no watch state, no TMDB metadata of a title.
+const NOT_TITLES = ['collection', 'programme', 'person', 'company'];
 
 /**
  * A favourite category or genre shown as a card: `{ type, key, name, filterKind: 'category' | 'genre', filterId }`.
@@ -46,6 +48,7 @@ export function createTypedRows(ctx, { prefix, onOpen, limit = 500, hideFavorite
           items: group.entries.map((entry) => {
             if (entry.type === 'collection') return { entry, type: 'movie', meta: { placeholder: 'folder', subtitle: entry.subtitle } }; // cards of a collection look like titles
             if (entry.type === 'programme') return { entry, type: 'live', meta: { subtitle: entry.subtitle } }; // a guide programme: the channel's picture, its hours
+            if (entry.type === 'person' || entry.type === 'company') return { entry, type: 'cast', meta: { placeholder: entry.type === 'company' ? 'provider' : 'user', subtitle: '' } }; // a favourite person / company: as the cast cards
             if (isFilterEntry(entry)) return { entry, type: group.type, meta: filterCardMeta(entry) };
             return entry.roleText ? { entry, type: group.type, meta: { subtitle: entry.roleText } } : { entry, type: group.type }; // the person page: the role(s) under the card
           }),
@@ -53,7 +56,7 @@ export function createTypedRows(ctx, { prefix, onOpen, limit = 500, hideFavorite
           revealTop: index === 0,
           // Cards made while scrolling get the same badges and metadata as the first ones.
           onAdded: (list, made) => {
-            if (ctx.enrich && group.type !== 'collection' && group.type !== 'programme') ctx.enrich(list.map((item) => item.entry), made, group.type, true, { hideFavorite });
+            if (ctx.enrich && NOT_TITLES.indexOf(group.type) < 0) ctx.enrich(list.map((item) => item.entry), made, group.type, true, { hideFavorite });
           },
         });
         carousel.type = group.type;
@@ -65,7 +68,7 @@ export function createTypedRows(ctx, { prefix, onOpen, limit = 500, hideFavorite
         if (i > 0) ctx.focus.link(carousel.zone.id, 'up', carousels[i - 1].zone.id);
         else if (upZone) ctx.focus.link(carousel.zone.id, 'up', upZone);
         if (i < carousels.length - 1) ctx.focus.link(carousel.zone.id, 'down', carousels[i + 1].zone.id);
-        if (ctx.enrich && carousel.type !== 'collection' && carousel.type !== 'programme') ctx.enrich(carousel.items.map((item) => item.entry), carousel.cards, carousel.type, i > 0, { hideFavorite });
+        if (ctx.enrich && NOT_TITLES.indexOf(carousel.type) < 0) ctx.enrich(carousel.items.map((item) => item.entry), carousel.cards, carousel.type, i > 0, { hideFavorite });
       });
       if (linkFromField && ctx.linkSearchDown && carousels.length) ctx.linkSearchDown(carousels[0].zone.id);
     },

@@ -314,6 +314,8 @@
   "meta.running": "In corso dal {time}",
   "player.recovering": "Problema di riproduzione, riprovo… ({attempt}/{attempts})",
   "common.never": "Mai eseguito",
+  "favorites.people": "Persone",
+  "favorites.companies": "Produzioni",
   "favorites.category": "Categoria",
   "favorites.genre": "Genere",
   "notice.opStart": "{name}: avviato",

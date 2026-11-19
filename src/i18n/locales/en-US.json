@@ -314,6 +314,8 @@
   "meta.running": "Running since {time}",
   "player.recovering": "Playback problem, trying again… ({attempt}/{attempts})",
   "common.never": "Never run",
+  "favorites.people": "People",
+  "favorites.companies": "Production companies",
   "favorites.category": "Category",
   "favorites.genre": "Genre",
   "notice.opStart": "{name} started",

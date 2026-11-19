@@ -29,12 +29,20 @@
     line-height: 1.5;
   }
 
-  // The biography in the box of the plot: five lines, "Show more" opens it all.
+  // The biography in the box of the plot: five lines; "Show more" opens it in a box of twelve that Down / Up scroll (no bar shown).
   .person-bio {
+    max-height: 1.4em * 12;
+    overflow-y: auto;
     white-space: pre-line;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
 
     &.clamped {
       max-height: 1.4em * 5;
+      overflow: hidden;
     }
   }
 }
