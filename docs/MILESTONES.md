@@ -1014,3 +1014,9 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
 - Production company page: the TMDB logo, then the number of its films and of its TV series in the catalog.
 - (The search of downloaded subtitles by name, for titles without a TMDB id, is set aside until the tester says whether that title had one.)
 - Tests: the roles of a person (with and without TMDB), the departments in the credits. Browser check with a simulated TMDB: the logo first on a title page and on a person and a company page, the person's roles, the company's counts; plus the earlier scripts. Not verified on the TV.
+
+### Patch 196 — Downloaded subtitles for titles whose TMDB id the title page found
+- The new log from the Fire TV (titles with the TMDB logo on their page): the subtitle list opened, then nothing — no choice, no OpenSubtitles line. The title page finds the TMDB id of a title also from its details or TMDB's search by title, but the player looked for it only in the key and the provider's list row: for those titles "Download from OpenSubtitles" ended in silence. Now the title page gives the player the TMDB id it found, which OpenSubtitles is asked for; without any, a notice says nothing was found.
+- Logs: the list (tracks of the player and of the file, downloaded or not, OpenSubtitles on or without a key), closed without a choice, the download asked, what is searched, why there is nothing to search (no TMDB id, an episode without its number).
+- (The search by title name of patch 194, set aside, was dropped: the titles of the report have a TMDB id.)
+- Tests: the player asking OpenSubtitles with the TMDB id of the title page (its key without one) and drawing the lines; a notice when there is no TMDB id. Not verified on the Fire TV.

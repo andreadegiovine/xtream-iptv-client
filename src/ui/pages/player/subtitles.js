@@ -79,6 +79,7 @@ export function createPlayerSubtitles({ ctx, engine, params, isLive, isTrailer, 
     // The tracks the app reads replace the player's (which list them without sending their lines).
     const own = embedded ? embedded.tracks : [];
     const tracks = own.length ? [] : engine.getSubtitleTracks ? engine.getSubtitleTracks() : [];
+    log.info('Subtitles list', `player tracks ${tracks.length}`, `file tracks ${own.length}`, `downloaded ${online ? 'yes' : 'no'}`, `OpenSubtitles ${ctx.openSubtitles && ctx.openSubtitles.enabled ? 'on' : 'off (no key)'}`);
     if (!tracks.length && !own.length && !online && !canDownload()) {
       ctx.notices.warning(t('player.subtitles.none'), { scope: 'playback', key: 'track' });
       return;
@@ -91,12 +92,14 @@ export function createPlayerSubtitles({ ctx, engine, params, isLive, isTrailer, 
       ...(canDownload() ? [{ label: t('player.subtitles.download'), value: DOWNLOAD }] : []),
     ];
     const value = await ctx.dialogs.choose({ title: t('player.subtitles'), options, selected: subtitle });
+    if (value === null) log.info('Subtitles list closed without a choice');
     if (value === null || isDestroyed()) return;
     if (value === SYNC) {
       await chooseDelay();
       return;
     }
     if (value === DOWNLOAD) {
+      log.info('Subtitles: download from OpenSubtitles asked');
       await downloadOnline();
       return;
     }
@@ -268,19 +271,31 @@ export function createPlayerSubtitles({ ctx, engine, params, isLive, isTrailer, 
     }, ONLINE_TICK_MS);
   }
 
-  /** TMDB id (and episode) of what is playing: from the key, or from the provider's list row when it has one. */
+  /**
+   * TMDB id (and episode) of what is playing: the one the title page found (also by TMDB's search by title: its key may have none), else
+   * from the key, or from the provider's list row when it has one. Null, logged with why, when there is none.
+   */
   async function tmdbQuery() {
-    let key = params.entryKey || '';
-    if (!/^(movie|series):t\d+$/.test(key)) {
-      const current = await ctx.active.get();
-      key = (current && (await portableKeyFor(current.db, key))) || key;
+    let id = Number(params.tmdbId) || null;
+    if (!id) {
+      let key = params.entryKey || '';
+      if (!/^(movie|series):t\d+$/.test(key)) {
+        const current = await ctx.active.get();
+        key = (current && (await Promise.resolve().then(() => portableKeyFor(current.db, key)).catch(() => null))) || key;
+      }
+      const m = /^(movie|series):t(\d+)$/.exec(key);
+      if (m && m[1] === params.type) id = Number(m[2]);
     }
-    const m = /^(movie|series):t(\d+)$/.exec(key);
-    if (!m || m[1] !== params.type) return null;
+    if (!id) {
+      log.info('OpenSubtitles: no TMDB id for', params.type, params.entryKey || '?');
+      return null;
+    }
     const languages = subtitleLanguages(i18n.getLocale());
-    if (m[1] === 'movie') return { tmdbId: Number(m[2]), languages };
+    if (params.type === 'movie') return { tmdbId: id, languages };
     const ep = current();
-    return ep && ep.season !== undefined && ep.number !== undefined ? { tmdbId: Number(m[2]), season: Number(ep.season), episode: Number(ep.number), languages } : null;
+    if (ep && ep.season !== undefined && ep.number !== undefined) return { tmdbId: id, season: Number(ep.season), episode: Number(ep.number), languages };
+    log.info('OpenSubtitles: the episode has no season / number', params.entryKey || '?');
+    return null;
   }
 
   /**
@@ -291,7 +306,12 @@ export function createPlayerSubtitles({ ctx, engine, params, isLive, isTrailer, 
     const service = ctx.openSubtitles;
     if (isLive || isTrailer || !service || !service.enabled || token !== loadToken() || isDestroyed()) return;
     const query = await tmdbQuery().catch(() => null);
-    if (!query || token !== loadToken() || isDestroyed()) return;
+    if (token !== loadToken() || isDestroyed()) return;
+    if (!query) {
+      ctx.notices.warning(t('player.subtitles.notFound'), { scope: 'playback', key: 'subs-online' }); // said, not silent
+      return;
+    }
+    log.info('OpenSubtitles: searching', `tmdb ${query.tmdbId}`, query.season !== undefined ? `S${query.season}E${query.episode}` : '', query.languages.join(','));
     onlineNotice = ctx.notices.info(t('player.subtitles.downloading'), { scope: 'playback', key: 'subs-online', permanent: true });
     let found = null;
     let failed = false;

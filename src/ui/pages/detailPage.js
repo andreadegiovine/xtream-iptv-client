@@ -104,6 +104,8 @@ export function createDetailPage(ctx, params) {
       type: entry.type,
       entryKey: entry.key,
       title: data().title,
+      // The TMDB id the page found (its key, the details, or TMDB's search by title): OpenSubtitles searches by it.
+      tmdbId: (meta && meta.tmdbId) || entry.tmdbId || null,
       icon: entry.icon,
       playlist,
       index: startIndex || 0,

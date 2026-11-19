@@ -4,7 +4,7 @@ import { createNoticeService } from '../../src/ui/components/notice.js';
 
 const wait = (ms = 30) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function setup({ tracks = [], fetch, fileFetch = async () => ({ status: 404, headers: { get: () => null } }), url = 'http://h/movie/1.mp4' }) {
+function setup({ tracks = [], fetch, fileFetch = async () => ({ status: 404, headers: { get: () => null } }), url = 'http://h/movie/1.mp4', entryKey = 'movie:t603', tmdbId = null }) {
   let handlers = null;
   let now = 0;
   const engine = {
@@ -35,7 +35,7 @@ function setup({ tracks = [], fetch, fileFetch = async () => ({ status: 404, hea
     openSubtitles: { enabled: true, fetch: jest.fn(fetch) },
     fetch: fileFetch,
   };
-  const page = createPlayerPage(ctx, { type: 'movie', entryKey: 'movie:t603', title: 'Matrix', playlist: [{ id: 1, ext: 'mp4', title: '' }], index: 0 });
+  const page = createPlayerPage(ctx, { type: 'movie', entryKey, tmdbId, title: 'Matrix', playlist: [{ id: 1, ext: 'mp4', title: '' }], index: 0 });
   document.body.appendChild(page.el);
   page.mount();
   return { ctx, page, engine, start: () => handlers && (handlers.onPrepared(), handlers.onBufferingDone()), setTime: (ms) => (now = ms) };
@@ -240,5 +240,34 @@ test('an MP4 with tx3g tracks: the app reads them and draws the chosen one', asy
   s.setTime(3500);
   await wait(500);
   expect(s.page.el.querySelector('.player-subtitle').textContent).toBe('Hello\nworld, again');
+  s.page.destroy();
+}, 10000);
+
+test('the TMDB id the title page found (its key has none: found by TMDB search or the details) is the one OpenSubtitles is asked for', async () => {
+  const s = setup({ entryKey: 'movie:i77', tmdbId: 603, fetch: async () => ({ language: 'it', cues: [{ start: 1000, end: 3000, text: 'Ciao' }] }) });
+  await wait();
+  s.start();
+  await wait(300);
+  const answers = [(options) => options.find((o) => o.label === 'Download from OpenSubtitles').value, (options) => options[1].value];
+  s.ctx.dialogs.choose.mockImplementation(async ({ options }) => answers.shift()(options));
+  pressSubtitles(s);
+  await wait(300);
+  expect(s.ctx.openSubtitles.fetch).toHaveBeenCalledWith({ tmdbId: 603, languages: expect.any(Array) }, { url: 'http://h/movie/1.mp4' });
+  s.setTime(1500);
+  await wait(300);
+  expect(s.page.el.querySelector('.player-subtitle').textContent).toBe('Ciao');
+  s.page.destroy();
+}, 10000);
+
+test('no TMDB id at all: a notice says nothing was found (it used to end in silence)', async () => {
+  const s = setup({ entryKey: 'movie:i77', fetch: async () => null });
+  await wait();
+  s.start();
+  await wait(300);
+  s.ctx.dialogs.choose.mockImplementation(async ({ options }) => options.find((o) => o.label === 'Download from OpenSubtitles').value);
+  pressSubtitles(s);
+  await wait(300);
+  expect(s.ctx.openSubtitles.fetch).not.toHaveBeenCalled();
+  expect(noticeTexts().some((text) => /no subtitles|not found|No subtitles/i.test(text))).toBe(true);
   s.page.destroy();
 }, 10000);
