@@ -105,7 +105,12 @@ test('favourite people and companies: by TMDB id (else by name), for every provi
   const current = { provider: { id: 'p2' }, db: await openProviderDb(`people-fav-p-${Math.random()}`) };
   const shown = await visibleFavorites(ctx, current); // another provider: still there
   expect(shown.map((e) => `${e.type}:${e.name}`).sort()).toEqual(['company:Studio', 'person:Will Smith']);
-  expect(shown.find((e) => e.type === 'person').person).toEqual({ kind: 'person', id: 31, name: 'Will Smith', photo: 'p.jpg' });
+  expect(shown.find((e) => e.type === 'person').person).toEqual({ kind: 'person', id: 31, name: 'Will Smith', photo: 'p.jpg', subtitle: '' });
+  // Seen again on its page: the line under its card (roles; a company its counts) kept up to date.
+  await favorites.refreshPerson({ kind: 'person', id: 31, name: 'Will Smith', subtitle: 'Acting · Production' });
+  await favorites.refreshPerson({ kind: 'company', id: 5, name: 'Studio', subtitle: '12 movies · 3 TV series' });
+  const again = await visibleFavorites(ctx, current);
+  expect(again.map((e) => `${e.name}=${e.subtitle}`).sort()).toEqual(['Studio=12 movies · 3 TV series', 'Will Smith=Acting · Production']);
   expect(await favorites.togglePerson({ kind: 'person', id: 31, name: 'Will Smith' })).toBe(false);
   expect(await favorites.hasPerson({ kind: 'person', id: 31 })).toBe(false);
 });

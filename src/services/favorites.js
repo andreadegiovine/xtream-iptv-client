@@ -98,14 +98,22 @@ export function createFavoritesService({ db, now = Date.now }) {
       return this.has('', personKey(target));
     },
     /** Adds or removes a person / company: { kind: 'person' | 'company', id (TMDB) | null, name, photo }; resolves with the new state. */
-    async togglePerson({ kind, id = null, name = '', photo = '' }) {
+    async togglePerson({ kind, id = null, name = '', photo = '', subtitle = '' }) {
       const all = await load();
       const entryKey = personKey({ kind, id, name });
       const index = all.findIndex((item) => item.entryKey === entryKey);
       if (index >= 0) all.splice(index, 1);
-      else all.push({ providerId: '', entryKey, type: kind === 'company' ? 'company' : 'person', person: { kind, id: id || null, name: String(name || ''), photo: String(photo || '') }, addedAt: now() });
+      else all.push({ providerId: '', entryKey, type: kind === 'company' ? 'company' : 'person', person: { kind, id: id || null, name: String(name || ''), photo: String(photo || ''), subtitle: String(subtitle || '') }, addedAt: now() });
       await save(all);
       return index < 0;
+    },
+    /** A favourite person / company seen again: its picture and the line under its card (roles, counts) kept up to date. */
+    async refreshPerson({ kind, id = null, name = '', photo = '', subtitle = '' }) {
+      const all = await load();
+      const item = all.find((it) => it.entryKey === personKey({ kind, id, name }));
+      if (!item || (item.person.subtitle === subtitle && (!photo || item.person.photo === photo))) return;
+      item.person = { ...item.person, subtitle: String(subtitle || ''), ...(photo ? { photo } : {}) };
+      await save(all);
     },
     /** `name` matters for a category (saved by name). */
     hasFilter(providerId, kind, type, id, name) {

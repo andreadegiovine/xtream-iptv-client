@@ -48,7 +48,7 @@ export function createTypedRows(ctx, { prefix, onOpen, limit = 500, hideFavorite
           items: group.entries.map((entry) => {
             if (entry.type === 'collection') return { entry, type: 'movie', meta: { placeholder: 'folder', subtitle: entry.subtitle } }; // cards of a collection look like titles
             if (entry.type === 'programme') return { entry, type: 'live', meta: { subtitle: entry.subtitle } }; // a guide programme: the channel's picture, its hours
-            if (entry.type === 'person' || entry.type === 'company') return { entry, type: 'cast', meta: { placeholder: entry.type === 'company' ? 'provider' : 'user', subtitle: '' } }; // a favourite person / company: as the cast cards
+            if (entry.type === 'person' || entry.type === 'company') return { entry, type: 'cast', meta: { placeholder: entry.type === 'company' ? 'provider' : 'user', subtitle: entry.subtitle || '' } }; // a favourite person / company: as the cast cards, its roles or counts under it
             if (isFilterEntry(entry)) return { entry, type: group.type, meta: filterCardMeta(entry) };
             return entry.roleText ? { entry, type: group.type, meta: { subtitle: entry.roleText } } : { entry, type: group.type }; // the person page: the role(s) under the card
           }),

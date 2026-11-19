@@ -16,7 +16,7 @@ export async function visibleFavorites(ctx, current) {
     if (item.kind) continue;
     if (item.person) {
       // A person or a production company: a card of its own (its photo or logo), opening its page.
-      entries.push({ key: item.entryKey, type: item.type, name: item.person.name, icon: item.person.photo, person: item.person });
+      entries.push({ key: item.entryKey, type: item.type, name: item.person.name, icon: item.person.photo, person: item.person, subtitle: item.person.subtitle || '' });
       continue;
     }
     if (isCollectionKey(item.entryKey)) {

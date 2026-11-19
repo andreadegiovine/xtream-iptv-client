@@ -265,10 +265,12 @@ export function createPersonPage(ctx, params = {}) {
       const entries = await personTitles({ info, name: params.name, kind, getEntryOf: (key) => getEntry(current.db, key).catch(() => null), byName: (role, name) => titlesByName(current.db, role, name).catch(() => []) });
       pickBackdrop(info, entries).catch(() => undefined);
       // The info line: a person's roles; a company's number of films and series of the catalog.
-      if (kind === 'company') {
-        const count = (type) => entries.filter((e) => e.type === type).length;
-        setMeta([t('person.movies', { count: count('movie') }), t('person.series', { count: count('series') })], Boolean(info));
-      } else setMeta(personRoles(info, entries), Boolean(info));
+      const count = (type) => entries.filter((e) => e.type === type).length;
+      const parts = kind === 'company' ? [t('person.movies', { count: count('movie') }), t('person.series', { count: count('series') })] : personRoles(info, entries);
+      setMeta(parts, Boolean(info));
+      // The line under its card in the favourites: the same roles (a company: its counts), kept up to date when it is one.
+      favoriteTarget = { ...favoriteTarget, subtitle: parts.join(' · ') };
+      if (favorite) ctx.favorites.refreshPerson(favoriteTarget).catch(() => undefined);
       return { entries, status: entries.length ? '' : t('person.empty') };
     },
   });

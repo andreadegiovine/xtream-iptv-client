@@ -1054,3 +1054,8 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
 - Every point removed: the alignment is deleted (not saved empty), the subtitles go back to their own timing and the entry of the subtitle list is a plain one again.
 - Once the procedure is done, the entry "Alignment of the downloaded subtitles" shows a check at its right (green) in place of "(done)". Lists of the dialogs take an icon after the label (`trailingIcon` of an option).
 - Tests: every point removed (deleted, the plain entry, the lines without the delay), the check on the entry. Browser check with a real video. Not verified on the TV.
+
+### Patch 203 — The rating first on a title page; roles and counts under the favourite people and companies
+- Title page: the age rating is the first of the chips (before collections, categories, genres) and is named as in the sidebar's Rating group ("TV-14" → "14+", "T" → "All ages"); a rating whose age is unknown stays as TMDB writes it.
+- Favorites page: under the card of a person their roles (as in the info line of their page), under a company the number of its films and TV series in the catalog. Saved with the favourite and kept up to date each time its page is opened.
+- Tests: the line under the favourite cards (saved, updated). Browser check with a simulated TMDB: the rating first and named "13+" (PG-13), the roles under a favourite person; plus the earlier scripts. Not verified on the TV.

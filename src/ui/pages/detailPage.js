@@ -21,6 +21,7 @@ import { createCarousel } from '../components/carousel.js';
 import { createSelectField } from '../atoms/selectField.js';
 import { getEntry, listCategories, listNetworks, createMergeSearch } from '../../services/catalogQuery.js';
 import { ratingAge } from '../../services/kidsLimits.js';
+import { ageLabel } from '../ageLabel.js';
 import { peopleFromInfo, writePeople } from '../../services/peopleIndex.js';
 import { rebuildLive } from '../../services/rebuildLive.js';
 import { watchKey, shouldResume, isWatched } from '../../services/watchStore.js';
@@ -86,7 +87,7 @@ export function createDetailPage(ctx, params) {
     { class: 'page detail loading' },
     backdropEl,
     poster,
-    h('div', { class: 'detail-body' }, titleEl, metaEl, versionEl, actionsEl, plotEl, collectionsEl, categoriesEl, tagsEl, ratingEl, directorEl, companiesEl, epgEl, episodesEl, castEl, relatedEl),
+    h('div', { class: 'detail-body' }, titleEl, metaEl, versionEl, actionsEl, plotEl, ratingEl, collectionsEl, categoriesEl, tagsEl, directorEl, companiesEl, epgEl, episodesEl, castEl, relatedEl),
   );
 
   const data = () => ({
@@ -342,6 +343,7 @@ export function createDetailPage(ctx, params) {
   }
 
   function renderCategories(next) {
+    renderRating(next); // first of the chips
     renderChips(collectionsEl, 'detailCollections', collectionItems, 'collection', next, t('nav.collections'), (item) => ctx.router.push('collection', { id: item.id, section: params.section || 'collections' }));
     // The categories of each provider that has the title: "Categories <provider>" with several active, one line each.
     clear(categoriesEl);
@@ -358,7 +360,6 @@ export function createDetailPage(ctx, params) {
       renderChips(line, slot ? `detailCategories${slot}` : 'detailCategories', bySlot.get(slot), 'category', next, label);
     });
     renderChips(tagsEl, 'detailGenres', entry.type === 'live' ? [] : genreItems(), 'genre', next, t('detail.genres'));
-    renderRating(next);
     renderDirectors(next);
     renderCompanies(next);
   }
@@ -372,7 +373,8 @@ export function createDetailPage(ctx, params) {
     const value = entry.type === 'live' || !meta ? '' : meta.certification;
     if (!value) return;
     const age = ratingAge(value);
-    renderChips(ratingEl, 'detailRating', [{ id: age === null ? undefined : String(age), name: value }], 'rating', next, t('detail.certification'), (item) => {
+    // Named as in the sidebar ("TV-14" → "14+", "T" → "All ages"); a rating whose age is unknown as TMDB writes it.
+    renderChips(ratingEl, 'detailRating', [{ id: age === null ? undefined : String(age), name: age === null ? value : ageLabel(age) }], 'rating', next, t('detail.certification'), (item) => {
       const section = { movie: 'movies', series: 'series' }[entry.type];
       ctx.router.push('browse', { type: entry.type, section, filter: { kind: 'rating', id: item.id }, focusSidebar: true });
     });
