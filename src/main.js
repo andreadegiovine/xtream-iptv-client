@@ -7,6 +7,7 @@ import { createProfiles, profileSettings } from './services/profiles.js';
 import { pickProfile } from './ui/profilePicker.js';
 import { startTooltips } from './ui/tooltip.js';
 import { log } from './core/logger.js';
+import { onVersionChange } from './core/idb.js';
 import { providerHiddenSections } from './services/providerTypes.js';
 import { visibleFavorites } from './services/favoriteEntries.js';
 import { forgetUpdate, runningVersions } from './services/updates.js';
@@ -106,6 +107,15 @@ import { updateInBackground, restartDialog, checkUpdates, canUpdateItself } from
 import { startInAppScheduling } from './app/scheduling.js';
 
 async function boot() {
+  // A database of this app opened with a newer schema elsewhere closes ours: every read would fail from then on (pages empty, "never
+  // run", the integration boxes shown). Logged, then the app starts again on the new schema.
+  let reloading = false;
+  onVersionChange(({ name, from, to }) => {
+    log.warn(`Database ${name} upgraded elsewhere (${from} → ${to}): starting again`);
+    if (reloading || typeof location === 'undefined') return;
+    reloading = true;
+    setTimeout(() => location.reload(), 500);
+  });
   const db = await openAppDb();
   const globalSettings = new SettingsService(db);
   const providers = new ProviderStore(db);
@@ -233,8 +243,13 @@ async function boot() {
     }
   };
   ctx.apiKeys = createApiKeys({ db });
-  const keysReady = ctx.apiKeys.load(); // read while the rest of the start-up is set up; awaited before the first page
-  keysReady.catch(() => undefined);
+  // Read while the rest of the start-up is set up; awaited before the first page. A failed read is logged and tried again once (left
+  // empty it would show every service as off, the integration boxes included).
+  const keysReady = ctx.apiKeys.load().catch((err) => {
+    log.warn('API keys: read failed, trying again', err && err.message);
+    return new Promise((resolve) => setTimeout(resolve, 1500)).then(() => ctx.apiKeys.load());
+  });
+  keysReady.catch((err) => log.warn('API keys: read failed', err && err.message));
   ctx.trakt = createTraktService({ db: pdb, client: createTraktClient({ getCredentials: () => ({ clientId: ctx.apiKeys.get().traktId, clientSecret: ctx.apiKeys.get().traktSecret }) }) });
   ctx.watch = createWatchState({ store: new WatchStore(pdb), trakt: ctx.trakt });
   ctx.openSubtitles = createOpenSubtitles({ getKey: () => ctx.apiKeys.get().openSubtitlesKey });

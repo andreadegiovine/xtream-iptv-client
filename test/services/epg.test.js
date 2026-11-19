@@ -257,3 +257,26 @@ describe('programme search in the search worker', () => {
     expect(await svc.searchProgrammes('air')).toEqual([]); // the guide was cleared
   });
 });
+
+test('the guide download waits for its consumer (the writes behind it): one chunk at a time', async () => {
+  const { readGuide } = await import('../../src/services/epgSync.js');
+  const util = await import('util');
+  if (typeof global.TextDecoder === 'undefined') global.TextDecoder = util.TextDecoder;
+  const encode = (text) => new util.TextEncoder().encode(text);
+  const chunks = ['<tv>', '<programme/>', '</tv>'];
+  let reads = 0;
+  const body = { getReader: () => ({ read: async () => { reads += 1; const value = chunks.shift(); return value === undefined ? { done: true } : { done: false, value: encode(value) }; } }) };
+  const fetchImpl = async () => ({ ok: true, body });
+  const seen = [];
+  let release = null;
+  const done = readGuide('http://g', (text) => {
+    seen.push(text);
+    if (seen.length === 1) return new Promise((resolve) => { release = resolve; }); // the first chunk's writes are slow
+    return undefined;
+  }, { fetchImpl });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(reads).toBe(1); // nothing more is read while the consumer is busy
+  release();
+  await done;
+  expect(seen.join('')).toBe('<tv><programme/></tv>');
+});

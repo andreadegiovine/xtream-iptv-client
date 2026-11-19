@@ -16,6 +16,15 @@ export function transactionDone(tx) {
 }
 
 /** Opens a database; `upgrade(db, oldVersion, newVersion, tx)` runs inside the versionchange tx. */
+/**
+ * Called when a connection of this context is closed because a newer schema was opened elsewhere (another context of a newer build): its
+ * reads would fail from then on, every page showing nothing. The app sets it (main.js: log and start again); workers leave it empty.
+ */
+let versionChangeHandler = null;
+export function onVersionChange(handler) {
+  versionChangeHandler = handler;
+}
+
 export function openDb(name, version, { upgrade } = {}) {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(name, version);
@@ -29,7 +38,11 @@ export function openDb(name, version, { upgrade } = {}) {
     };
     request.onsuccess = () => {
       const db = request.result;
-      db.onversionchange = () => db.close();
+      db.onversionchange = (event) => {
+        db.close();
+        // (A database being deleted — a provider removed, a reset — has no new version: not a newer schema.)
+        if (versionChangeHandler && event && event.newVersion) versionChangeHandler({ name, from: event.oldVersion, to: event.newVersion });
+      };
       resolve(db);
     };
     request.onerror = () =>

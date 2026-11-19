@@ -1,14 +1,15 @@
 import { h } from '../dom.js';
 import { t, i18n } from '../../i18n/index.js';
-import { icon } from '../icons.js';
-import { createButton } from '../atoms/button.js';
+import { createHeading } from '../atoms/heading.js';
+import { createChip } from '../atoms/chip.js';
+import { createPlaceholder } from '../atoms/placeholder.js';
+import { createMetaSeparator, createMetaText } from '../atoms/metaParts.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { ListModel } from '../focus/models.js';
 import { createCarouselPage } from './templates.js';
 import { getEntry } from '../../services/catalogQuery.js';
 import { titlesByName } from '../../services/peopleIndex.js';
 
-const BIO_LINES_CHARS = 420; // a longer biography is cut, "Read more" shows it all
 const ZONE = 'personHeader';
 
 /** "1968-09-25" → "25 September 1968" in the language of the app ('' when not a date). */
@@ -87,48 +88,67 @@ export async function personTitles({ info, name, kind, getEntryOf, byName = asyn
 
 /**
  * A person or a production company (the "person" template): at the top the picture, the name, what they do, the facts and the biography
- * (TMDB; without TMDB only the name), below the carousels of the films and series of the catalog they are in, with their role under each
+ * (TMDB; without TMDB only the name) laid out as the top of a title page, below the carousels of the films and series of the catalog they are in, with their role under each
  * card (the Favorites template). `params`: { kind: 'person' | 'company', id (TMDB id or null), name }.
  */
 export function createPersonPage(ctx, params = {}) {
   const kind = params.kind === 'company' ? 'company' : 'person';
-  const picture = h('div', { class: kind === 'company' ? 'person-picture logo' : 'person-picture' }, icon(kind === 'company' ? 'provider' : 'user', 'person-placeholder'));
-  const nameEl = h('h1', { class: 'person-name', text: params.name || '' });
-  const roleEl = h('div', { class: 'person-role muted' });
+  // The top of the page is the title page's (same classes and style): the picture on the left (sticky), on the right the name, what they
+  // do, the facts and the biography in the box of the plot, cut to a few lines with "Show more" / "Show less".
+  const poster = h('div', { class: kind === 'company' ? 'detail-poster square company-logo' : 'detail-poster' }, createPlaceholder({ icon: kind === 'company' ? 'provider' : 'user' }));
+  const nameEl = createHeading({ level: 1, className: 'detail-title', text: params.name || '' });
+  const metaEl = h('p', { class: 'detail-meta' });
   const factsEl = h('div', { class: 'person-facts' });
-  const bioEl = h('p', { class: 'person-bio' });
-  const moreBtn = createButton({ label: t('person.readMore'), className: 'person-more' });
-  moreBtn.style.display = 'none';
-  let fullBio = '';
-  const buttons = () => (moreBtn.style.display === 'none' ? [] : [moreBtn]);
+  const bioEl = h('p', { class: 'detail-plot person-bio clamped' });
+  const moreChip = createChip({ text: t('person.showMore'), link: true });
+  const moreRow = h('div', { class: 'detail-categories person-more' }, moreChip);
+  moreRow.style.display = 'none';
+  const buttons = () => (moreRow.style.display === 'none' ? [] : [moreChip]);
   const headerZone = new FocusZone({
     id: ZONE,
     nodes: buttons,
     model: new ListModel({ orientation: 'horizontal', getCount: () => buttons().length }),
     onFocus: (i) => buttons()[i] && buttons()[i].classList.add('focused'),
     onBlur: (i) => buttons()[i] && buttons()[i].classList.remove('focused'),
-    onActivate: () => ctx.dialogs.confirm({ title: nameEl.textContent, content: h('p', { class: 'person-bio-full', text: fullBio }), confirmLabel: t('common.close'), cancelLabel: null }),
+    onActivate: () => {
+      const open = bioEl.classList.toggle('clamped') === false;
+      moreChip.textContent = t(open ? 'person.showLess' : 'person.showMore');
+    },
   });
-  const header = h('div', { class: 'person-header' }, picture, h('div', { class: 'person-info' }, nameEl, roleEl, factsEl, bioEl, moreBtn));
+  const header = h('div', { class: 'person-top' }, poster, h('div', { class: 'detail-body' }, nameEl, metaEl, factsEl, bioEl, moreRow));
+
+  function setMeta(parts) {
+    while (metaEl.firstChild) metaEl.removeChild(metaEl.firstChild);
+    parts.filter(Boolean).forEach((part, i) => {
+      if (i > 0) metaEl.appendChild(createMetaSeparator());
+      metaEl.appendChild(createMetaText(part));
+    });
+  }
 
   function fillHeader(info) {
     if (!info) {
-      roleEl.textContent = params.role === 'director' ? t('person.director') : kind === 'company' ? t('detail.companies') : '';
+      setMeta([params.role === 'director' ? t('person.director') : kind === 'company' ? t('detail.companies') : '']);
       return;
     }
     nameEl.textContent = info.name || params.name || '';
-    roleEl.textContent = kind === 'company' ? t('detail.companies') : departmentLabel(info.department);
+    setMeta([kind === 'company' ? t('detail.companies') : departmentLabel(info.department)]);
     const image = kind === 'company' ? info.logo : info.photo;
     if (image) {
-      while (picture.firstChild) picture.removeChild(picture.firstChild);
-      picture.appendChild(h('img', { src: image, alt: '' }));
+      // Shown once loaded (the placeholder stays until then, and when the picture cannot be loaded).
+      const img = h('img', { alt: '', referrerpolicy: 'no-referrer' });
+      img.addEventListener('load', () => {
+        while (poster.firstChild) poster.removeChild(poster.firstChild);
+        poster.appendChild(img);
+      });
+      img.src = image;
     }
     while (factsEl.firstChild) factsEl.removeChild(factsEl.firstChild);
     personFacts(info, i18n.getLocale()).forEach((line) => factsEl.appendChild(h('div', { text: line })));
-    fullBio = (kind === 'company' ? info.description : info.biography) || '';
-    const cut = fullBio.length > BIO_LINES_CHARS;
-    bioEl.textContent = cut ? `${fullBio.slice(0, fullBio.lastIndexOf(' ', BIO_LINES_CHARS) > 0 ? fullBio.lastIndexOf(' ', BIO_LINES_CHARS) : BIO_LINES_CHARS)}…` : fullBio;
-    moreBtn.style.display = cut ? '' : 'none';
+    bioEl.textContent = (kind === 'company' ? info.description : info.biography) || '';
+    // "Show more" only when the text goes past the lines shown.
+    setTimeout(() => {
+      moreRow.style.display = bioEl.scrollHeight > bioEl.clientHeight + 2 ? '' : 'none';
+    }, 0);
   }
 
   return createCarouselPage(ctx, {

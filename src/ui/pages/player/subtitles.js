@@ -101,6 +101,7 @@ export function createPlayerSubtitles({ ctx, engine, params, isLive, isTrailer, 
       return;
     }
     subtitle = value;
+    log.info('Subtitles chosen', String(value), `engine ${engine.kind || '?'}`, `player tracks ${tracks.length}`, `file tracks ${own.length}`, `downloaded ${online ? online.cues.length : 0} lines`);
     showSubtitle('');
     showControls();
     // The engine call can stall the picture for a moment: let the list close first.
@@ -158,17 +159,39 @@ export function createPlayerSubtitles({ ctx, engine, params, isLive, isTrailer, 
   function startOnline() {
     stopOnline();
     if (!online) return;
+    // Diagnostics (a report of downloaded subtitles not shown on one device): what is drawn, against which clock.
+    const first = online.cues[0];
+    const startedAt = Date.now();
+    let shownOnce = false;
+    let checked = false;
+    let readFailed = false;
+    log.info('Downloaded subtitles on', `engine ${engine.kind || '?'}`, `position ${Math.round(Number(engine.getTime()) || 0)} ms`, `${online.cues.length} lines`, `first ${first ? `${first.start}-${first.end} ms` : 'none'}`, `delay ${onlineDelay} ms`);
     onlineTimer = setInterval(() => {
       let ms = 0;
       try {
         ms = Number(engine.getTime()) || 0;
-      } catch {
+      } catch (err) {
+        if (!readFailed) log.warn('Downloaded subtitles: the position cannot be read', err && err.message);
+        readFailed = true;
         return;
       }
       const cue = cueAt(online.cues, ms - onlineDelay);
+      if (!checked && !shownOnce && Date.now() - startedAt > 10000) {
+        // Ten seconds without a line: where the clock is and where the lines are.
+        checked = true;
+        const next = online.cues.find((c) => c.end >= ms - onlineDelay);
+        const box = subtitleEl.getBoundingClientRect ? subtitleEl.getBoundingClientRect() : null;
+        log.warn('Downloaded subtitles: no line shown in 10 s', `position ${Math.round(ms)} ms`, `next line ${next ? `${next.start}-${next.end} ms` : 'none'}`, `delay ${onlineDelay} ms`, `box ${box ? `${Math.round(box.width)}x${Math.round(box.height)}` : '?'}`);
+      }
       if (cue === onlineCue) return;
       onlineCue = cue;
       showSubtitle(cue ? cue.text : '', cue ? cue.end + onlineDelay - ms : 0);
+      if (cue && !shownOnce) {
+        shownOnce = true;
+        const box = subtitleEl.getBoundingClientRect ? subtitleEl.getBoundingClientRect() : null;
+        const style = typeof getComputedStyle === 'function' ? getComputedStyle(subtitleEl) : null;
+        log.info('Downloaded subtitles: first line shown', `position ${Math.round(ms)} ms`, `line ${cue.start}-${cue.end} ms`, `box ${box ? `${Math.round(box.left)},${Math.round(box.top)} ${Math.round(box.width)}x${Math.round(box.height)}` : '?'}`, `display ${style ? style.display : '?'}`, `opacity ${style ? style.opacity : '?'}`);
+      }
     }, ONLINE_TICK_MS);
   }
   function stopOnline() {

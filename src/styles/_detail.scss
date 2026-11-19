@@ -20,7 +20,9 @@
 }
 
 // ---- detail ----
-.page.detail {
+// (Also the top of the person page, `.person-top`: the same layout and style, see pages/personPage.js.)
+.page.detail,
+.person-top {
   position: relative;
   display: flex;
   align-items: flex-start;

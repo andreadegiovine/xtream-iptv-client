@@ -5,7 +5,12 @@ import { createChannelSummary, EPG_CHANNELS_KEY } from './epgChannels.js';
 import { wrapApiUrl } from '../core/env.js';
 import { toAppError, AppError, ErrorCode } from '../core/errors.js';
 
-export const EPG_BATCH = 2000;
+export const EPG_BATCH = 1000;
+// After each batch the guide waits this long: the rest of the app reads its databases in between (Chromium runs the IndexedDB work of an
+// origin in one queue: a guide written back to back kept the catalog, the logs and the keys waiting until it ended, the pages showing
+// their empty state).
+export const EPG_YIELD_MS = 40;
+const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 export const EPG_TTL_MS = 24 * 3600 * 1000;
 const META_KEY = 'epg';
 
@@ -57,11 +62,11 @@ export async function readGuide(url, onText, { signal, fetchImpl = fetch } = {})
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
-      onText(decoder.decode(value, { stream: true }));
+      await onText(decoder.decode(value, { stream: true })); // the consumer can hold the download (its writes are behind)
     }
-    onText(decoder.decode());
+    await onText(decoder.decode());
   } else {
-    onText(await res.text());
+    await onText(await res.text());
   }
 }
 
@@ -80,11 +85,15 @@ export async function syncEpg({ db, url, now = Date.now(), signal, emit = () => 
   let buffer = [];
   let written = 0;
   let writes = Promise.resolve();
+  let queued = 0; // batches waiting to be written
   const flush = () => {
     const batch = buffer;
     buffer = [];
     written += batch.length;
-    writes = writes.then(() => dbPutMany(db, 'epg', batch));
+    queued += 1;
+    writes = writes.then(() => dbPutMany(db, 'epg', batch)).then(() => pause(EPG_YIELD_MS)).then(() => {
+      queued -= 1;
+    });
     writes.catch(() => undefined); // a failed write is thrown where `writes` is awaited, not as an unhandled rejection meanwhile
   };
   const summary = shared || createChannelSummary(); // span and genres of every channel, for the guide page and the Live TV sidebar
@@ -99,7 +108,11 @@ export async function syncEpg({ db, url, now = Date.now(), signal, emit = () => 
   });
   emit({ event: 'progress', phase: 'download' });
   const t0 = Date.now();
-  await readGuide(url, (text) => parser.push(text), { signal, fetchImpl });
+  // At most one batch waits while the next is read: the download waits for the database instead of piling writes up.
+  await readGuide(url, async (text) => {
+    parser.push(text);
+    if (queued > 1) await writes;
+  }, { signal, fetchImpl });
   if (written + buffer.length === 0 && parser.stats().total === 0) throw new AppError(ErrorCode.BAD_RESPONSE, 'Guide is empty');
   emit({ event: 'progress', phase: 'write', done: 0, total: written + buffer.length });
   if (buffer.length) flush();
