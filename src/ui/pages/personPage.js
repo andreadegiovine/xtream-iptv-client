@@ -5,13 +5,14 @@ import { createChip } from '../atoms/chip.js';
 import { cssUrl } from '../cssUrl.js';
 import { createIconButton, setIconButtonActive, setIconButtonLabel } from '../atoms/iconButton.js';
 import { createPlaceholder } from '../atoms/placeholder.js';
-import { createMetaSeparator, createMetaText } from '../atoms/metaParts.js';
+import { createMetaSeparator, createMetaText, createMetaTmdb } from '../atoms/metaParts.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { createCarouselPage } from './templates.js';
 import { getEntry } from '../../services/catalogQuery.js';
 import { titlesByName } from '../../services/peopleIndex.js';
 
 const ZONE = 'personHeader';
+const TMDB = {}; // the TMDB logo among the parts of the info line
 
 /** "1968-09-25" → "25 September 1968" in the language of the app ('' when not a date). */
 export function longDate(text, locale = 'en-US') {
@@ -59,8 +60,26 @@ export function personFacts(info, locale = 'en-US') {
 }
 
 /** "Acting" → the label of the department ("Recitazione"); unknown ones as TMDB writes them. */
-const DEPARTMENTS = { Acting: 'person.acting', Directing: 'person.directing', Writing: 'person.writing', Production: 'person.production' };
+const DEPARTMENTS = { Acting: 'person.acting', Directing: 'person.directing', Writing: 'person.writing', Production: 'person.production', Sound: 'person.sound', Camera: 'person.camera', Editing: 'person.editing', Creator: 'person.creator' };
 const departmentLabel = (department) => (DEPARTMENTS[department] ? t(DEPARTMENTS[department]) : department || '');
+
+/**
+ * The roles of a person for the info line: what TMDB says they are known for first, then the other departments of their credits, the
+ * most frequent first (at most four); without TMDB the roles the provider gives them ("Cast", "Director").
+ */
+export function personRoles(info, entries = []) {
+  if (info && info.credits) {
+    const counts = new Map();
+    info.credits.forEach((c) => c.department && counts.set(c.department, (counts.get(c.department) || 0) + 1));
+    const order = Array.from(counts.keys()).sort((a, b) => counts.get(b) - counts.get(a));
+    if (info.department) order.sort((a, b) => (a === info.department ? -1 : b === info.department ? 1 : 0));
+    else if (!order.length) return [];
+    return (order.length ? order : [info.department]).slice(0, 4).map(departmentLabel);
+  }
+  const out = [];
+  entries.forEach((e) => String(e.roleText || '').split(', ').forEach((role) => role && out.indexOf(role) < 0 && out.push(role)));
+  return out.slice(0, 4);
+}
 
 /**
  * The titles of the catalog a person (or company) is in, newest first as the provider lists them, each with its role(s) ("Mike Lowrey",
@@ -191,11 +210,12 @@ export function createPersonPage(ctx, params = {}) {
   }
   const header = h('div', { class: 'person-top' }, backdropEl, poster, h('div', { class: 'detail-body' }, nameEl, metaEl, actionsEl, factsEl, bioEl, moreRow));
 
-  function setMeta(parts) {
+  /** The info line: the TMDB logo first when TMDB gave the page, then its parts. */
+  function setMeta(parts, fromTmdb = false) {
     while (metaEl.firstChild) metaEl.removeChild(metaEl.firstChild);
-    parts.filter(Boolean).forEach((part, i) => {
+    (fromTmdb ? [TMDB] : []).concat(parts.filter(Boolean)).forEach((part, i) => {
       if (i > 0) metaEl.appendChild(createMetaSeparator());
-      metaEl.appendChild(createMetaText(part));
+      metaEl.appendChild(part === TMDB ? createMetaTmdb() : createMetaText(part));
     });
   }
 
@@ -205,7 +225,7 @@ export function createPersonPage(ctx, params = {}) {
       return;
     }
     nameEl.textContent = info.name || params.name || '';
-    setMeta([kind === 'company' ? t('detail.companies') : departmentLabel(info.department)]);
+    setMeta([kind === 'company' ? t('detail.companies') : departmentLabel(info.department)], true);
     const image = kind === 'company' ? info.logo : info.photo;
     favoriteTarget = { kind, id: info.id || params.id || null, name: info.name || params.name || '', photo: image || '' };
     if (image) {
@@ -244,6 +264,11 @@ export function createPersonPage(ctx, params = {}) {
       fillHeader(info);
       const entries = await personTitles({ info, name: params.name, kind, getEntryOf: (key) => getEntry(current.db, key).catch(() => null), byName: (role, name) => titlesByName(current.db, role, name).catch(() => []) });
       pickBackdrop(info, entries).catch(() => undefined);
+      // The info line: a person's roles; a company's number of films and series of the catalog.
+      if (kind === 'company') {
+        const count = (type) => entries.filter((e) => e.type === type).length;
+        setMeta([t('person.movies', { count: count('movie') }), t('person.series', { count: count('series') })], Boolean(info));
+      } else setMeta(personRoles(info, entries), Boolean(info));
       return { entries, status: entries.length ? '' : t('person.empty') };
     },
   });

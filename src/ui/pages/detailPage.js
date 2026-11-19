@@ -4,7 +4,7 @@ import { createChip, createChipLabel } from '../atoms/chip.js';
 import { createHint } from '../atoms/hint.js';
 import { createHeading } from '../atoms/heading.js';
 import { createPlaceholder } from '../atoms/placeholder.js';
-import { createMetaSeparator, createMetaRating, createMetaText } from '../atoms/metaParts.js';
+import { createMetaSeparator, createMetaRating, createMetaText, createMetaTmdb } from '../atoms/metaParts.js';
 import { streamLabel, sourceNames } from '../streamLabel.js';
 import { decodeId, decodeCategory } from '../../services/catalogUnion.js';
 import { cssUrl } from '../cssUrl.js';
@@ -657,9 +657,11 @@ export function createDetailPage(ctx, params) {
     const d = data();
     titleEl.textContent = d.title;
     clear(metaEl);
-    detailMetaParts({ type: entry && entry.type, ...d, providers: titleProviders() }).forEach((part, i) => {
+    // Enriched by TMDB (its metadata is here): its logo first.
+    const parts = (meta ? [{ kind: 'tmdb' }] : []).concat(detailMetaParts({ type: entry && entry.type, ...d, providers: titleProviders() }));
+    parts.forEach((part, i) => {
       if (i > 0) metaEl.appendChild(createMetaSeparator());
-      metaEl.appendChild(part.kind === 'rating' ? createMetaRating(part.text) : createMetaText(part.text));
+      metaEl.appendChild(part.kind === 'tmdb' ? createMetaTmdb() : part.kind === 'rating' ? createMetaRating(part.text) : createMetaText(part.text));
     });
     plotEl.textContent = (meta && meta.overview) || (info && info.plot) || '';
     const logo = entry && entry.isGroup && selectedMember && selectedMember.icon ? selectedMember.icon : entry && entry.icon;

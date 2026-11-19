@@ -291,16 +291,16 @@ export function createTmdbService({ db, client, getLanguage, now = Date.now, onA
   async function person(id) {
     if (!client.enabled || !id) return null;
     const language = getLanguage();
-    const record = await cached('tmdb', `person2:${id}:${language}`, () => RECOMMENDATIONS_TTL_MS, async () => {
+    const record = await cached('tmdb', `person3:${id}:${language}`, () => RECOMMENDATIONS_TTL_MS, async () => {
       const data = await client.person(id, language);
       let biography = (data && data.biography) || '';
       if (!biography && String(language).slice(0, 2) !== 'en') biography = ((await client.person(id, 'en-US').catch(() => null)) || {}).biography || ''; // none in the language of the app
       const credits = [];
-      const add = (list, field) => (list || []).forEach((c) => {
+      const add = (list, field, department) => (list || []).forEach((c) => {
         const type = c.media_type === 'tv' ? 'series' : c.media_type === 'movie' ? 'movie' : null;
-        if (type && c.id) credits.push({ type, tmdbId: c.id, role: String(c[field] || '').trim(), ...(c.backdrop_path ? { backdrop: posterUrl(c.backdrop_path, 'w1280') } : {}) });
+        if (type && c.id) credits.push({ type, tmdbId: c.id, role: String(c[field] || '').trim(), department: department || c.department || '', ...(c.backdrop_path ? { backdrop: posterUrl(c.backdrop_path, 'w1280') } : {}) });
       });
-      add(data.combined_credits && data.combined_credits.cast, 'character');
+      add(data.combined_credits && data.combined_credits.cast, 'character', 'Acting');
       add(data.combined_credits && data.combined_credits.crew, 'job');
       return {
         kind: 'person', id: data.id, name: data.name || '', photo: posterUrl(data.profile_path, 'w342'), biography,

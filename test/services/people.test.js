@@ -4,7 +4,7 @@ import { openAppDb } from '../../src/db/appDb.js';
 import { dbPutMany } from '../../src/core/idb.js';
 import { splitNames, peopleFromInfo, writePeople, titlesByName, runPeopleBackfill, countPeople, removePeople } from '../../src/services/peopleIndex.js';
 import { createTmdbService, normalizeMeta } from '../../src/services/tmdbService.js';
-import { personTitles, personFacts, longDate, yearsBetween } from '../../src/ui/pages/personPage.js';
+import { personTitles, personFacts, longDate, yearsBetween, personRoles } from '../../src/ui/pages/personPage.js';
 
 const instant = { run: (fn) => fn() };
 
@@ -50,7 +50,7 @@ test('a person and a company from TMDB: their facts and every title (the credits
   const svc = createTmdbService({ db, client, getLanguage: () => 'it-IT' });
   const person = await svc.person(31);
   expect(person).toMatchObject({ kind: 'person', name: 'Will Smith', biography: 'English bio', birthday: '1968-09-25', department: 'Acting' });
-  expect(person.credits).toEqual([{ type: 'movie', tmdbId: 9, role: 'Mike Lowrey' }, { type: 'series', tmdbId: 7, role: 'Will' }, { type: 'movie', tmdbId: 9, role: 'Producer' }]);
+  expect(person.credits).toEqual([{ type: 'movie', tmdbId: 9, role: 'Mike Lowrey', department: 'Acting' }, { type: 'series', tmdbId: 7, role: 'Will', department: 'Acting' }, { type: 'movie', tmdbId: 9, role: 'Producer', department: '' }]);
   await svc.person(31);
   expect(client.person).toHaveBeenCalledTimes(2); // its page once (plus the English biography), then from the cache
   const company = await svc.company(5);
@@ -108,4 +108,10 @@ test('favourite people and companies: by TMDB id (else by name), for every provi
   expect(shown.find((e) => e.type === 'person').person).toEqual({ kind: 'person', id: 31, name: 'Will Smith', photo: 'p.jpg' });
   expect(await favorites.togglePerson({ kind: 'person', id: 31, name: 'Will Smith' })).toBe(false);
   expect(await favorites.hasPerson({ kind: 'person', id: 31 })).toBe(false);
+});
+
+test('the roles of a person in the info line: known for first, then the most frequent departments; without TMDB the provider roles', () => {
+  const info = { department: 'Directing', credits: [{ department: 'Acting' }, { department: 'Acting' }, { department: 'Production' }, { department: 'Directing' }] };
+  expect(personRoles(info)).toEqual(['Directing', 'Acting', 'Production']);
+  expect(personRoles(null, [{ roleText: 'Cast' }, { roleText: 'Director' }, { roleText: 'Cast' }])).toEqual(['Cast', 'Director']);
 });

@@ -111,6 +111,13 @@
       margin: 0 12px;
     }
 
+    // TMDB's logo (white), first when the page was enriched by it.
+    .meta-tmdb {
+      width: 86px; // its 92 × 32 drawing at 30 px (old TV browsers do not size an inline SVG from its viewBox)
+      height: 30px;
+      color: $text;
+    }
+
     .meta-rating {
       display: flex;
       align-items: center;
