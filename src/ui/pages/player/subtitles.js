@@ -4,6 +4,7 @@ import { cleanSubtitle, subtitleLabel } from '../../../services/playerController
 import { portableKeyFor } from '../../../services/shareKeys.js';
 import { cueAt, subtitleLanguages } from '../../../services/openSubtitles.js';
 import { NO_TIMING, toCue, toVideo, alignKey } from '../../../services/subtitleAlign.js';
+import { MIN_POINTS } from './subtitleAlign.js';
 import { createRangeReader, probeMkv, createTrackLoader } from '../../../services/mkvSubtitles.js';
 import { probeMp4 } from '../../../services/mp4Subtitles.js';
 
@@ -127,19 +128,9 @@ export function createPlayerSubtitles({ ctx, engine, params, isLive, isTrailer, 
   const onlineLanguage = () => subtitleLabel({ language: online.language }, 1, t('player.track'));
   // "for this file" when OpenSubtitles found them by the file's hash (made for this very version: in time with it).
   const onlineLabel = () => t(online.matched ? 'player.subtitles.matched' : 'player.subtitles.online', { language: onlineLanguage() });
-  // "+2.5 s", "−1:05" (a minute or more as minutes:seconds).
-  const delayText = (ms) => {
-    const sign = ms > 0 ? '+' : ms < 0 ? '−' : '';
-    const abs = Math.abs(ms);
-    if (abs >= 60000) return `${sign}${Math.floor(abs / 60000)}:${`0${Math.round((abs % 60000) / 1000)}`.slice(-2)} min`;
-    return `${sign}${(abs / 1000).toLocaleString(i18n.getLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 })} s`;
-  };
-  // "Align the downloaded subtitles", with the delay they have now (and the speed when not 1).
-  const alignLabel = () => {
-    const parts = timing.offset || timing.scale !== 1 ? [delayText(Math.round(timing.offset))].concat(timing.scale !== 1 ? [`× ${timing.scale.toFixed(3)}`] : []) : [];
-    return parts.length ? `${t('player.subtitles.align')} (${parts.join(' · ')})` : t('player.subtitles.align');
-  };
-  /** The key of the alignment of these subtitles on this video (saved in the profile's database). */
+  // "Alignment of the downloaded subtitles", "(done)" once the procedure ended with its points (or a saved one is used).
+  let aligned = false;
+  const alignLabel = () => (aligned ? `${t('player.subtitles.align')} (${t('player.subtitles.alignDone')})` : t('player.subtitles.align'));
   let alignProvider = ''; // the provider of what is playing (read with the download)
   const alignKeyNow = () => alignKey({ providerId: alignProvider, entryKey: params.entryKey || '', streamId: String((current() || {}).id || ''), fileId: String((online && online.fileId) || online.language || '') });
 
@@ -151,7 +142,10 @@ export function createPlayerSubtitles({ ctx, engine, params, isLive, isTrailer, 
       timing,
       key: alignKeyNow(),
       onDone: (next) => {
-        if (next) timing = { offset: next.offset, scale: next.scale };
+        if (next) {
+          timing = { offset: next.offset, scale: next.scale };
+          aligned = true;
+        }
         log.info('Downloaded subtitles aligned', `offset ${Math.round(timing.offset)} ms`, `scale ${timing.scale.toFixed(4)}`);
         if (subtitle !== ONLINE) {
           subtitle = ONLINE;
@@ -343,8 +337,9 @@ export function createPlayerSubtitles({ ctx, engine, params, isLive, isTrailer, 
       log.info('OpenSubtitles', found.language, `${found.cues.length} lines`);
       // Aligned before (these subtitles on this video): that timing again.
       const saved = ctx.subtitleAlign ? await ctx.subtitleAlign.get(alignKeyNow()).catch(() => null) : null;
-      if (saved && token === loadToken()) {
+      if (saved && token === loadToken() && saved.points && saved.points.length >= MIN_POINTS) {
         timing = { offset: saved.offset, scale: saved.scale };
+        aligned = true;
         log.info('Downloaded subtitles: alignment saved before', `${saved.points.length} points`, `offset ${Math.round(saved.offset)} ms`, `scale ${saved.scale.toFixed(4)}`);
       }
       ctx.notices.info(t('player.subtitles.downloaded', { language: onlineLanguage() }), { scope: 'playback', key: 'subs-online' });
@@ -360,6 +355,7 @@ export function createPlayerSubtitles({ ctx, engine, params, isLive, isTrailer, 
       subtitle = -1;
       online = null;
       timing = { ...NO_TIMING };
+      aligned = false;
       closeOnlineNotice();
       stopOnline();
       onlinePending = null;

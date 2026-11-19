@@ -40,6 +40,27 @@ export class FocusZone {
 }
 
 /** Moves focus inside a zone, and between zones through explicit links (zone A --down--> zone B). */
+/**
+ * Runs the action of an entry of a zone once at a time: while what it started has not ended (the promise it returns: a dialog closed, a
+ * request answered) the same entry does nothing — a quick second press used to open the same dialog twice. The entry shows `busy`.
+ */
+export function runOnce(zone, action) {
+  const index = zone.index;
+  if (!zone.busy) zone.busy = new Set();
+  if (zone.busy.has(index)) return undefined;
+  const result = action(index);
+  if (!result || typeof result.then !== 'function') return result;
+  zone.busy.add(index);
+  const node = zone.nodes ? (zone.nodes() || [])[index] : null;
+  if (node && node.classList) node.classList.add('busy');
+  const done = () => {
+    zone.busy.delete(index);
+    if (node && node.classList) node.classList.remove('busy');
+  };
+  result.then(done, done);
+  return result;
+}
+
 export class FocusManager {
   constructor() {
     this.zones = new Map();
@@ -116,8 +137,8 @@ export class FocusManager {
     const zone = this.zones.get(id);
     if (long) {
       if (!zone.onLongActivate) return false;
-      zone.onLongActivate(zone.index);
-    } else zone.onActivate(zone.index);
+      runOnce(zone, zone.onLongActivate);
+    } else runOnce(zone, zone.onActivate);
     return true;
   }
 
@@ -126,11 +147,11 @@ export class FocusManager {
     const zone = this.active;
     if (!zone) return false;
     if (action === Action.ENTER) {
-      zone.onActivate(zone.index);
+      runOnce(zone, zone.onActivate);
       return true;
     }
     if (action === Action.LONG_ENTER) {
-      (zone.onLongActivate || zone.onActivate)(zone.index);
+      runOnce(zone, zone.onLongActivate || zone.onActivate);
       return true;
     }
     const dir = DIRECTIONS[action];

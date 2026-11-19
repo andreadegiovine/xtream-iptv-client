@@ -2,14 +2,17 @@ import { h } from '../../dom.js';
 import { t } from '../../../i18n/index.js';
 import { Action } from '../../../core/input.js';
 import { formatClock, cleanSubtitle } from '../../../services/playerController.js';
-import { fitAlignment, toVideo, toCue, REACTION_MS } from '../../../services/subtitleAlign.js';
+import { cueAt } from '../../../services/openSubtitles.js';
+import { fitAlignment, toVideo, toCue } from '../../../services/subtitleAlign.js';
+import { createButton } from '../../atoms/button.js';
+import { createListRow } from '../../atoms/listRow.js';
 
 /** The two zoomed bars show this much of the video around the cursor (the main progress bar stays as it is). */
 export const WINDOW_MS = 120000;
-/** Playing a line: from this long before it, so the voice can be heard coming. */
-const LEAD_MS = 5000;
-const STEP_MS = 1000; // Left / Right while the video plays
-const FINE_MS = 500; // Left / Right once paused on the line
+/** The points needed to end the procedure (delay and speed). */
+export const MIN_POINTS = 2;
+const LEAD_MS = 5000; // playing the portion: from this long before the anchor
+const STEP_MS = 500; // Left / Right on the video bar move the anchor by this much
 const SEEK_WAIT_MS = 500; // the video jumps once the keys stop
 const TICK_MS = 200;
 const SUGGEST_GAP_MS = 10 * 60000; // the next line suggested: about ten minutes from the last point (the speed needs points far apart)
@@ -38,84 +41,106 @@ export function suggestLine(cues, fromCueMs, gap = SUGGEST_GAP_MS) {
 }
 
 /**
- * The guided alignment of downloaded subtitles, over the player. Two bars above the main progress bar, zoomed on two minutes around the
- * cursor: the lines of the subtitles (segments) and the video. Steps: choose a line (Left / Right go from line to line, its text on
- * screen, the cursors of the video bars follow), OK plays the video from just before it; when the line is heard OK pauses (the moment
- * minus the time of reaction is the point), Left / Right adjust it by half a second, OK again goes to "Next" (which keeps the point;
- * "Back" there plays the video on instead). From two points the timing
- * (delay and speed) is used at once (preview) and the procedure can end; more points are optional. The points are saved one by one: the
- * procedure opened again starts from them (each can be done again).
+ * The guided alignment of downloaded subtitles, over the player. Above the main progress bar (which stays as it is) two bars zoomed on two
+ * minutes around the cursor: the lines of the subtitles (segments) and the video. At the top right the panel: how many points are defined
+ * (red until MIN_POINTS, then green), what to do, the points (each with "Edit" and "Remove"), "Add point" and "Conclude".
+ * A point: on the bar of the subtitles Left / Right choose a line (its text on screen), OK confirms it (its cursor turns green) and the
+ * focus goes to the bar of the video, where the anchor (green) is the moment of the video matched with that line: Left / Right move it
+ * (the picture follows, from the anchor's frame); OK plays video and subtitles together with that alignment, from just before the anchor to
+ * the end of the zoomed portion (OK again, Back or the end: back to the anchor's frame). "Add point" (on as soon as the line is confirmed)
+ * keeps it and starts the next one. Back: from the video bar to the subtitles, from the subtitles to the panel, from the panel the procedure
+ * ends (only the points added stay). The points are saved one by one; opened again it starts from them.
  * deps: { root, cues, timing, points, save(points), durationMs(), getTime(), seek(ms), setPaused(paused), onPreview(fit), onClose(fit | null) }
  */
 export function createSubtitleAligner({ root, cues, timing: startTiming, points: savedPoints = [], save = async () => undefined, durationMs, getTime, seek, setPaused, onPreview = () => {}, onClose }) {
-  let points = savedPoints.slice();
+  let points = savedPoints.slice().sort((a, b) => a.cue - b.cue);
   let fit = fitAlignment(points);
   const timingNow = () => (points.length ? fit : startTiming);
-  let index = points.length ? Math.max(0, cues.findIndex((c) => c.start >= points[points.length - 1].cue)) : lineAt(cues, getTime(), startTiming);
-  let phase = 'pick'; // 'pick' | 'play' | 'paused'
+  const startPosition = Number(getTime()) || 0; // where the video was: back there at the end
+  let index = points.length ? suggestLine(cues, points[points.length - 1].cue) : lineAt(cues, startPosition, startTiming);
+  let confirmed = false; // the line is chosen (its cursor green): the video bar sets its anchor
+  let anchor = null; // the moment of the video matched with the line (ms)
+  let playing = false; // the portion plays (video and subtitles together)
+  let playWindow = null;
+  let playhead = 0;
   let focus = 'subs'; // 'subs' | 'video' | 'panel'
-  let panelArea = 'buttons'; // in the panel: 'buttons' (Back, Next, Finish: Left / Right) or 'points' (the points: Up / Down)
+  let panelArea = 'buttons'; // 'buttons' (Add point, Conclude) | 'points' (the list: Edit, Remove)
   let buttonIndex = 0;
   let pointIndex = 0;
-  let pending = null; // { cue, video }: the point found, waiting for "Next"
-  let videoCursor = toVideo(cues[index] ? cues[index].start : 0, timingNow());
-  let playWindow = null;
+  let pointButton = 0; // 0 Edit, 1 Remove
   let seekTimer = null;
   let closed = false;
+
+  // The timing with the point being made (the anchor matched with the line): what the bars and the portion played show.
+  const candidateTiming = () => (confirmed && anchor !== null ? fitAlignment(points.concat([{ cue: cues[index].start, video: anchor }])) : timingNow());
+  const canAdd = () => confirmed && anchor !== null;
+  const canConclude = () => points.length >= MIN_POINTS && fit.ok;
 
   const lineEl = h('div', { class: 'align-line' });
   const subsTrack = h('div', { class: 'align-track' });
   const subsCursor = h('div', { class: 'align-cursor' });
   const subsBar = h('div', { class: 'align-bar subs' }, h('span', { class: 'align-label', text: t('align.subtitles') }), h('div', { class: 'align-rail' }, subsTrack, subsCursor));
   const videoMarks = h('div', { class: 'align-track' });
-  const videoCursorEl = h('div', { class: 'align-cursor' });
-  const videoBar = h('div', { class: 'align-bar video' }, h('span', { class: 'align-label', text: t('align.video') }), h('div', { class: 'align-rail' }, videoMarks, videoCursorEl));
+  const anchorEl = h('div', { class: 'align-anchor' });
+  const playheadEl = h('div', { class: 'align-cursor' });
+  const videoBar = h('div', { class: 'align-bar video' }, h('span', { class: 'align-label', text: t('align.video') }), h('div', { class: 'align-rail' }, videoMarks, anchorEl, playheadEl));
   const fromEl = h('span', { class: 'align-time' });
   const toEl = h('span', { class: 'align-time' });
   const bars = h('div', { class: 'align-bars' }, lineEl, subsBar, videoBar, h('div', { class: 'align-times' }, fromEl, toEl));
-  const stepEl = h('div', { class: 'align-step' });
-  const helpEl = h('div', { class: 'align-help' });
-  const listEl = h('div', { class: 'align-points' });
-  const resultEl = h('div', { class: 'align-result' });
-  const backBtn = h('button', { class: 'btn align-btn', text: t('align.back') });
-  const nextBtn = h('button', { class: 'btn btn-primary align-btn', text: t('align.next') });
-  const doneBtn = h('button', { class: 'btn align-btn', text: t('align.finish') });
-  const panel = h('div', { class: 'align-panel' }, h('div', { class: 'align-title', text: t('align.title') }), stepEl, helpEl, listEl, resultEl, h('div', { class: 'align-actions' }, backBtn, nextBtn, doneBtn));
+  const countEl = h('div', { class: 'align-count' });
+  const listEl = h('div', { class: 'list align-points' });
+  const warnEl = h('div', { class: 'align-warning' });
+  const addBtn = createButton({ label: t('align.add'), className: 'align-btn' });
+  const concludeBtn = createButton({ label: t('align.conclude'), variant: 'primary', className: 'align-btn' });
+  const panel = h(
+    'div',
+    { class: 'align-panel' },
+    h('div', { class: 'align-title', text: t('align.title') }),
+    countEl,
+    h('div', { class: 'align-help', text: t('align.help') }),
+    listEl,
+    warnEl,
+    h('div', { class: 'align-actions' }, addBtn, concludeBtn),
+  );
   const el = h('div', { class: 'align-ui' }, panel, bars);
   root.appendChild(el);
   root.classList.add('aligning');
   setPaused(true);
 
-  const cueVideo = (i) => toVideo(cues[i].start, timingNow());
-  const canNext = () => phase === 'paused' && Boolean(pending);
-  const canFinish = () => points.length >= 2 && fit.ok;
   const pct = (ms, win) => `${Math.max(0, Math.min(100, ((ms - win.start) / (win.end - win.start)) * 100))}%`;
-  const delayText = (ms) => `${ms >= 0 ? '+' : '−'}${(Math.abs(ms) / 1000).toFixed(1)} s`;
-
-  /** The buttons of the panel, in a row: Back, Next, Finish. */
-  const buttons = () => [
-    { el: backBtn, run: goBack, enabled: true },
-    { el: nextBtn, run: keepPoint, enabled: canNext() },
-    { el: doneBtn, run: finish, enabled: canFinish() },
+  const panelButtons = () => [
+    { el: addBtn, run: addPoint, enabled: canAdd() },
+    { el: concludeBtn, run: conclude, enabled: canConclude() },
   ];
-  /** Up to the panel: on the button that goes on (Next, else Finish, else Back). */
-  function toButtons() {
-    focus = 'panel';
-    panelArea = 'buttons';
-    buttonIndex = canNext() ? 1 : canFinish() ? 2 : 0;
+  let pointRows = []; // [{ el, edit, remove }]
+
+  function renderPoints() {
+    while (listEl.firstChild) listEl.removeChild(listEl.firstChild);
+    pointRows = points.map((p, i) => {
+      const cue = cues.find((c) => c.start === p.cue);
+      const edit = createButton({ label: t('align.edit'), className: 'align-small' });
+      const remove = createButton({ label: t('align.remove'), className: 'align-small' });
+      const row = createListRow({ label: t('align.point', { n: i + 1, time: formatClock(p.video / 1000), line: cue ? cleanSubtitle(cue.text).split('\n')[0] : '' }), valueEl: h('span', { class: 'align-row-actions' }, edit, remove), className: 'align-point' });
+      edit.addEventListener('click', () => { editPoint(i); render(); });
+      remove.addEventListener('click', () => { removePoint(i); render(); });
+      listEl.appendChild(row.el);
+      return { el: row.el, edit, remove };
+    });
   }
 
   function render() {
     if (closed) return;
-    const cue = cues[index];
-    lineEl.textContent = cue ? cleanSubtitle(cue.text) : '';
-    const center = phase === 'pick' ? cueVideo(index) : videoCursor;
-    const win = phase === 'pick' || !playWindow ? zoomWindow(center, durationMs()) : playWindow;
+    const timing = candidateTiming();
+    const cueVideo = toVideo(cues[index].start, timing);
+    // The line on screen: while the portion plays, the one of the moment (with the alignment being made); otherwise the one chosen.
+    if (playing) {
+      const cue = cueAt(cues, toCue(playhead, timing));
+      lineEl.textContent = cue ? cleanSubtitle(cue.text) : '';
+    } else lineEl.textContent = cleanSubtitle(cues[index].text);
+    const win = playing && playWindow ? playWindow : zoomWindow(confirmed && anchor !== null ? anchor : cueVideo, durationMs());
     fromEl.textContent = formatClock(win.start / 1000);
     toEl.textContent = formatClock(win.end / 1000);
-    // The lines in the window, where they fall on the video with the timing of now.
     while (subsTrack.firstChild) subsTrack.removeChild(subsTrack.firstChild);
-    const timing = timingNow();
     let drawn = 0;
     for (let i = 0; i < cues.length && drawn < MAX_SEGMENTS; i += 1) {
       const from = toVideo(cues[i].start, timing);
@@ -129,47 +154,45 @@ export function createSubtitleAligner({ root, cues, timing: startTiming, points:
       subsTrack.appendChild(seg);
       drawn += 1;
     }
-    subsCursor.style.left = pct(cueVideo(index), win);
-    videoCursorEl.style.left = pct(phase === 'pick' ? cueVideo(index) : videoCursor, win);
+    subsCursor.style.left = pct(cueVideo, win);
+    subsCursor.classList.toggle('confirmed', confirmed);
+    anchorEl.style.display = confirmed && anchor !== null ? '' : 'none';
+    if (anchor !== null) anchorEl.style.left = pct(anchor, win);
+    playheadEl.style.display = playing ? '' : 'none';
+    playheadEl.style.left = pct(playhead, win);
     while (videoMarks.firstChild) videoMarks.removeChild(videoMarks.firstChild);
-    points.concat(pending ? [pending] : []).forEach((p) => {
+    points.forEach((p) => {
       if (p.video < win.start || p.video > win.end) return;
       const mark = h('div', { class: 'align-mark' });
       mark.style.left = pct(p.video, win);
       videoMarks.appendChild(mark);
     });
-    // The panel.
-    stepEl.textContent = t('align.step', { step: points.length + 1 });
-    helpEl.textContent = t(phase === 'pick' ? 'align.helpPick' : phase === 'play' ? 'align.helpPlay' : 'align.helpPaused');
-    while (listEl.firstChild) listEl.removeChild(listEl.firstChild);
-    points.forEach((p, i) => listEl.appendChild(h('div', { class: 'align-point', text: t('align.point', { n: i + 1, time: formatClock(p.video / 1000), delay: delayText(p.video - p.cue) }) })));
-    if (points.length >= 2) {
-      resultEl.textContent = fit.ok
-        ? t('align.result', { delay: delayText(fit.offset), speed: fit.scale.toFixed(3) })
-        : t(fit.problem === 'speed' ? 'align.badSpeed' : 'align.badPoint', { n: fit.worst + 1 });
-      resultEl.classList.toggle('warning', !fit.ok);
-    } else resultEl.textContent = points.length ? t('align.oneMore') : '';
-    nextBtn.classList.toggle('disabled', !canNext());
-    doneBtn.classList.toggle('disabled', !canFinish());
+    // The panel: how many points (red until enough, then green), the points, a problem if any, the buttons.
+    const enough = points.length >= MIN_POINTS;
+    countEl.textContent = enough ? t('align.countDone', { count: points.length }) : t('align.count', { count: points.length, min: MIN_POINTS });
+    countEl.classList.toggle('done', enough);
+    renderPoints();
+    warnEl.textContent = enough && !fit.ok ? t(fit.problem === 'speed' ? 'align.badSpeed' : 'align.badPoint', { n: fit.worst + 1 }) : '';
+    addBtn.classList.toggle('disabled', !canAdd());
+    concludeBtn.classList.toggle('disabled', !canConclude());
     // The focus.
-    [subsBar, videoBar, backBtn, nextBtn, doneBtn].forEach((node) => node.classList.remove('focused'));
+    [subsBar, videoBar, addBtn, concludeBtn].forEach((node) => node.classList.remove('focused'));
     if (focus === 'subs') subsBar.classList.add('focused');
     else if (focus === 'video') videoBar.classList.add('focused');
-    else if (panelArea === 'points' && points.length) {
-      pointIndex = Math.max(0, Math.min(pointIndex, points.length - 1));
-      listEl.children[pointIndex].classList.add('focused');
+    else if (panelArea === 'points' && pointRows.length) {
+      pointIndex = Math.max(0, Math.min(pointIndex, pointRows.length - 1));
+      (pointButton ? pointRows[pointIndex].remove : pointRows[pointIndex].edit).classList.add('focused');
     } else {
       panelArea = 'buttons';
-      buttonIndex = Math.max(0, Math.min(buttonIndex, 2));
-      buttons()[buttonIndex].el.classList.add('focused');
+      panelButtons()[buttonIndex].el.classList.add('focused');
     }
   }
 
-  // While the video plays: its cursor follows it; at the end of the two minutes it stops.
+  // While the portion plays: its cursor and the line of the moment follow the video; at the end, back to the anchor.
   const ticker = setInterval(() => {
-    if (closed || phase !== 'play' || seekTimer) return;
-    videoCursor = Number(getTime()) || 0;
-    if (playWindow && videoCursor >= playWindow.end) setPaused(true);
+    if (closed || !playing) return;
+    playhead = Number(getTime()) || playhead;
+    if (playWindow && playhead >= playWindow.end) stopPortion();
     render();
   }, TICK_MS);
 
@@ -182,95 +205,95 @@ export function createSubtitleAligner({ root, cues, timing: startTiming, points:
     }, SEEK_WAIT_MS);
   }
 
-  function chooseLine() {
-    phase = 'play';
-    pending = null;
-    const start = Math.max(0, cueVideo(index) - LEAD_MS);
-    playWindow = zoomWindow(cueVideo(index), durationMs());
-    videoCursor = start;
-    seek(start);
-    setPaused(false);
+  /** OK on a line: chosen (green); the anchor starts where it falls with the alignment of now; the video bar takes the focus. */
+  function confirmLine() {
+    confirmed = true;
+    anchor = Math.max(0, toVideo(cues[index].start, timingNow()));
     focus = 'video';
+    seekSoon(anchor); // the picture of the anchor
   }
 
-  /** OK on the video: paused where the line is heard (minus the reaction; Left / Right then adjust it); OK again goes to "Next". */
-  function markOrNext() {
-    if (phase === 'play') {
-      setPaused(true);
-      videoCursor = Math.max(0, (Number(getTime()) || videoCursor) - REACTION_MS);
-      pending = { cue: cues[index].start, video: videoCursor };
-      phase = 'paused';
-      seekSoon(videoCursor);
-    } else if (phase === 'paused') toButtons();
+  function chooseLine(delta) {
+    if (playing) stopPortion();
+    index = Math.max(0, Math.min(cues.length - 1, index + delta));
+    confirmed = false;
+    anchor = null;
   }
 
-  /** Paused on a line, "Back": the video plays on and Left / Right move it by a second again. */
-  function playAgain() {
-    pending = null;
-    phase = 'play';
+  /** OK on the video bar: video and subtitles play together (this alignment) to the end of the zoomed portion. */
+  function playPortion() {
+    if (!canAdd()) return;
+    clearTimeout(seekTimer);
+    seekTimer = null;
+    playWindow = zoomWindow(anchor, durationMs());
+    playhead = Math.max(playWindow.start, anchor - LEAD_MS);
+    playing = true;
+    seek(playhead);
     setPaused(false);
-    focus = 'video';
   }
 
-  function moveVideo(delta) {
-    if (phase === 'play') {
-      videoCursor = Math.max(0, videoCursor + delta * STEP_MS);
-      seekSoon(videoCursor);
-    } else if (phase === 'paused' && pending) {
-      videoCursor = Math.max(0, videoCursor + delta * FINE_MS);
-      pending = { ...pending, video: videoCursor };
-      seekSoon(videoCursor);
-    }
-  }
-
-  function backToPick() {
-    phase = 'pick';
-    pending = null;
+  /** The portion stops: the picture goes back to the anchor. */
+  function stopPortion() {
+    playing = false;
     playWindow = null;
     setPaused(true);
-    focus = 'subs';
+    if (anchor !== null) seek(anchor);
+  }
+
+  function moveAnchor(delta) {
+    if (!canAdd()) return;
+    if (playing) stopPortion();
+    anchor = Math.max(0, anchor + delta * STEP_MS);
+    seekSoon(anchor);
   }
 
   async function persist() {
     fit = fitAlignment(points);
     await save(points).catch(() => undefined);
-    if (points.length >= 2 && fit.ok) onPreview(fit); // the subtitles already follow the points
+    if (points.length >= MIN_POINTS && fit.ok) onPreview(fit); // the subtitles already follow the points
   }
 
-  function keepPoint() {
-    if (!canNext()) return;
-    points.push(pending);
+  /** "Add point": the line and its anchor join the points; the next point starts on the bar of the subtitles. */
+  function addPoint() {
+    if (!canAdd()) return;
+    if (playing) stopPortion();
+    const last = cues[index].start;
+    points.push({ cue: last, video: anchor });
     points.sort((a, b) => a.cue - b.cue);
-    const last = pending.cue;
     persist();
-    backToPick();
+    confirmed = false;
+    anchor = null;
     index = suggestLine(cues, last);
+    focus = 'subs';
   }
 
-  function redoPoint(i) {
+  /** "Edit": the point leaves the list and is the one being made again (its line chosen, its anchor), on the video bar. */
+  function editPoint(i) {
     const point = points[i];
+    if (!point) return;
+    if (playing) stopPortion();
     points.splice(i, 1);
     persist();
-    backToPick();
     index = Math.max(0, cues.findIndex((c) => c.start >= point.cue));
+    confirmed = true;
+    anchor = point.video;
+    focus = 'video';
+    seekSoon(anchor);
   }
 
-  /**
-   * "Back": paused on a line, the video plays on (the point is looked for again); while it plays, back to the choice of the line; from the
-   * choice the last point is done again; with none the procedure ends.
-   */
-  function goBack() {
-    if (phase === 'paused') playAgain();
-    else if (phase === 'play') backToPick();
-    else if (points.length) redoPoint(points.length - 1);
-    else close(null);
+  function removePoint(i) {
+    if (!points[i]) return;
+    points.splice(i, 1);
+    persist();
+    if (!points.length) panelArea = 'buttons';
   }
 
-  function finish() {
-    if (!canFinish()) return;
+  function conclude() {
+    if (!canConclude()) return;
     close(fit);
   }
 
+  /** The end: the video back where it was; the timing of the points when there are enough good ones. */
   function close(result) {
     if (closed) return;
     closed = true;
@@ -278,40 +301,35 @@ export function createSubtitleAligner({ root, cues, timing: startTiming, points:
     clearTimeout(seekTimer);
     el.remove();
     root.classList.remove('aligning');
+    seek(startPosition);
     onClose(result);
   }
 
-  // Pointer: a line on the bar of the subtitles, a moment on the bar of the video, the buttons of the panel.
+  // Pointer: a line on the bar of the subtitles, a moment on the bar of the video (the anchor), the buttons of the panel.
   subsTrack.addEventListener('click', (event) => {
     const i = Number(event.target && event.target.dataset ? event.target.dataset.index : NaN);
     if (!Number.isFinite(i)) return;
-    if (phase !== 'pick') backToPick();
-    index = i;
+    chooseLine(i - index);
     focus = 'subs';
     render();
   });
   videoBar.addEventListener('click', (event) => {
-    if (phase === 'pick' || !playWindow) return;
+    if (!canAdd()) return;
     const rail = videoBar.querySelector('.align-rail').getBoundingClientRect();
-    const at = playWindow.start + ((event.clientX - rail.left) / Math.max(1, rail.width)) * (playWindow.end - playWindow.start);
-    videoCursor = Math.max(0, at);
-    if (pending) pending = { ...pending, video: videoCursor };
+    const win = zoomWindow(anchor, durationMs());
+    if (playing) stopPortion();
+    anchor = Math.max(0, win.start + ((event.clientX - rail.left) / Math.max(1, rail.width)) * (win.end - win.start));
     focus = 'video';
-    seekSoon(videoCursor);
+    seekSoon(anchor);
     render();
   });
-  [backBtn, nextBtn, doneBtn].forEach((btn) =>
+  [addBtn, concludeBtn].forEach((btn) =>
     btn.addEventListener('click', () => {
-      const item = buttons().find((it) => it.el === btn);
+      const item = panelButtons().find((it) => it.el === btn);
       if (item && item.enabled) item.run();
       render();
     }),
   );
-  listEl.addEventListener('click', (event) => {
-    const i = Array.prototype.indexOf.call(listEl.children, event.target);
-    if (i >= 0) redoPoint(i);
-    render();
-  });
 
   render();
 
@@ -320,44 +338,70 @@ export function createSubtitleAligner({ root, cues, timing: startTiming, points:
     handle(action) {
       if (closed) return false;
       if (focus === 'subs') {
-        if (action === Action.LEFT || action === Action.RIGHT) {
-          if (phase !== 'pick') backToPick();
-          index = Math.max(0, Math.min(cues.length - 1, index + (action === Action.RIGHT ? 1 : -1)));
-        } else if (action === Action.ENTER) chooseLine();
-        else if (action === Action.UP) toButtons();
-        else if (action === Action.DOWN && phase !== 'pick') focus = 'video';
+        if (action === Action.LEFT || action === Action.RIGHT) chooseLine(action === Action.RIGHT ? 1 : -1);
+        else if (action === Action.ENTER) confirmLine();
+        else if (action === Action.UP) {
+          focus = 'panel';
+          panelArea = 'buttons';
+          buttonIndex = canAdd() ? 0 : canConclude() ? 1 : 0;
+        } else if (action === Action.DOWN && canAdd()) focus = 'video';
       } else if (focus === 'video') {
-        if (action === Action.LEFT || action === Action.RIGHT) moveVideo(action === Action.RIGHT ? 1 : -1);
-        else if (action === Action.ENTER) markOrNext();
-        else if (action === Action.UP) focus = 'subs';
-      } else if (panelArea === 'points') {
-        // The points, one under the other: Up / Down along them, Down from the last back to the buttons.
+        if (action === Action.LEFT || action === Action.RIGHT) moveAnchor(action === Action.RIGHT ? 1 : -1);
+        else if (action === Action.ENTER) {
+          if (playing) stopPortion();
+          else playPortion();
+        } else if (action === Action.UP) {
+          if (playing) stopPortion();
+          focus = 'subs';
+        }
+      } else if (panelArea === 'points' && pointRows.length) {
+        // The points, one under the other (Up / Down), each with Edit and Remove (Left / Right); Down from the last: the buttons.
         if (action === Action.UP) pointIndex = Math.max(0, pointIndex - 1);
         else if (action === Action.DOWN) {
-          if (pointIndex < points.length - 1) pointIndex += 1;
+          if (pointIndex < pointRows.length - 1) pointIndex += 1;
           else panelArea = 'buttons';
-        } else if (action === Action.ENTER && points[pointIndex]) redoPoint(pointIndex);
+        } else if (action === Action.LEFT) pointButton = 0;
+        else if (action === Action.RIGHT) pointButton = 1;
+        else if (action === Action.ENTER) {
+          if (pointButton) removePoint(pointIndex);
+          else editPoint(pointIndex);
+        }
       } else {
-        // The buttons, in a row: Left / Right; Up to the points; Down back to the bars.
-        const list = buttons();
-        if (action === Action.LEFT) buttonIndex = Math.max(0, buttonIndex - 1);
-        else if (action === Action.RIGHT) buttonIndex = Math.min(list.length - 1, buttonIndex + 1);
+        // The buttons, in a row (Left / Right); Up: the points; Down: back to the bars.
+        const list = panelButtons();
+        if (action === Action.LEFT) buttonIndex = 0;
+        else if (action === Action.RIGHT) buttonIndex = 1;
         else if (action === Action.UP && points.length) {
           panelArea = 'points';
           pointIndex = points.length - 1;
-        } else if (action === Action.DOWN) focus = phase === 'pick' ? 'subs' : 'video';
+          pointButton = 0;
+        } else if (action === Action.DOWN) focus = canAdd() ? 'video' : 'subs';
         else if (action === Action.ENTER && list[buttonIndex].enabled) list[buttonIndex].run();
       }
       render();
       return true;
     },
-    /** The Back key: the procedure ends; the points stay saved, and from two good ones their timing is used. */
+    /**
+     * The Back key: the portion playing stops (back to the anchor); from the video bar back to the subtitles; from the subtitles to the
+     * panel; from the panel the procedure ends (the points added stay; with enough good ones their timing is used).
+     */
     back() {
-      close(canFinish() ? fit : null);
+      if (closed) return false;
+      if (focus === 'video') {
+        if (playing) stopPortion();
+        else focus = 'subs';
+      } else if (focus === 'subs') {
+        focus = 'panel';
+        panelArea = 'buttons';
+      } else {
+        close(canConclude() ? fit : null);
+        return true;
+      }
+      render();
       return true;
     },
-    /** Where the main progress bar shows the cursor (the line chosen, or the video), in ms. */
-    mainCursor: () => (closed ? null : phase === 'pick' && cues[index] ? cueVideo(index) : videoCursor),
+    /** Where the main progress bar shows the cursor, in ms: the portion playing, the anchor, or the line chosen. */
+    mainCursor: () => (closed ? null : playing ? playhead : confirmed && anchor !== null ? anchor : toVideo(cues[index].start, timingNow())),
     destroy: () => close(null),
     isOpen: () => !closed,
   };

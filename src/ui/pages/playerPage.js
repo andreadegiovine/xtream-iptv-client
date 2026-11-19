@@ -363,7 +363,7 @@ export function createPlayerPage(ctx, params) {
     def.el.addEventListener('click', (event) => {
       event.preventDefault();
       focusButton(def);
-      def.run();
+      runButton(def);
     });
   });
   backEl.addEventListener('click', (event) => {
@@ -480,6 +480,21 @@ export function createPlayerPage(ctx, params) {
     streamUrl: () => streamUrl,
     openAligner: (options) => openAligner(options),
   });
+
+  // A button runs once at a time: while what it opened (a list, a download) has not ended, pressing it again does nothing.
+  const runningButtons = new Set();
+  function runButton(def) {
+    if (!def || runningButtons.has(def.id)) return;
+    const result = def.run();
+    if (!result || typeof result.then !== 'function') return;
+    runningButtons.add(def.id);
+    if (def.el) def.el.classList.add('busy');
+    const done = () => {
+      runningButtons.delete(def.id);
+      if (def.el) def.el.classList.remove('busy');
+    };
+    result.then(done, done);
+  }
 
   // The guided alignment of the downloaded subtitles (player/subtitleAlign.js): over the player, with the controls kept on screen.
   let aligner = null;
@@ -966,7 +981,7 @@ export function createPlayerPage(ctx, params) {
       paintFocus();
     },
     [Action.ENTER]: () => {
-      if (!barFocus) shown()[focusIndex].run();
+      if (!barFocus) runButton(shown()[focusIndex]);
       else if (scrub !== null) endScrub(true);
       else togglePause();
     },

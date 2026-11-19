@@ -75,7 +75,7 @@ test('nothing is downloaded by itself: the list offers "Download from OpenSubtit
   release({ language: 'it', cues: [{ start: 1000, end: 3000, text: 'Ciao' }] });
   await wait(300);
   expect(noticeTexts()).toContain('Subtitles downloaded: Italiano');
-  expect(lists[1]).toEqual(['Off', 'OpenSubtitles: Italiano', 'Align the downloaded subtitles']); // the download entry is gone
+  expect(lists[1]).toEqual(['Off', 'OpenSubtitles: Italiano', 'Alignment of the downloaded subtitles']); // the download entry is gone
   s.setTime(1500);
   await wait(300);
   expect(s.page.el.querySelector('.player-subtitle').textContent).toBe('Ciao');
@@ -100,62 +100,78 @@ test('the file has its own subtitles: they are listed with the download entry, n
   s.page.destroy();
 }, 10000);
 
-test('the guided alignment: two lines paired with the moment they are heard; the timing found is used and saved', async () => {
+test('the guided alignment: a line confirmed, the video anchored to it, "Add point" twice, "Conclude": the timing used and saved', async () => {
   const s = setup({ fetch: async () => ({ language: 'it', matched: false, fileId: 42, cues: [{ start: 1000, end: 3000, text: 'Ciao' }, { start: 400000, end: 402000, text: 'Fine' }] }) });
   const saved = [];
   s.ctx.subtitleAlign = { get: async () => null, save: jest.fn(async (key, points) => saved.push({ key, points: points.slice() })) };
   await wait();
   s.start();
   await wait(100);
-  const answers = [() => 'download', (options) => {
-    expect(options.map((o) => o.label)).toEqual(['Off', 'OpenSubtitles: Italiano', 'Align the downloaded subtitles']);
-    return 'align';
-  }];
+  const lists = [];
+  const answers = [() => 'download', (options) => { lists.push(options.map((o) => o.label)); return 'align'; }, (options) => { lists.push(options.map((o) => o.label)); return null; }];
   s.ctx.dialogs.choose.mockImplementation(async ({ options }) => answers.shift()(options));
   pressSubtitles(s);
   await wait(300);
+  expect(lists[0]).toEqual(['Off', 'OpenSubtitles: Italiano', 'Alignment of the downloaded subtitles']);
   const ui = s.page.el.querySelector('.align-ui');
-  expect(ui).toBeTruthy();
-  expect(ui.querySelector('.align-line').textContent).toBe('Ciao'); // the line at the position, on screen
   const key = (action, n = 1) => { for (let i = 0; i < n; i += 1) s.page.onAction(action); };
-  // Point 1: OK plays from just before the line; OK when heard (3.25 s, minus the reaction: 3 s).
+  const text = (sel) => ui.querySelector(sel).textContent;
+  const focused = () => ui.querySelector('.focused');
+  expect(text('.align-count')).toBe('Points defined 0 of at least 2');
+  expect(ui.querySelector('.align-count').classList.contains('done')).toBe(false);
+  expect(focused().className).toContain('subs'); // the focus starts on the bar of the subtitles
+  expect(Array.from(ui.querySelectorAll('.align-btn')).every((b) => b.classList.contains('disabled'))).toBe(true);
+  expect(text('.align-line')).toBe('Ciao');
+  // Point 1: OK confirms the line (green), the focus on the video bar, the anchor at 1 s; Right × 4: 3 s.
   key(Action.ENTER);
-  s.setTime(3250);
-  await wait(250);
-  key(Action.ENTER); // paused on the line
-  key(Action.ENTER); // OK again: the focus on "Next"
-  expect(ui.querySelector('.align-btn.focused').textContent).toBe('Next');
+  expect(ui.querySelector('.align-cursor').classList.contains('confirmed')).toBe(true);
+  expect(focused().className).toContain('video');
+  key(Action.RIGHT, 4);
+  // OK plays video and subtitles together (this alignment), OK again stops on the anchor.
+  key(Action.ENTER);
+  expect(s.engine.play).toHaveBeenCalled();
+  s.setTime(3500);
+  await wait(300);
+  expect(text('.align-line')).toBe('Ciao'); // at 3.5 s with the line at 3 s
+  key(Action.ENTER);
+  expect(s.engine.seekTo).toHaveBeenLastCalledWith(3000);
+  key(Action.UP, 2); // the subtitles, then the panel: on "Add point"
+  expect(focused().textContent).toBe('Add point');
   key(Action.ENTER);
   expect(saved[0].points).toEqual([{ cue: 1000, video: 3000 }]);
   expect(saved[0].key).toContain('|42');
-  // Point 2: the next line, heard at 402.25 s.
-  key(Action.RIGHT); // the focus is back on the lines: the next one
-  expect(ui.querySelector('.align-line').textContent).toBe('Fine');
+  expect(text('.align-count')).toBe('Points defined 1 of at least 2');
+  expect(focused().className).toContain('subs'); // the next point
+  // Point 2: the next line, its anchor where the first point puts it (402 s): kept as it is.
+  key(Action.RIGHT);
+  expect(text('.align-line')).toBe('Fine');
   key(Action.ENTER);
-  s.setTime(402250);
-  await wait(250);
+  key(Action.UP, 2);
   key(Action.ENTER);
-  key(Action.ENTER); // "Next"
-  key(Action.ENTER);
-  expect(saved[1].points.length).toBe(2);
-  expect(ui.querySelector('.align-result').textContent).toMatch(/\+2\.0 s.*1\.000/);
-  key(Action.UP); // after "Next" the focus is back on the lines: Up goes to the buttons, on "Finish" (the one that goes on)
-  expect(ui.querySelector('.align-btn.focused').textContent).toBe('Finish');
+  expect(saved[1].points).toEqual([{ cue: 1000, video: 3000 }, { cue: 400000, video: 402000 }]);
+  expect(text('.align-count')).toBe('Points defined 2');
+  expect(ui.querySelector('.align-count').classList.contains('done')).toBe(true);
+  expect(ui.querySelectorAll('.align-point').length).toBe(2);
+  key(Action.UP); // the buttons: on "Conclude" (nothing to add)
+  expect(focused().textContent).toBe('Conclude');
   key(Action.ENTER);
   expect(s.page.el.querySelector('.align-ui')).toBe(null);
-  // The lines two seconds later now.
   s.setTime(1500);
   await wait(300);
   expect(s.page.el.querySelector('.player-subtitle').textContent).toBe('');
   s.setTime(3500);
   await wait(300);
   expect(s.page.el.querySelector('.player-subtitle').textContent).toBe('Ciao');
+  pressSubtitles(s); // the list says it is done
+  await wait(300);
+  expect(lists[1]).toContain('Alignment of the downloaded subtitles (done)');
   s.page.destroy();
 }, 10000);
 
-test('alignment panel: the buttons in a row (Left / Right), the points above them (Up / Down); "Back" while paused plays on', async () => {
+test('alignment: Edit and Remove on each point; Back from the video to the subtitles, to the panel, then out (the points stay)', async () => {
   const s = setup({ fetch: async () => ({ language: 'it', fileId: 7, cues: [{ start: 1000, end: 3000, text: 'Ciao' }, { start: 400000, end: 402000, text: 'Fine' }] }) });
-  s.ctx.subtitleAlign = { get: async () => ({ points: [{ cue: 1000, video: 3000 }], offset: 2000, scale: 1 }), save: jest.fn(async () => undefined) };
+  const saves = [];
+  s.ctx.subtitleAlign = { get: async () => ({ points: [{ cue: 1000, video: 3000 }, { cue: 400000, video: 402000 }], offset: 2000, scale: 1 }), save: jest.fn(async (k, points) => saves.push(points.slice())) };
   await wait();
   s.start();
   await wait(100);
@@ -166,34 +182,32 @@ test('alignment panel: the buttons in a row (Left / Right), the points above the
   const ui = s.page.el.querySelector('.align-ui');
   const key = (action, n = 1) => { for (let i = 0; i < n; i += 1) s.page.onAction(action); };
   const focused = () => ui.querySelector('.focused');
-  key(Action.UP); // from the lines: the buttons (Next and Finish off: Back)
-  expect(focused().textContent).toBe('Back');
+  expect(focused().className).toContain('subs'); // also with the points done
+  key(Action.UP); // the buttons: Conclude (on)
+  expect(focused().textContent).toBe('Conclude');
+  key(Action.UP); // the last point: Edit
+  expect(focused().textContent).toBe('Edit');
   key(Action.RIGHT);
-  expect(focused().textContent).toBe('Next');
-  key(Action.UP); // the points saved
-  expect(focused().className).toContain('align-point');
-  key(Action.DOWN); // back to the buttons
-  expect(focused().className).toContain('align-btn');
-  key(Action.DOWN); // back to the lines
-  expect(focused().className).toContain('subs');
-  // Paused on a line, "Back": the video plays on, Left / Right by a second again.
-  key(Action.RIGHT);
-  key(Action.ENTER);
-  s.setTime(400500);
-  await wait(250);
-  key(Action.ENTER); // paused
-  key(Action.ENTER); // on Next
-  key(Action.LEFT); // Back
-  expect(focused().textContent).toBe('Back');
-  key(Action.ENTER);
+  expect(focused().textContent).toBe('Remove');
+  key(Action.ENTER); // point 2 removed
+  expect(saves[0]).toEqual([{ cue: 1000, video: 3000 }]);
+  expect(ui.querySelector('.align-count').textContent).toBe('Points defined 1 of at least 2');
+  key(Action.LEFT);
+  key(Action.ENTER); // Edit point 1: its line and anchor, on the video bar
   expect(focused().className).toContain('video');
-  expect(ui.querySelector('.align-help').textContent).toMatch(/as soon as you hear/);
+  expect(ui.querySelector('.align-line').textContent).toBe('Ciao');
+  s.page.onBack(); // video → subtitles
+  expect(focused().className).toContain('subs');
+  s.page.onBack(); // subtitles → panel
+  expect(ui.querySelector('.align-btn.focused')).toBeTruthy();
+  s.page.onBack(); // panel → out
+  expect(s.page.el.querySelector('.align-ui')).toBe(null);
   s.page.destroy();
 }, 10000);
 
 test('an alignment saved before is used as soon as the same subtitles are downloaded again', async () => {
   const s = setup({ fetch: async () => ({ language: 'it', fileId: 42, cues: [{ start: 1000, end: 3000, text: 'Ciao' }] }) });
-  s.ctx.subtitleAlign = { get: jest.fn(async () => ({ points: [{ cue: 1000, video: 3000 }], offset: 2000, scale: 1 })), save: jest.fn() };
+  s.ctx.subtitleAlign = { get: jest.fn(async () => ({ points: [{ cue: 1000, video: 3000 }, { cue: 400000, video: 402000 }], offset: 2000, scale: 1 })), save: jest.fn() };
   await wait();
   s.start();
   await wait(100);
