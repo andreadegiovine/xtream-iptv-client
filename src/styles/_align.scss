@@ -82,10 +82,7 @@
   }
 
   .align-small {
-    padding: 6px 14px;
-    margin-left: 8px;
-    font-size: 1rem;
-    background: rgba($text, 0.14);
+    margin-left: 8px; // icon buttons of the tables of Settings (panel-button): the same size and colours
   }
 
   .align-warning {
@@ -180,6 +177,11 @@
   }
 
   // The anchor of the point being made: the moment of the video matched with the line (green), moved with Left / Right.
+  // The cursor of the subtitles is green too (the line), as the anchor of the video.
+  .align-bar.subs .align-cursor {
+    background: #3ddc84;
+  }
+
   .align-anchor {
     position: absolute;
     top: -6px;
@@ -204,7 +206,7 @@
     &.confirmed {
       width: 6px;
       margin-left: -3px;
-      background: #3ddc84; // the line chosen
+      box-shadow: 0 0 10px #3ddc84; // the line chosen
     }
   }
 

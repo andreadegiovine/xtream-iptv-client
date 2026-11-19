@@ -185,10 +185,12 @@ test('alignment: Edit and Remove on each point; Back from the video to the subti
   expect(focused().className).toContain('subs'); // also with the points done
   key(Action.UP); // the buttons: Conclude (on)
   expect(focused().textContent).toBe('Conclude');
-  key(Action.UP); // the last point: Edit
-  expect(focused().textContent).toBe('Edit');
+  key(Action.UP); // the last point: Edit (icon buttons with their tooltip)
+  expect(focused().getAttribute('aria-label')).toBe('Edit');
+  expect(focused().closest('.align-point').textContent).toBe('Point 2 · 6:42'); // only the point and its time
   key(Action.RIGHT);
-  expect(focused().textContent).toBe('Remove');
+  expect(focused().getAttribute('aria-label')).toBe('Remove');
+  expect(focused().classList.contains('danger')).toBe(true); // as the remove buttons of Settings
   key(Action.ENTER); // point 2 removed
   expect(saves[0]).toEqual([{ cue: 1000, video: 3000 }]);
   expect(ui.querySelector('.align-count').textContent).toBe('Points defined 1 of at least 2');

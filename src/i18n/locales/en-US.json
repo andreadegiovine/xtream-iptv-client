@@ -492,7 +492,7 @@
   "align.title": "Align the subtitles",
   "align.subtitles": "Subtitles",
   "align.video": "Video",
-  "align.point": "Point {n} · {time} · {line}",
+  "align.point": "Point {n} · {time}",
   "align.badSpeed": "The points do not agree (a speed that does not happen): do point {n} again.",
   "align.badPoint": "Point {n} does not agree with the others: do it again.",
   "player.subtitles.alignDone": "done",

@@ -117,10 +117,10 @@ export function createSubtitleAligner({ root, cues, timing: startTiming, points:
   function renderPoints() {
     while (listEl.firstChild) listEl.removeChild(listEl.firstChild);
     pointRows = points.map((p, i) => {
-      const cue = cues.find((c) => c.start === p.cue);
-      const edit = createButton({ label: t('align.edit'), className: 'align-small' });
-      const remove = createButton({ label: t('align.remove'), className: 'align-small' });
-      const row = createListRow({ label: t('align.point', { n: i + 1, time: formatClock(p.video / 1000), line: cue ? cleanSubtitle(cue.text).split('\n')[0] : '' }), valueEl: h('span', { class: 'align-row-actions' }, edit, remove), className: 'align-point' });
+      // Icon buttons with their tooltip, as everywhere: Edit, and Remove as the remove buttons of Settings.
+      const edit = createButton({ label: t('align.edit'), icon: 'edit', iconOnly: true, className: 'panel-button align-small', tipDir: 'down' });
+      const remove = createButton({ label: t('align.remove'), icon: 'remove', variant: 'danger', iconOnly: true, className: 'panel-button align-small', tipDir: 'down' });
+      const row = createListRow({ label: t('align.point', { n: i + 1, time: formatClock(p.video / 1000) }), valueEl: h('span', { class: 'align-row-actions' }, edit, remove), className: 'align-point' });
       edit.addEventListener('click', () => { editPoint(i); render(); });
       remove.addEventListener('click', () => { removePoint(i); render(); });
       listEl.appendChild(row.el);

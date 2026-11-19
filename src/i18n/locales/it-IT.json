@@ -492,7 +492,7 @@
   "align.title": "Allinea i sottotitoli",
   "align.subtitles": "Sottotitoli",
   "align.video": "Video",
-  "align.point": "Punto {n} · {time} · {line}",
+  "align.point": "Punto {n} · {time}",
   "align.badSpeed": "I punti non tornano (una velocità impossibile): rifai il punto {n}.",
   "align.badPoint": "Il punto {n} non torna con gli altri: rifallo.",
   "player.subtitles.alignDone": "fatto",
