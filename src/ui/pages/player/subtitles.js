@@ -3,6 +3,7 @@ import { log } from '../../../core/logger.js';
 import { cleanSubtitle, subtitleLabel } from '../../../services/playerController.js';
 import { portableKeyFor } from '../../../services/shareKeys.js';
 import { cueAt, subtitleLanguages } from '../../../services/openSubtitles.js';
+import { NO_TIMING, toCue, toVideo, alignKey } from '../../../services/subtitleAlign.js';
 import { createRangeReader, probeMkv, createTrackLoader } from '../../../services/mkvSubtitles.js';
 import { probeMp4 } from '../../../services/mp4Subtitles.js';
 
@@ -10,7 +11,7 @@ const SUBTITLE_FALLBACK_MS = 5000;
 const ONLINE_TICK_MS = 200;
 const ONLINE = 'online'; // value of the downloaded track in the subtitle list
 const DOWNLOAD = 'download'; // value of the "Download from OpenSubtitles" entry of the subtitle list
-const SYNC = 'sync'; // value of the "timing" entry of the subtitle list (downloaded subtitles only)
+const ALIGN = 'align'; // value of the "Align the downloaded subtitles" entry of the subtitle list (the guided procedure)
 const EMBEDDED = 'emb:'; // + track number: a text track of the MKV read by the app (see mkvSubtitles.js)
 const ENSURE_EVERY_MS = 2000; // how often the reader of an embedded track checks what is coming
 
@@ -28,12 +29,12 @@ export function syncSteps() {
  * the Subtitles button (`open`): the engine's tracks, the text tracks of an MKV / MP4 read by the app, the OpenSubtitles download and
  * its timing. `reset()` when another title starts, `stop()` when the player closes.
  * deps: { ctx, engine, params, isLive, isTrailer, subtitleEl, current(), showControls(), loadToken() (the load being played), isDestroyed(),
- * streamUrl() }
+ * streamUrl(), openAligner({ cues, timing, key, onDone(timing) }): the guided alignment of the player }
  */
-export function createPlayerSubtitles({ ctx, engine, params, isLive, isTrailer, subtitleEl, current, showControls, loadToken, isDestroyed, streamUrl }) {
+export function createPlayerSubtitles({ ctx, engine, params, isLive, isTrailer, subtitleEl, current, showControls, loadToken, isDestroyed, streamUrl, openAligner = null }) {
   let subtitle = -1; // -1 = off, ONLINE = the downloaded subtitles, otherwise the engine's track
   let online = null; // { language, matched, cues } downloaded from OpenSubtitles for what is playing
-  let onlineDelay = 0; // ms the downloaded subtitles are moved by (later when positive), set from the subtitle list
+  let timing = { ...NO_TIMING }; // the downloaded subtitles on the video: video = line × scale + offset (the guided alignment, subtitleAlign.js)
   let onlineTimer = null; // draws the downloaded cues while they are chosen
   let onlineCue = null;
   let onlinePending = null; // the download running for what is playing, shared by repeated presses
@@ -88,14 +89,14 @@ export function createPlayerSubtitles({ ctx, engine, params, isLive, isTrailer, 
       { label: t('player.subtitles.off'), value: -1 },
       ...tracks.map((track, i) => ({ label: subtitleLabel(track, i + 1, t('player.track')), value: track.index })),
       ...own.map((track, i) => ({ label: embeddedLabel(track, i + 1), value: `${EMBEDDED}${track.number}` })),
-      ...(online ? [{ label: onlineLabel(), value: ONLINE }, { label: syncLabel(), value: SYNC }] : []),
+      ...(online ? [{ label: onlineLabel(), value: ONLINE }, ...(openAligner ? [{ label: alignLabel(), value: ALIGN }] : [])] : []),
       ...(canDownload() ? [{ label: t('player.subtitles.download'), value: DOWNLOAD }] : []),
     ];
     const value = await ctx.dialogs.choose({ title: t('player.subtitles'), options, selected: subtitle });
     if (value === null) log.info('Subtitles list closed without a choice');
     if (value === null || isDestroyed()) return;
-    if (value === SYNC) {
-      await chooseDelay();
+    if (value === ALIGN) {
+      startAlign();
       return;
     }
     if (value === DOWNLOAD) {
@@ -133,25 +134,37 @@ export function createPlayerSubtitles({ ctx, engine, params, isLive, isTrailer, 
     if (abs >= 60000) return `${sign}${Math.floor(abs / 60000)}:${`0${Math.round((abs % 60000) / 1000)}`.slice(-2)} min`;
     return `${sign}${(abs / 1000).toLocaleString(i18n.getLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 })} s`;
   };
-  const syncLabel = () => t('player.subtitles.sync', { delay: delayText(onlineDelay) });
+  // "Align the downloaded subtitles", with the delay they have now (and the speed when not 1).
+  const alignLabel = () => {
+    const parts = timing.offset || timing.scale !== 1 ? [delayText(Math.round(timing.offset))].concat(timing.scale !== 1 ? [`× ${timing.scale.toFixed(3)}`] : []) : [];
+    return parts.length ? `${t('player.subtitles.align')} (${parts.join(' · ')})` : t('player.subtitles.align');
+  };
+  /** The key of the alignment of these subtitles on this video (saved in the profile's database). */
+  let alignProvider = ''; // the provider of what is playing (read with the download)
+  const alignKeyNow = () => alignKey({ providerId: alignProvider, entryKey: params.entryKey || '', streamId: String((current() || {}).id || ''), fileId: String((online && online.fileId) || online.language || '') });
 
-  /**
-   * Timing of the downloaded subtitles, from −5 to +5 minutes (+ = later, for lines that come before the voice; see syncSteps). Choosing
-   * a value also switches them on.
-   */
-  async function chooseDelay() {
-    const options = syncSteps().map((ms) => ({ label: delayText(ms), value: ms }));
-    const value = await ctx.dialogs.choose({ title: t('player.subtitles.syncTitle'), options, selected: onlineDelay });
-    if (value === null || isDestroyed()) return;
-    onlineDelay = value;
-    ctx.notices.info(syncLabel(), { scope: 'playback', key: 'track' });
-    if (subtitle !== ONLINE) {
-      subtitle = ONLINE;
-      if (engine.setSubtitleTrack && engine.getSubtitleTracks && engine.getSubtitleTracks().length) engine.setSubtitleTrack(null);
-    }
-    showSubtitle('');
-    startOnline();
+  /** The guided procedure: the player shows it; at the end the timing found is used (and was saved, point by point). */
+  function startAlign() {
+    if (!online || !openAligner) return;
+    openAligner({
+      cues: online.cues,
+      timing,
+      key: alignKeyNow(),
+      onDone: (next) => {
+        if (next) timing = { offset: next.offset, scale: next.scale };
+        log.info('Downloaded subtitles aligned', `offset ${Math.round(timing.offset)} ms`, `scale ${timing.scale.toFixed(4)}`);
+        if (subtitle !== ONLINE) {
+          subtitle = ONLINE;
+          if (engine.setSubtitleTrack && engine.getSubtitleTracks && engine.getSubtitleTracks().length) engine.setSubtitleTrack(null);
+        }
+        startOnline();
+      },
+      preview: (next) => {
+        timing = { offset: next.offset, scale: next.scale };
+      },
+    });
   }
+
   let onlineNotice = null; // the "downloading" notice, closed if the player changes title or closes first
   function closeOnlineNotice() {
     if (onlineNotice !== null) ctx.notices.close(onlineNotice);
@@ -168,7 +181,7 @@ export function createPlayerSubtitles({ ctx, engine, params, isLive, isTrailer, 
     let shownOnce = false;
     let checked = false;
     let readFailed = false;
-    log.info('Downloaded subtitles on', `engine ${engine.kind || '?'}`, `position ${Math.round(Number(engine.getTime()) || 0)} ms`, `${online.cues.length} lines`, `first ${first ? `${first.start}-${first.end} ms` : 'none'}`, `delay ${onlineDelay} ms`);
+    log.info('Downloaded subtitles on', `engine ${engine.kind || '?'}`, `position ${Math.round(Number(engine.getTime()) || 0)} ms`, `${online.cues.length} lines`, `first ${first ? `${first.start}-${first.end} ms` : 'none'}`, `offset ${Math.round(timing.offset)} ms`, `scale ${timing.scale}`);
     onlineTimer = setInterval(() => {
       let ms = 0;
       try {
@@ -178,17 +191,17 @@ export function createPlayerSubtitles({ ctx, engine, params, isLive, isTrailer, 
         readFailed = true;
         return;
       }
-      const cue = cueAt(online.cues, ms - onlineDelay);
+      const cue = cueAt(online.cues, toCue(ms, timing));
       if (!checked && !shownOnce && Date.now() - startedAt > 10000) {
         // Ten seconds without a line: where the clock is and where the lines are.
         checked = true;
-        const next = online.cues.find((c) => c.end >= ms - onlineDelay);
+        const next = online.cues.find((c) => c.end >= toCue(ms, timing));
         const box = subtitleEl.getBoundingClientRect ? subtitleEl.getBoundingClientRect() : null;
-        log.warn('Downloaded subtitles: no line shown in 10 s', `position ${Math.round(ms)} ms`, `next line ${next ? `${next.start}-${next.end} ms` : 'none'}`, `delay ${onlineDelay} ms`, `box ${box ? `${Math.round(box.width)}x${Math.round(box.height)}` : '?'}`);
+        log.warn('Downloaded subtitles: no line shown in 10 s', `position ${Math.round(ms)} ms`, `next line ${next ? `${next.start}-${next.end} ms` : 'none'}`, `offset ${Math.round(timing.offset)} ms`, `box ${box ? `${Math.round(box.width)}x${Math.round(box.height)}` : '?'}`);
       }
       if (cue === onlineCue) return;
       onlineCue = cue;
-      showSubtitle(cue ? cue.text : '', cue ? cue.end + onlineDelay - ms : 0);
+      showSubtitle(cue ? cue.text : '', cue ? toVideo(cue.end, timing) - ms : 0);
       if (cue && !shownOnce) {
         shownOnce = true;
         const box = subtitleEl.getBoundingClientRect ? subtitleEl.getBoundingClientRect() : null;
@@ -311,6 +324,8 @@ export function createPlayerSubtitles({ ctx, engine, params, isLive, isTrailer, 
       ctx.notices.warning(t('player.subtitles.notFound'), { scope: 'playback', key: 'subs-online' }); // said, not silent
       return;
     }
+    const activeNow = await ctx.active.get().catch(() => null);
+    alignProvider = activeNow && activeNow.provider ? activeNow.provider.id : '';
     log.info('OpenSubtitles: searching', `tmdb ${query.tmdbId}`, query.season !== undefined ? `S${query.season}E${query.episode}` : '', query.languages.join(','));
     onlineNotice = ctx.notices.info(t('player.subtitles.downloading'), { scope: 'playback', key: 'subs-online', permanent: true });
     let found = null;
@@ -326,6 +341,12 @@ export function createPlayerSubtitles({ ctx, engine, params, isLive, isTrailer, 
     if (found) {
       online = found;
       log.info('OpenSubtitles', found.language, `${found.cues.length} lines`);
+      // Aligned before (these subtitles on this video): that timing again.
+      const saved = ctx.subtitleAlign ? await ctx.subtitleAlign.get(alignKeyNow()).catch(() => null) : null;
+      if (saved && token === loadToken()) {
+        timing = { offset: saved.offset, scale: saved.scale };
+        log.info('Downloaded subtitles: alignment saved before', `${saved.points.length} points`, `offset ${Math.round(saved.offset)} ms`, `scale ${saved.scale.toFixed(4)}`);
+      }
       ctx.notices.info(t('player.subtitles.downloaded', { language: onlineLanguage() }), { scope: 'playback', key: 'subs-online' });
     } else ctx.notices.warning(t(failed ? 'player.subtitles.failed' : 'player.subtitles.notFound'), { scope: 'playback', key: 'subs-online' });
   }
@@ -338,7 +359,7 @@ export function createPlayerSubtitles({ ctx, engine, params, isLive, isTrailer, 
     reset() {
       subtitle = -1;
       online = null;
-      onlineDelay = 0;
+      timing = { ...NO_TIMING };
       closeOnlineNotice();
       stopOnline();
       onlinePending = null;

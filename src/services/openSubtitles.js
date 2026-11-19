@@ -149,7 +149,7 @@ export function createOpenSubtitles({ getKey = () => '', doFetch = (...args) => 
     }
     if (!res.ok) throw new AppError(ErrorCode.HTTP, `Subtitle file HTTP ${res.status}`);
     const cues = parseSubtitles(await res.text());
-    return cues.length ? { language: best.language, matched: best.matched, cues } : null;
+    return cues.length ? { language: best.language, matched: best.matched, fileId: best.fileId, cues } : null;
   }
 
   /** Bytes `from`-`to` of the video: { buffer, size } (size from Content-Range), null when the server does not serve ranges. */

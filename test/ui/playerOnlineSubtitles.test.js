@@ -75,7 +75,7 @@ test('nothing is downloaded by itself: the list offers "Download from OpenSubtit
   release({ language: 'it', cues: [{ start: 1000, end: 3000, text: 'Ciao' }] });
   await wait(300);
   expect(noticeTexts()).toContain('Subtitles downloaded: Italiano');
-  expect(lists[1]).toEqual(['Off', 'OpenSubtitles: Italiano', 'OpenSubtitles sync: 0.0 s']); // the download entry is gone
+  expect(lists[1]).toEqual(['Off', 'OpenSubtitles: Italiano', 'Align the downloaded subtitles']); // the download entry is gone
   s.setTime(1500);
   await wait(300);
   expect(s.page.el.querySelector('.player-subtitle').textContent).toBe('Ciao');
@@ -100,23 +100,73 @@ test('the file has its own subtitles: they are listed with the download entry, n
   s.page.destroy();
 }, 10000);
 
-test('timing of the downloaded subtitles: +2 s shows each line two seconds later', async () => {
-  const s = setup({ fetch: async () => ({ language: 'it', matched: true, cues: [{ start: 1000, end: 3000, text: 'Ciao' }] }) });
+test('the guided alignment: two lines paired with the moment they are heard; the timing found is used and saved', async () => {
+  const s = setup({ fetch: async () => ({ language: 'it', matched: false, fileId: 42, cues: [{ start: 1000, end: 3000, text: 'Ciao' }, { start: 400000, end: 402000, text: 'Fine' }] }) });
+  const saved = [];
+  s.ctx.subtitleAlign = { get: async () => null, save: jest.fn(async (key, points) => saved.push({ key, points: points.slice() })) };
   await wait();
   s.start();
   await wait(100);
   const answers = [() => 'download', (options) => {
-    expect(options.map((o) => o.label)).toEqual(['Off', 'OpenSubtitles: Italiano (for this file)', 'OpenSubtitles sync: 0.0 s']);
-    return 'sync';
-  }, (options) => {
-    expect(options[0].label).toBe('−5:00 min');
-    expect(options.some((o) => o.label === '−1:00 min')).toBe(true);
-    return options.find((o) => o.label === '+2.0 s').value;
+    expect(options.map((o) => o.label)).toEqual(['Off', 'OpenSubtitles: Italiano', 'Align the downloaded subtitles']);
+    return 'align';
   }];
   s.ctx.dialogs.choose.mockImplementation(async ({ options }) => answers.shift()(options));
   pressSubtitles(s);
   await wait(300);
-  s.setTime(1500); // the line starts at 3 s now
+  const ui = s.page.el.querySelector('.align-ui');
+  expect(ui).toBeTruthy();
+  expect(ui.querySelector('.align-line').textContent).toBe('Ciao'); // the line at the position, on screen
+  const key = (action, n = 1) => { for (let i = 0; i < n; i += 1) s.page.onAction(action); };
+  // Point 1: OK plays from just before the line; OK when heard (3.25 s, minus the reaction: 3 s).
+  key(Action.ENTER);
+  s.setTime(3250);
+  await wait(250);
+  key(Action.ENTER);
+  key(Action.UP, 2); // the panel: Back, Next, Finish
+  key(Action.RIGHT);
+  expect(ui.querySelector('.align-btn.focused').textContent).toBe('Next');
+  key(Action.ENTER);
+  expect(saved[0].points).toEqual([{ cue: 1000, video: 3000 }]);
+  expect(saved[0].key).toContain('|42');
+  // Point 2: the next line, heard at 402.25 s.
+  key(Action.RIGHT); // the focus is back on the lines: the next one
+  expect(ui.querySelector('.align-line').textContent).toBe('Fine');
+  key(Action.ENTER);
+  s.setTime(402250);
+  await wait(250);
+  key(Action.ENTER);
+  key(Action.UP, 2);
+  key(Action.RIGHT, 2); // Point 1, Back, Next
+  key(Action.ENTER);
+  expect(saved[1].points.length).toBe(2);
+  expect(ui.querySelector('.align-result').textContent).toMatch(/\+2\.0 s.*1\.000/);
+  key(Action.UP); // after "Next" the focus is back on the lines: up to the panel (Point 1, Point 2, Back, Next, Finish)
+  key(Action.RIGHT, 4);
+  expect(ui.querySelector('.align-btn.focused').textContent).toBe('Finish');
+  key(Action.ENTER);
+  expect(s.page.el.querySelector('.align-ui')).toBe(null);
+  // The lines two seconds later now.
+  s.setTime(1500);
+  await wait(300);
+  expect(s.page.el.querySelector('.player-subtitle').textContent).toBe('');
+  s.setTime(3500);
+  await wait(300);
+  expect(s.page.el.querySelector('.player-subtitle').textContent).toBe('Ciao');
+  s.page.destroy();
+}, 10000);
+
+test('an alignment saved before is used as soon as the same subtitles are downloaded again', async () => {
+  const s = setup({ fetch: async () => ({ language: 'it', fileId: 42, cues: [{ start: 1000, end: 3000, text: 'Ciao' }] }) });
+  s.ctx.subtitleAlign = { get: jest.fn(async () => ({ points: [{ cue: 1000, video: 3000 }], offset: 2000, scale: 1 })), save: jest.fn() };
+  await wait();
+  s.start();
+  await wait(100);
+  const answers = [() => 'download', (options) => options[1].value];
+  s.ctx.dialogs.choose.mockImplementation(async ({ options }) => answers.shift()(options));
+  pressSubtitles(s);
+  await wait(300);
+  s.setTime(1500);
   await wait(300);
   expect(s.page.el.querySelector('.player-subtitle').textContent).toBe('');
   s.setTime(3500);

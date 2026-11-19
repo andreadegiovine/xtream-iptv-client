@@ -16,6 +16,7 @@ import { pageEntries, getEntry, liveSequence, neighborKey } from '../../services
 import { streamLabel, sourceNames } from '../streamLabel.js';
 import { portableKeyFor } from '../../services/shareKeys.js';
 import { createPlayerSubtitles } from './player/subtitles.js';
+import { createSubtitleAligner } from './player/subtitleAlign.js';
 
 const CONTROLS_MS = 4000;
 const SAVE_EVERY_MS = 10000;
@@ -178,6 +179,7 @@ export function createPlayerPage(ctx, params) {
   }
 
   function hideControls() {
+    if (aligner) return; // the alignment keeps the progress bars on screen
     clearTimeout(hideTimer);
     focusMode = false;
     barFocus = false;
@@ -476,7 +478,43 @@ export function createPlayerPage(ctx, params) {
     loadToken: () => loadToken,
     isDestroyed: () => destroyed,
     streamUrl: () => streamUrl,
+    openAligner: (options) => openAligner(options),
   });
+
+  // The guided alignment of the downloaded subtitles (player/subtitleAlign.js): over the player, with the controls kept on screen.
+  let aligner = null;
+  async function openAligner({ cues, timing, key, onDone, preview }) {
+    if (aligner || destroyed) return;
+    const store = ctx.subtitleAlign || null;
+    const saved = store ? await store.get(key).catch(() => null) : null;
+    if (destroyed) return;
+    exitFocus();
+    showControls();
+    log.info('Subtitle alignment opened', `${cues.length} lines`, `${saved ? saved.points.length : 0} points saved`);
+    aligner = createSubtitleAligner({
+      root: el,
+      cues,
+      timing,
+      points: saved ? saved.points : [],
+      save: (points) => (store ? store.save(key, points) : Promise.resolve()),
+      durationMs: () => (lastState.duration || 0) * 1000,
+      getTime: () => Number(engine.getTime()) || 0,
+      seek: (ms) => controller.seekTo(ms / 1000),
+      setPaused: (paused) => {
+        const status = controller.getState().status;
+        if (paused && status === 'playing') controller.togglePause();
+        if (!paused && status === 'paused') controller.togglePause();
+      },
+      onPreview: (fit) => preview(fit),
+      onClose: (fit) => {
+        aligner = null;
+        log.info('Subtitle alignment closed', fit ? `offset ${Math.round(fit.offset)} ms, scale ${fit.scale.toFixed(4)}` : 'without a new timing');
+        if (fit) onDone(fit);
+        if (controller.getState().status === 'paused') controller.togglePause(); // the video plays on, with the subtitles aligned
+        showControls();
+      },
+    });
+  }
 
   function cycleAspect() {
     aspect = nextAspect(engine.aspectModes || ASPECT_MODES, aspect);
@@ -534,7 +572,8 @@ export function createPlayerPage(ctx, params) {
   function render(state) {
     if (destroyed) return;
     lastState = state;
-    if (scrub === null) {
+    if (aligner && aligner.mainCursor() !== null) drawProgress(aligner.mainCursor() / 1000, state.duration, state.bufferedEnd); // its cursor
+    else if (scrub === null) {
       drawProgress(state.position, state.duration, state.bufferedEnd);
       if (!isLive && lastPosition !== null && Math.abs(state.position - lastPosition) > 3) {
         showControls();
@@ -949,6 +988,7 @@ export function createPlayerPage(ctx, params) {
     /** Called by main.js before the focus manager: the player owns every key except Back. */
     onAction(action) {
       if (ctx.dialogs && ctx.dialogs.isOpen()) return false; // an open list (subtitles) takes the keys
+      if (aligner) return aligner.handle(action); // the alignment takes every key
       const handler = (focusMode && controlHandlers[action]) || handlers[action];
       if (!handler) return false;
       showControls();
@@ -957,6 +997,7 @@ export function createPlayerPage(ctx, params) {
     },
     /** Back first leaves the controls; a second Back leaves the player. */
     onBack() {
+      if (aligner) return aligner.back(); // Back ends the alignment (its points stay saved)
       if (!focusMode) return false;
       exitFocus();
       return true;
@@ -999,6 +1040,7 @@ export function createPlayerPage(ctx, params) {
       closeNextNotice();
       clearTimeout(hideTimer);
       clearTimeout(scrubTimer);
+      if (aligner) aligner.destroy();
       subtitles.stop();
       clearTimeout(programmeTimer);
       clearInterval(saveTimer);

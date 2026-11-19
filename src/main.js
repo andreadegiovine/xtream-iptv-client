@@ -55,6 +55,7 @@ import { createOperations } from './services/operations.js';
 import { countEntries, getEntry, setHidden } from './services/catalogQuery.js';
 import { createKidsLimits, outOfRange, rangeOf } from './services/kidsLimits.js';
 import { createRatingIndex } from './services/ratingIndex.js';
+import { createAlignStore } from './services/subtitleAlign.js';
 import { continueWatching } from './services/continueWatching.js';
 import { isEmptySeries, markUnavailable } from './services/unavailable.js';
 import { createGenreIndex } from './services/genreIndex.js';
@@ -224,6 +225,7 @@ async function boot() {
       return limits && (limits.before || limits.after || limits.minutes > 0) ? limits : null;
     },
   });
+  ctx.subtitleAlign = createAlignStore(pdb); // the alignments of downloaded subtitles, per video and file (player/subtitleAlign.js)
   ctx.parental = createParentalService({ db: pdb, appDb: db });
   setAdultCheck((entry) => ctx.parental.isAdult(entry));
   /** The adult categories and the marks of the active provider; a kids profile also gets what it must not see removed from every read. */
