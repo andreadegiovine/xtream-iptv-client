@@ -122,9 +122,8 @@ test('the guided alignment: two lines paired with the moment they are heard; the
   key(Action.ENTER);
   s.setTime(3250);
   await wait(250);
-  key(Action.ENTER);
-  key(Action.UP, 2); // the panel: Back, Next, Finish
-  key(Action.RIGHT);
+  key(Action.ENTER); // paused on the line
+  key(Action.ENTER); // OK again: the focus on "Next"
   expect(ui.querySelector('.align-btn.focused').textContent).toBe('Next');
   key(Action.ENTER);
   expect(saved[0].points).toEqual([{ cue: 1000, video: 3000 }]);
@@ -136,13 +135,11 @@ test('the guided alignment: two lines paired with the moment they are heard; the
   s.setTime(402250);
   await wait(250);
   key(Action.ENTER);
-  key(Action.UP, 2);
-  key(Action.RIGHT, 2); // Point 1, Back, Next
+  key(Action.ENTER); // "Next"
   key(Action.ENTER);
   expect(saved[1].points.length).toBe(2);
   expect(ui.querySelector('.align-result').textContent).toMatch(/\+2\.0 s.*1\.000/);
-  key(Action.UP); // after "Next" the focus is back on the lines: up to the panel (Point 1, Point 2, Back, Next, Finish)
-  key(Action.RIGHT, 4);
+  key(Action.UP); // after "Next" the focus is back on the lines: Up goes to the buttons, on "Finish" (the one that goes on)
   expect(ui.querySelector('.align-btn.focused').textContent).toBe('Finish');
   key(Action.ENTER);
   expect(s.page.el.querySelector('.align-ui')).toBe(null);
@@ -153,6 +150,44 @@ test('the guided alignment: two lines paired with the moment they are heard; the
   s.setTime(3500);
   await wait(300);
   expect(s.page.el.querySelector('.player-subtitle').textContent).toBe('Ciao');
+  s.page.destroy();
+}, 10000);
+
+test('alignment panel: the buttons in a row (Left / Right), the points above them (Up / Down); "Back" while paused plays on', async () => {
+  const s = setup({ fetch: async () => ({ language: 'it', fileId: 7, cues: [{ start: 1000, end: 3000, text: 'Ciao' }, { start: 400000, end: 402000, text: 'Fine' }] }) });
+  s.ctx.subtitleAlign = { get: async () => ({ points: [{ cue: 1000, video: 3000 }], offset: 2000, scale: 1 }), save: jest.fn(async () => undefined) };
+  await wait();
+  s.start();
+  await wait(100);
+  const answers = [() => 'download', () => 'align'];
+  s.ctx.dialogs.choose.mockImplementation(async () => answers.shift()());
+  pressSubtitles(s);
+  await wait(300);
+  const ui = s.page.el.querySelector('.align-ui');
+  const key = (action, n = 1) => { for (let i = 0; i < n; i += 1) s.page.onAction(action); };
+  const focused = () => ui.querySelector('.focused');
+  key(Action.UP); // from the lines: the buttons (Next and Finish off: Back)
+  expect(focused().textContent).toBe('Back');
+  key(Action.RIGHT);
+  expect(focused().textContent).toBe('Next');
+  key(Action.UP); // the points saved
+  expect(focused().className).toContain('align-point');
+  key(Action.DOWN); // back to the buttons
+  expect(focused().className).toContain('align-btn');
+  key(Action.DOWN); // back to the lines
+  expect(focused().className).toContain('subs');
+  // Paused on a line, "Back": the video plays on, Left / Right by a second again.
+  key(Action.RIGHT);
+  key(Action.ENTER);
+  s.setTime(400500);
+  await wait(250);
+  key(Action.ENTER); // paused
+  key(Action.ENTER); // on Next
+  key(Action.LEFT); // Back
+  expect(focused().textContent).toBe('Back');
+  key(Action.ENTER);
+  expect(focused().className).toContain('video');
+  expect(ui.querySelector('.align-help').textContent).toMatch(/as soon as you hear/);
   s.page.destroy();
 }, 10000);
 

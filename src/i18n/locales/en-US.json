@@ -495,7 +495,7 @@
   "align.step": "Point {step}",
   "align.helpPick": "Choose a line you will recognise with ← / → (its text is on screen), then OK: the video plays from just before it.",
   "align.helpPlay": "Press OK as soon as you hear the line. ← / → start again 1 s earlier or later.",
-  "align.helpPaused": "Paused on the line: ← / → adjust it by half a second, OK plays again. \"Next\" keeps the point.",
+  "align.helpPaused": "Paused on the line: ← / → adjust it by half a second, OK goes to \"Next\" (which keeps the point); \"Back\" plays the video on.",
   "align.point": "Point {n} · {time} · {delay}",
   "align.oneMore": "One more point, far from this one (about ten minutes), to finish.",
   "align.result": "Delay {delay} · speed {speed}: the subtitles follow it. More points are optional.",

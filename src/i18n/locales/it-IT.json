@@ -495,7 +495,7 @@
   "align.step": "Punto {step}",
   "align.helpPick": "Scegli con ← / → una battuta che riconoscerai (il testo è a schermo), poi OK: il video parte da poco prima.",
   "align.helpPlay": "Premi OK appena senti la battuta. ← / → ripartono 1 s prima o dopo.",
-  "align.helpPaused": "In pausa sulla battuta: ← / → la regolano di mezzo secondo, OK riprende. \"Avanti\" conferma il punto.",
+  "align.helpPaused": "In pausa sulla battuta: ← / → la regolano di mezzo secondo, OK passa ad \"Avanti\" (che conferma il punto); \"Indietro\" riprende la riproduzione.",
   "align.point": "Punto {n} · {time} · {delay}",
   "align.oneMore": "Ancora un punto, lontano da questo (una decina di minuti), per concludere.",
   "align.result": "Ritardo {delay} · velocità {speed}: i sottotitoli lo seguono già. Altri punti sono facoltativi.",
