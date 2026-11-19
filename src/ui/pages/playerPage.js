@@ -511,7 +511,12 @@ export function createPlayerPage(ctx, params) {
       cues,
       timing,
       points: saved ? saved.points : [],
-      save: (points) => (store ? store.save(key, points) : Promise.resolve()),
+      // Saved point by point; every point removed: the alignment is deleted.
+      save: async (points) => {
+        if (!store) return;
+        if (points.length || !store.remove) await store.save(key, points);
+        else await store.remove(key);
+      },
       durationMs: () => (lastState.duration || 0) * 1000,
       getTime: () => Number(engine.getTime()) || 0,
       seek: (ms) => controller.seekTo(ms / 1000),

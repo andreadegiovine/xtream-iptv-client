@@ -495,7 +495,6 @@
   "align.point": "Point {n} · {time}",
   "align.badSpeed": "The points do not agree (a speed that does not happen): do point {n} again.",
   "align.badPoint": "Point {n} does not agree with the others: do it again.",
-  "player.subtitles.alignDone": "done",
   "align.count": "Points defined {count} of at least {min}",
   "align.countDone": "Points defined {count}",
   "align.help": "Choose a line of the subtitles with ← / → and press OK. Align the video to the line on screen with ← / → (OK plays them together) and when you are done press \"Add point\".",

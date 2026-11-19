@@ -126,7 +126,7 @@ bar (the gear); "Settings → X" names the page of its sidebar.
   Left / Right and OK; on the video bar move the green anchor (faster while the arrow is held) to the moment the line is spoken and press
   OK to play video and subtitles together and check; then "Add point". From two points (about ten minutes apart, which the procedure
   suggests) both the delay and the speed are corrected, which also fixes subtitles made for a 25 fps release. The points are saved for
-  that video and file, the alignment is used again whenever the same subtitles are downloaded, and the list says "(done)".
+  that video and file, the alignment is used again whenever the same subtitles are downloaded, and its entry in the list shows a check.
 - **Settings.** *Settings → OpenSubtitles*: the API key (see [Optional services](#optional-services)).
 - **What you gain.** Subtitles for almost anything, in time with the voice, aligned once for good.
 

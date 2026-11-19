@@ -41,6 +41,25 @@
     }
   }
 
+  // Option with an icon after the label (the check of the alignment of downloaded subtitles once done): the icon at the right.
+  &.with-trailing {
+    display: flex;
+    align-items: center;
+
+    span {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .icon {
+      flex: none;
+      width: 28px;
+      height: 28px;
+      margin-left: 20px;
+      color: #3ddc84;
+    }
+  }
+
   &.focused {
     background: $text;
     color: $bg;

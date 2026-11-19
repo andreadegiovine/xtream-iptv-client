@@ -495,7 +495,6 @@
   "align.point": "Punto {n} · {time}",
   "align.badSpeed": "I punti non tornano (una velocità impossibile): rifai il punto {n}.",
   "align.badPoint": "Il punto {n} non torna con gli altri: rifallo.",
-  "player.subtitles.alignDone": "fatto",
   "align.count": "Punti definiti {count} su almeno {min}",
   "align.countDone": "Punti definiti {count}",
   "align.help": "Scegli una battuta dai sottotitoli scorrendo con ← / → e premi OK. Allinea il video alla battuta visibile sullo schermo con ← / → (OK li riproduce insieme) e quando hai terminato premi \"Aggiungi punto\".",

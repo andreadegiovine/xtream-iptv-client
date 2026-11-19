@@ -90,7 +90,7 @@ export function createPlayerSubtitles({ ctx, engine, params, isLive, isTrailer, 
       { label: t('player.subtitles.off'), value: -1 },
       ...tracks.map((track, i) => ({ label: subtitleLabel(track, i + 1, t('player.track')), value: track.index })),
       ...own.map((track, i) => ({ label: embeddedLabel(track, i + 1), value: `${EMBEDDED}${track.number}` })),
-      ...(online ? [{ label: onlineLabel(), value: ONLINE }, ...(openAligner ? [{ label: alignLabel(), value: ALIGN }] : [])] : []),
+      ...(online ? [{ label: onlineLabel(), value: ONLINE }, ...(openAligner ? [{ label: alignLabel(), value: ALIGN, ...(aligned ? { trailingIcon: 'check' } : {}) }] : [])] : []),
       ...(canDownload() ? [{ label: t('player.subtitles.download'), value: DOWNLOAD }] : []),
     ];
     const value = await ctx.dialogs.choose({ title: t('player.subtitles'), options, selected: subtitle });
@@ -130,7 +130,7 @@ export function createPlayerSubtitles({ ctx, engine, params, isLive, isTrailer, 
   const onlineLabel = () => t(online.matched ? 'player.subtitles.matched' : 'player.subtitles.online', { language: onlineLanguage() });
   // "Alignment of the downloaded subtitles", "(done)" once the procedure ended with its points (or a saved one is used).
   let aligned = false;
-  const alignLabel = () => (aligned ? `${t('player.subtitles.align')} (${t('player.subtitles.alignDone')})` : t('player.subtitles.align'));
+  const alignLabel = () => t('player.subtitles.align'); // with a check at its right once done (`aligned`)
   let alignProvider = ''; // the provider of what is playing (read with the download)
   const alignKeyNow = () => alignKey({ providerId: alignProvider, entryKey: params.entryKey || '', streamId: String((current() || {}).id || ''), fileId: String((online && online.fileId) || online.language || '') });
 
@@ -155,6 +155,8 @@ export function createPlayerSubtitles({ ctx, engine, params, isLive, isTrailer, 
       },
       preview: (next) => {
         timing = { offset: next.offset, scale: next.scale };
+        // Every point removed: no alignment any more (the entry of the list is a plain one again).
+        if (next.cleared) aligned = false;
       },
     });
   }

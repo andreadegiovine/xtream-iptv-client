@@ -1049,3 +1049,8 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
 - Without points (or once all are removed) the line chosen starts from the beginning of the film; every new point suggests the line about ten minutes after the last.
 - README: a section per feature — how it works, its settings, what it gives — for the unified catalog, huge catalogs, titles / genres / categories, age ratings, search, title pages, people and companies, player, subtitles and their alignment, Live TV, the guide, Home and favourites, profiles, parental control, Trakt, look and language, remote / mouse / touch, privacy and updates.
 - Tests: the step while a key is held, the bars still during the move and centered after it, the first line without points. Browser check with a real video. Not verified on the TV.
+
+### Patch 202 — Subtitle alignment: removed when its points are, a check once done
+- Every point removed: the alignment is deleted (not saved empty), the subtitles go back to their own timing and the entry of the subtitle list is a plain one again.
+- Once the procedure is done, the entry "Alignment of the downloaded subtitles" shows a check at its right (green) in place of "(done)". Lists of the dialogs take an icon after the label (`trailingIcon` of an option).
+- Tests: every point removed (deleted, the plain entry, the lines without the delay), the check on the entry. Browser check with a real video. Not verified on the TV.

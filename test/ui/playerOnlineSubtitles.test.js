@@ -162,9 +162,12 @@ test('the guided alignment: a line confirmed, the video anchored to it, "Add poi
   s.setTime(3500);
   await wait(300);
   expect(s.page.el.querySelector('.player-subtitle').textContent).toBe('Ciao');
-  pressSubtitles(s); // the list says it is done
+  let doneOption = null;
+  answers.length = 0;
+  answers.push((options) => { doneOption = options.find((o) => o.value === 'align'); return null; });
+  pressSubtitles(s); // the list: the entry with a check once done
   await wait(300);
-  expect(lists[1]).toContain('Alignment of the downloaded subtitles (done)');
+  expect(doneOption).toMatchObject({ label: 'Alignment of the downloaded subtitles', trailingIcon: 'check' });
   s.page.destroy();
 }, 10000);
 
@@ -405,5 +408,42 @@ test('alignment: a key held moves the anchor faster, the bars stay still until t
   await wait(700);
   expect(from()).toBe('2:34'); // centered on the anchor (214 s) once the keys stopped
   expect(s.engine.seekTo).toHaveBeenLastCalledWith(214000); // its frame
+  s.page.destroy();
+}, 10000);
+
+test('alignment: every point removed, the alignment is deleted and the entry of the list is a plain one again', async () => {
+  const s = setup({ fetch: async () => ({ language: 'it', fileId: 5, cues: [{ start: 1000, end: 3000, text: 'Ciao' }, { start: 400000, end: 402000, text: 'Fine' }] }) });
+  const removed = [];
+  s.ctx.subtitleAlign = { get: async () => ({ points: [{ cue: 1000, video: 3000 }, { cue: 400000, video: 402000 }], offset: 2000, scale: 1 }), save: jest.fn(async () => undefined), remove: jest.fn(async (key) => removed.push(key)) };
+  await wait();
+  s.start();
+  await wait(100);
+  let entry = null;
+  const answers = [() => 'download', (options) => { entry = options.find((o) => o.value === 'align'); return 'align'; }];
+  s.ctx.dialogs.choose.mockImplementation(async ({ options }) => answers.shift()(options));
+  pressSubtitles(s);
+  await wait(300);
+  expect(entry.trailingIcon).toBe('check'); // the saved alignment is used: done
+  const key = (action, n = 1) => { for (let i = 0; i < n; i += 1) s.page.onAction(action); };
+  key(Action.UP, 2); // the last point
+  key(Action.RIGHT); // Remove
+  key(Action.ENTER);
+  key(Action.UP); // the first one now (the only one)
+  key(Action.RIGHT);
+  key(Action.ENTER);
+  await wait(50);
+  expect(removed.length).toBe(1); // deleted, not saved empty
+  s.page.onBack();
+  s.page.onBack();
+  s.page.onBack(); // out
+  expect(s.page.el.querySelector('.align-ui')).toBe(null);
+  answers.push((options) => { entry = options.find((o) => o.value === 'align'); return null; });
+  pressSubtitles(s);
+  await wait(300);
+  expect(entry.trailingIcon).toBeUndefined();
+  // The lines without the delay again.
+  s.setTime(1500);
+  await wait(300);
+  expect(s.page.el.querySelector('.player-subtitle').textContent).toBe('');
   s.page.destroy();
 }, 10000);

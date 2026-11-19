@@ -114,7 +114,7 @@ export function createDialogService({ focus, root = document.body }) {
     const done = (value) => (over ? closeSub(value) : close(value));
     const previous = snapshot();
     // An option can carry an icon (`option.icon`) before its label: the actions of a programme, say.
-    const nodes = options.map((option, i) => createChoice({ label: option.label, icon: option.icon || null, current: option.value === selected, index: i }));
+    const nodes = options.map((option, i) => createChoice({ label: option.label, icon: option.icon || null, trailingIcon: option.trailingIcon || null, className: option.trailingIcon ? 'with-trailing' : '', current: option.value === selected, index: i }));
     const list = h('div', { class: 'choice-list' }, nodes);
     const overlay = h('div', { class: 'dialog-backdrop', role: 'dialog', 'aria-modal': 'true' }, h('div', { class: 'dialog' }, createHeading({ text: title }), list));
     root.appendChild(overlay);

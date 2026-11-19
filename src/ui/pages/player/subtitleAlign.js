@@ -268,6 +268,7 @@ export function createSubtitleAligner({ root, cues, timing: startTiming, points:
     fit = fitAlignment(points);
     await save(points).catch(() => undefined);
     if (points.length >= MIN_POINTS && fit.ok) onPreview(fit); // the subtitles already follow the points
+    else if (!points.length) onPreview({ offset: 0, scale: 1, cleared: true }); // every point removed: the alignment is gone
   }
 
   /** "Add point": the line and its anchor join the points; the next point starts on the bar of the subtitles. */
