@@ -41,7 +41,7 @@ describe('genre index', () => {
     const again = index.restart(); // waits for the first run, then starts a new one
     expect(await first).toBe(0);
     expect(await again).toBe(0);
-    expect(calls).toBe(3); // with a TMDB key: the TMDB phase (stopped by the restart, so no ratings), then TMDB and the ratings again
+    expect(calls).toBe(4); // with a TMDB key: the TMDB phase (stopped by the restart), then TMDB, its genres (logged as Genres) and the ratings
   });
   test('the provider is asked at an adaptive pace, without a daily cap; failures in a row stop the run (tried again next time)', async () => {
     const { db } = await setup([item(1, ''), item(2, ''), item(3, '')]);
@@ -177,4 +177,15 @@ describe('tmdb download', () => {
     expect((await listGenres(db, 'movie')).map((g) => g.key)).toEqual(['dramma']);
     expect(await runGenreBackfill({ db, xtream: { getVodInfo: jest.fn(), getSeriesInfo: jest.fn() }, tmdb: null, language: 'it' })).toBe(0);
   });
+});
+
+test('with TMDB the genres written from its metadata are logged as the Genres row (also from the update button)', async () => {
+  const names = [];
+  const syncLog = { track: jest.fn(async (name, job) => { names.push(name); return job(); }) };
+  const index = createGenreIndex({ active: { get: async () => null }, getTmdbKey: () => 'k', syncLog });
+  await index.backfill();
+  expect(names).toEqual(['tmdb', 'genres', 'ratings']);
+  names.length = 0;
+  await index.restore();
+  expect(names).toEqual(['genres']);
 });

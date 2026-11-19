@@ -286,19 +286,19 @@ export function createTmdbService({ db, client, getLanguage, now = Date.now, onA
 
   /**
    * A person for the person page (kept a day): { kind: 'person', id, name, photo, biography, birthday, deathday, placeOfBirth,
-   * department, credits: [{ type, tmdbId, role }] } (role: the character, or the job). Null when TMDB does not know them.
+   * department, credits: [{ type, tmdbId, role, backdrop? }] } (role: the character, or the job; backdrop: the title's picture). Null when TMDB does not know them.
    */
   async function person(id) {
     if (!client.enabled || !id) return null;
     const language = getLanguage();
-    const record = await cached('tmdb', `person:${id}:${language}`, () => RECOMMENDATIONS_TTL_MS, async () => {
+    const record = await cached('tmdb', `person2:${id}:${language}`, () => RECOMMENDATIONS_TTL_MS, async () => {
       const data = await client.person(id, language);
       let biography = (data && data.biography) || '';
       if (!biography && String(language).slice(0, 2) !== 'en') biography = ((await client.person(id, 'en-US').catch(() => null)) || {}).biography || ''; // none in the language of the app
       const credits = [];
       const add = (list, field) => (list || []).forEach((c) => {
         const type = c.media_type === 'tv' ? 'series' : c.media_type === 'movie' ? 'movie' : null;
-        if (type && c.id) credits.push({ type, tmdbId: c.id, role: String(c[field] || '').trim() });
+        if (type && c.id) credits.push({ type, tmdbId: c.id, role: String(c[field] || '').trim(), ...(c.backdrop_path ? { backdrop: posterUrl(c.backdrop_path, 'w1280') } : {}) });
       });
       add(data.combined_credits && data.combined_credits.cast, 'character');
       add(data.combined_credits && data.combined_credits.crew, 'job');
@@ -317,13 +317,13 @@ export function createTmdbService({ db, client, getLanguage, now = Date.now, onA
   async function company(id) {
     if (!client.enabled || !id) return null;
     const language = getLanguage();
-    const record = await cached('tmdb', `company:${id}:${language}`, () => RECOMMENDATIONS_TTL_MS, async () => {
+    const record = await cached('tmdb', `company2:${id}:${language}`, () => RECOMMENDATIONS_TTL_MS, async () => {
       const data = await client.company(id);
       const credits = [];
       for (const type of ['movie', 'series']) {
         for (let page = 1; page <= COMPANY_PAGES; page += 1) {
           const found = await client.companyTitles(type, id, language, page).catch(() => null);
-          ((found && found.results) || []).forEach((r) => r.id && credits.push({ type, tmdbId: r.id, role: '' }));
+          ((found && found.results) || []).forEach((r) => r.id && credits.push({ type, tmdbId: r.id, role: '', ...(r.backdrop_path ? { backdrop: posterUrl(r.backdrop_path, 'w1280') } : {}) }));
           if (!found || page >= (Number(found.total_pages) || 1)) break;
         }
       }

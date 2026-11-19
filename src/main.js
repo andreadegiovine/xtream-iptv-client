@@ -53,7 +53,7 @@ import { platform } from './platform/index.js';
 import { createSyncLog } from './services/syncLog.js';
 import { createOperations } from './services/operations.js';
 import { countEntries, getEntry, setHidden } from './services/catalogQuery.js';
-import { createKidsLimits, outOfRange, rangeOf, hasRange } from './services/kidsLimits.js';
+import { createKidsLimits, outOfRange, rangeOf } from './services/kidsLimits.js';
 import { createRatingIndex } from './services/ratingIndex.js';
 import { continueWatching } from './services/continueWatching.js';
 import { isEmptySeries, markUnavailable } from './services/unavailable.js';
@@ -770,9 +770,9 @@ async function boot() {
           if (count) log.info(`TMDB: ${count} titles in another script to download again`);
           await kvSet(db, 'tmdbTitlesLocalized', true).catch(() => undefined);
         }
-        // Once a kids profile has a rating range: the metadata saved without the age rating is downloaded again by this run (patch 187).
-        const rated = (await profiles.list().catch(() => [])).some((p) => p.kids && hasRange(p.limits));
-        if (rated && !(await kvGet(db, 'tmdbCertifications', false).catch(() => true))) {
+        // Once: the metadata saved without the age rating (before patch 187) is downloaded again by this run — the Rating group of the
+        // sidebar and the kids profiles' range need it (it used to happen only with a kids range).
+        if (!(await kvGet(db, 'tmdbCertifications', false).catch(() => true))) {
           const count = await tmdb.expireWithoutCertification().catch(() => 0);
           if (count) log.info(`TMDB: ${count} titles to download again for their age rating`);
           await kvSet(db, 'tmdbCertifications', true).catch(() => undefined);

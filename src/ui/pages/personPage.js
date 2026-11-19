@@ -2,6 +2,7 @@ import { h } from '../dom.js';
 import { t, i18n } from '../../i18n/index.js';
 import { createHeading } from '../atoms/heading.js';
 import { createChip } from '../atoms/chip.js';
+import { cssUrl } from '../cssUrl.js';
 import { createIconButton, setIconButtonActive, setIconButtonLabel } from '../atoms/iconButton.js';
 import { createPlaceholder } from '../atoms/placeholder.js';
 import { createMetaSeparator, createMetaText } from '../atoms/metaParts.js';
@@ -162,7 +163,33 @@ export function createPersonPage(ctx, params = {}) {
       moreChip.textContent = t(open ? 'person.showLess' : 'person.showMore');
     },
   });
-  const header = h('div', { class: 'person-top' }, poster, h('div', { class: 'detail-body' }, nameEl, metaEl, actionsEl, factsEl, bioEl, moreRow));
+  // Behind the page, as on a title page: the picture of one of their titles of the catalog, chosen at random.
+  const backdropEl = h('div', { class: 'detail-backdrop' });
+  let destroyed = false;
+  function showBackdrop(url) {
+    if (!url) return;
+    const probe = new Image();
+    probe.onload = () => {
+      if (destroyed) return;
+      backdropEl.style.backgroundImage = cssUrl(url);
+      backdropEl.classList.add('visible');
+    };
+    probe.src = url;
+  }
+  /** A random title's backdrop: TMDB's (with the credits), otherwise the provider's details of a title (one request, cached). */
+  async function pickBackdrop(info, entries) {
+    const shown = new Set(entries.map((e) => e.key));
+    const fromTmdb = ((info && info.credits) || []).filter((c) => c.backdrop && shown.has(`${c.type}:t${c.tmdbId}`));
+    if (fromTmdb.length) {
+      showBackdrop(fromTmdb[Math.floor(Math.random() * fromTmdb.length)].backdrop);
+      return;
+    }
+    if (!entries.length || !ctx.details) return;
+    const entry = entries[Math.floor(Math.random() * entries.length)];
+    const details = await (entry.type === 'series' ? ctx.details.series(entry.defaultId) : ctx.details.vod(entry.defaultId)).catch(() => null);
+    if (details && details.backdrop) showBackdrop(details.backdrop);
+  }
+  const header = h('div', { class: 'person-top' }, backdropEl, poster, h('div', { class: 'detail-body' }, nameEl, metaEl, actionsEl, factsEl, bioEl, moreRow));
 
   function setMeta(parts) {
     while (metaEl.firstChild) metaEl.removeChild(metaEl.firstChild);
@@ -200,7 +227,7 @@ export function createPersonPage(ctx, params = {}) {
     }, 0);
   }
 
-  return createCarouselPage(ctx, {
+  const page = createCarouselPage(ctx, {
     className: 'person',
     loadingText: '',
     prefix: 'person',
@@ -216,8 +243,15 @@ export function createPersonPage(ctx, params = {}) {
       const info = tmdb ? await (kind === 'company' ? tmdb.company(params.id) : tmdb.person(params.id)).catch(() => null) : null;
       fillHeader(info);
       const entries = await personTitles({ info, name: params.name, kind, getEntryOf: (key) => getEntry(current.db, key).catch(() => null), byName: (role, name) => titlesByName(current.db, role, name).catch(() => []) });
+      pickBackdrop(info, entries).catch(() => undefined);
       return { entries, status: entries.length ? '' : t('person.empty') };
     },
   });
+  const destroyPage = page.destroy;
+  page.destroy = () => {
+    destroyed = true;
+    destroyPage();
+  };
+  return page;
 }
 

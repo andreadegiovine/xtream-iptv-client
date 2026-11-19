@@ -7,6 +7,13 @@
     margin-bottom: $gutter;
   }
 
+  // Over the backdrop (fixed behind the page, as on a title page): the carousels and their status.
+  .typed-rows,
+  .search-status {
+    position: relative;
+    z-index: 1;
+  }
+
   .card-placeholder {
     height: 100%;
   }

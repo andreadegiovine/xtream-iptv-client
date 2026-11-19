@@ -154,7 +154,7 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
   function restore() {
     if (running) return Promise.resolve(0);
     cancelled = false;
-    return run('restore', false);
+    return trackAs('genres', 'restore'); // the Genres row of Settings: with TMDB its genres are these
   }
 
   function phase(name, force) {
@@ -164,7 +164,11 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
     return inFlight;
   }
 
-  const track = (name, force) => (syncLog ? syncLog.track(name, () => run(name, force), { cancel: stop }) : run(name, force));
+  const track = (name, force) => trackAs(name, name, force);
+  /** Runs `phaseName`, logged (Settings tables, operations in progress) as `logName`. */
+  function trackAs(logName, phaseName, force = false) {
+    return syncLog ? syncLog.track(logName, () => run(phaseName, force), { cancel: stop }) : run(phaseName, force);
+  }
 
   async function runPhases(force) {
     cancelled = false;
@@ -172,6 +176,8 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
     let done = 0;
     try {
       if (getTmdbKey()) done += await track('tmdb', force);
+      // With TMDB the genres are its own, written from the metadata (titles still without any): logged as the Genres row.
+      if (!cancelled && getTmdbKey()) await trackAs('genres', 'restore');
       // The ratings of the metadata just downloaded (also of titles added by a sync).
       if (!cancelled && getTmdbKey()) await track('ratings', false);
       // The provider's genre search only without TMDB: with a key TMDB's genres replace the provider's, asking the provider is wasted.
