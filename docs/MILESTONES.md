@@ -1142,3 +1142,8 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
 - **Keys:** Right enters on "Sync now", Left reaches "Remove", Down "Show password". The buttons are at the top of the page, so the page no longer scrolls to rows below the table.
 - **Sends:** already every 10 minutes while the app is open, plus a minute after the start and when the app goes to the background. A TV switched off suddenly loses at most the last 10 minutes of changes. No other timer added.
 - **Browser check:** the key navigation (positions and scroll at every step), the password shown and hidden. Not verified on the TV.
+
+### Patch 209 — Settings: Down scrolls a long table below the last button
+- On a sub-page of Settings, Down on the last control (the sync table has its buttons at the top) scrolls the page instead of doing nothing, about two thirds of the screen at a time, until its end.
+- Up first brings back the control that was scrolled out of the screen, then moves as before. This works on every sub-page with a long table, not only Sync.
+- Browser check on a shorter window (the table taller than the screen): two presses of Down reach the end of the table, Up comes back to the buttons. Not verified on the TV.

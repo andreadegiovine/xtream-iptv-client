@@ -711,6 +711,14 @@ export function createSettingsPage(ctx) {
   const visibleRows = () => subpages[current].rows.filter((row) => row.el.style.display !== 'none');
   rows.forEach((row) => row.refresh());
 
+  /** Scrolls the page by most of its height (`dir` 1 down, -1 up); false when it is already at that end. */
+  function scrollPage(dir) {
+    if (!page) return false;
+    const before = page.scrollTop;
+    page.scrollTop = before + dir * Math.round(page.clientHeight * 0.6);
+    return page.scrollTop !== before;
+  }
+
   // Stop buttons of the running operations come first, then the fixed rows; the list changes while the page is open.
   // Up / Down visit one control per line (the right-most button, or the field with a button at its right);
   // the controls at the left (`secondary: 'left'`) or at the right (`'right'`) of it are reached with Left / Right.
@@ -724,8 +732,21 @@ export function createSettingsPage(ctx) {
         for (let i = from + d; i >= 0 && i < list.length; i += d) if (!list[i].secondary) return { type: 'move', index: i };
         return { type: 'exit', dir };
       };
-      if (dir === Dir.DOWN) return step(1);
-      if (dir === Dir.UP) return step(-1);
+      if (dir === Dir.DOWN) {
+        // Below the last control the page may still go on (a long table): Down scrolls it, a screen at a time.
+        const next = step(1);
+        if (next.type === 'exit') scrollPage(1);
+        return next;
+      }
+      if (dir === Dir.UP) {
+        // Scrolled past the focused control (Down at the end of a long table): Up brings it back first.
+        const here = list[index] && list[index].el;
+        if (here && page && here.getBoundingClientRect().bottom < page.getBoundingClientRect().top + 1) {
+          ensureVisible(here);
+          return { type: 'exit', dir };
+        }
+        return step(-1);
+      }
       const next = list[index + 1];
       const here = list[index];
       if (dir === Dir.LEFT) {
