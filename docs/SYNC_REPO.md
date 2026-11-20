@@ -1,6 +1,6 @@
 # The device sync repository
 
-"Settings › Sync devices" keeps several TVs the same (providers, settings, profiles, keys, Trakt, watch state, favourites, collections,
+"Settings › Sync" keeps several TVs the same (providers, settings, profiles, keys, Trakt, watch state, favourites, collections,
 pinned entries). The data of every account lives, encrypted on the TV with the account's password, in one file per account of a GitHub
 repository of its own. This document says how it is set up, and how to make a new one if GitHub blocks or removes it.
 

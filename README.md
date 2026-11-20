@@ -190,7 +190,7 @@ bar (the gear); "Settings → X" names the page of its sidebar.
   the table of what is aligned.
 - **What you gain.** The same history everywhere, and an account that survives a reset of the TV.
 
-### Sync devices
+### Sync between TVs
 
 - **How it works.** Two or more TVs with the same account stay the same: providers, settings, profiles (and the limits of the kids
   profiles, with the minutes watched on all TVs added up), TMDB / OpenSubtitles keys, Trakt account, watch state, favourites,
@@ -198,7 +198,7 @@ bar (the gear); "Settings → X" names the page of its sidebar.
   the server (a GitHub repository) only stores what it cannot read. Changes are sent in the background (a minute after the start, then
   every 10 minutes, and when the app goes to the background) and taken at the next start of the other TVs, or at once with *Sync now*.
   Not synced: the parental PINs, scheduled viewing, and the settings of each TV (text size, screensaver, buffer).
-- **Settings.** *Settings → Sync devices*: username and password (at least 12 characters) the first time — the account is made if it
+- **Settings.** *Settings → Sync*: username and password (at least 12 characters) the first time — the account is made if it
   does not exist; when it holds data, this TV's data is replaced by it after a confirmation. Then the account, the counts of what is on
   this TV and in sync, *Show password*, *Sync now* and *Remove* (this TV leaves the sync and is reset). At the first start of a new TV,
   *Account* next to Xtream and M3U takes everything from an account another TV already set up (then only the parental PIN is asked).

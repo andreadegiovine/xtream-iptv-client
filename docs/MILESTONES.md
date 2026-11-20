@@ -1133,3 +1133,12 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
 - The builds of the online updates are published on the public gh-pages branch. The token of the device sync is now stored encoded (`scripts/sync-token.js`: XOR 0x5a, hex, reversed) and decoded when the app starts (`decodeSyncToken`, src/services/sync/config.js), so its plain form never appears in them.
 - The token is part of the app's code: an update of the "_autoupdate" packages brings a new one (a new token = a new release).
 - Tests: encode / decode, a build with a token holds no plain copy of it, the two-TV browser check again (the fake GitHub accepts only the decoded token). Not verified on the TV.
+
+### Patch 208 — Settings › Sync: one table, icon buttons
+- **Name:** the sidebar entry, the page and its table are now "Sync" ("Sincronizzazione").
+- **One table:** account, password, last sync, state and the counts of each kind of data.
+  - On the account row, at its right as in the other tables: "Remove" and "Sync now", as icons.
+  - On the password row: the eye that shows or hides it. Its icon changes, without redrawing the page.
+- **Keys:** Right enters on "Sync now", Left reaches "Remove", Down "Show password". The buttons are at the top of the page, so the page no longer scrolls to rows below the table.
+- **Sends:** already every 10 minutes while the app is open, plus a minute after the start and when the app goes to the background. A TV switched off suddenly loses at most the last 10 minutes of changes. No other timer added.
+- **Browser check:** the key navigation (positions and scroll at every step), the password shown and hidden. Not verified on the TV.

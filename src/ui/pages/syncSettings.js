@@ -1,10 +1,12 @@
 import { h } from '../dom.js';
 import { t, i18n } from '../../i18n/index.js';
-import { createListRow, createRowValue } from '../atoms/listRow.js';
+import { createListRow } from '../atoms/listRow.js';
 import { createField } from '../atoms/field.js';
 import { createHint } from '../atoms/hint.js';
 import { createPanel } from '../atoms/panel.js';
-import { createTableRow } from '../atoms/tableRow.js';
+import { createTableRow, createRowButtons } from '../atoms/tableRow.js';
+import { createButton } from '../atoms/button.js';
+import { icon } from '../icons.js';
 import { formatDateTime, formatNumber } from '../../core/format.js';
 import { log } from '../../core/logger.js';
 import { resetApp } from '../../services/resetApp.js';
@@ -13,8 +15,9 @@ import { MIN_PASSWORD, loginAndTake } from '../../services/sync/index.js';
 const SECTIONS = ['providers', 'profiles', 'settings', 'trakt', 'watch', 'favorites', 'collections', 'pins', 'other'];
 
 /**
- * Settings › "Sync devices": the account's fields and "Log in" the first time; then the account (with "Show password"), the counts of
- * each kind of data on this TV and in sync with the account, "Sync now" and "Remove" (this TV leaves the sync and the app is reset).
+ * Settings › "Sync": the account's fields and "Log in" the first time; then one table: the account (with the icon buttons "Remove" — this
+ * TV leaves the sync and the app is reset — and "Sync now" at its right, as in the other tables), the password (hidden, with "Show
+ * password" at its right), the last sync, the state, and the counts of each kind of data on this TV and in sync with the account.
  * Returns { id, icon, label, blocks, rows } as the other sub-pages.
  */
 export function createSyncSubpage(ctx) {
@@ -85,11 +88,26 @@ export function createSyncSubpage(ctx) {
     window.location.reload();
   }
 
-  const passwordValue = createRowValue();
-  const showRow = { el: createListRow({ label: t('sync.showPassword'), valueEl: passwordValue }).el, refresh: async () => undefined, activate: async () => { showPassword = !showPassword; await render(); } };
-  const nowRow = { el: createListRow({ label: t('sync.now') }).el, refresh: async () => undefined, activate: syncNow };
-  const removeRow = { el: createListRow({ label: t('sync.remove') }).el, refresh: async () => undefined, activate: remove };
+  // The buttons of the table (the same elements at every render: they are the focusable rows). Up / Down: "Sync now" and "Show
+  // password"; Left from "Sync now": "Remove" (secondary 'left', as the other tables of Settings).
+  const syncButton = createButton({ label: t('sync.now'), icon: 'refresh', variant: 'primary', iconOnly: true, className: 'panel-button' });
+  const removeButton = createButton({ label: t('sync.remove'), icon: 'remove', variant: 'danger', iconOnly: true, className: 'panel-button' });
+  const showButton = createButton({ label: t('sync.showPassword'), icon: 'seen', iconOnly: true, className: 'panel-button' });
+  const syncRow = { el: syncButton, refresh: async () => undefined, activate: syncNow };
+  const removeRow = { secondary: 'left', el: removeButton, refresh: async () => undefined, activate: remove };
+  const showRow = { el: showButton, refresh: async () => undefined, activate: async () => togglePassword() };
   const loginRow = { el: createListRow({ label: t('sync.login') }).el, refresh: async () => undefined, activate: login };
+  let passwordCell = null;
+  let shownPassword = '';
+  const hiddenText = '••••••••••••';
+  function togglePassword() {
+    showPassword = !showPassword;
+    if (passwordCell) passwordCell.textContent = showPassword ? shownPassword : hiddenText;
+    // The icon and the name of the button follow (the eye crossed out while the password is shown).
+    const glyph = showButton.querySelector('svg');
+    if (glyph) glyph.replaceWith(icon(showPassword ? 'hidden' : 'seen'));
+    showButton.setAttribute('aria-label', t(showPassword ? 'sync.hidePassword' : 'sync.showPassword'));
+  }
 
   async function render() {
     const info = await sync.engine.info();
@@ -102,18 +120,20 @@ export function createSyncSubpage(ctx) {
       rows.splice(0, rows.length, fieldRow(userField), fieldRow(passField), loginRow);
       return;
     }
-    const line = (name, value) => createTableRow({ name, statusText: value }).el;
+    const line = (name, value, buttons = null) => createTableRow({ name, statusText: value, buttons });
     const counts = await sync.engine.counts().catch(() => null);
     const when = info.lastSync ? formatDateTime(info.lastSync, i18n.getLocale()) : t('sync.never');
     const state = info.locked ? t('sync.locked') : info.lastError ? t('sync.error', { error: info.lastError }) : counts && counts.pending ? t('sync.pending', { count: counts.pending }) : t('sync.ok');
-    const accountRows = [line(t('sync.account'), info.username), line(t('sync.password'), showPassword ? info.password : '••••••••••••'), line(t('sync.lastSync'), when), line(t('sync.state'), state)];
-    const sectionRows = SECTIONS.filter((s) => counts && ((counts.here[s] || 0) || (counts.agreed[s] || 0))).map((s) =>
-      line(t(`sync.section.${s}`), t('sync.counts', { here: formatNumber(counts.here[s] || 0, i18n.getLocale()), synced: formatNumber(counts.agreed[s] || 0, i18n.getLocale()) })),
+    shownPassword = info.password;
+    const passwordLine = line(t('sync.password'), showPassword ? info.password : hiddenText, createRowButtons(showButton));
+    passwordCell = passwordLine.status;
+    const tableRows = [line(t('sync.account'), info.username, createRowButtons(removeButton, syncButton)).el, passwordLine.el, line(t('sync.lastSync'), when).el, line(t('sync.state'), state).el].concat(
+      SECTIONS.filter((s) => counts && ((counts.here[s] || 0) || (counts.agreed[s] || 0))).map(
+        (s) => line(t(`sync.section.${s}`), t('sync.counts', { here: formatNumber(counts.here[s] || 0, i18n.getLocale()), synced: formatNumber(counts.agreed[s] || 0, i18n.getLocale()) })).el,
+      ),
     );
-    panelHost.append(createPanel({ title: t('sync.accountTitle'), rows: accountRows }).el, createPanel({ title: t('sync.dataTitle'), rows: sectionRows }).el);
-    passwordValue.textContent = showPassword ? t('sync.hide') : '';
-    list.append(showRow.el, nowRow.el, removeRow.el);
-    rows.splice(0, rows.length, showRow, nowRow, removeRow);
+    panelHost.append(createPanel({ title: t('sync.title'), rows: tableRows }).el);
+    rows.splice(0, rows.length, syncRow, removeRow, showRow);
   }
 
   return {
