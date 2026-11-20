@@ -198,6 +198,19 @@ bar (the gear); "Settings → X" names the page of its sidebar.
   the server (a GitHub repository) only stores what it cannot read. Changes are sent in the background (a minute after the start, then
   every 10 minutes, and when the app goes to the background) and taken at the next start of the other TVs, or at once with *Sync now*.
   Not synced: the parental PINs, scheduled viewing, and the settings of each TV (text size, screensaver, buffer).
+- **Encryption.** Everything is encrypted on the TV, before it leaves, with keys made from the username and password: the password
+  never leaves the TV.
+  - **Keys:** PBKDF2-SHA-256 with 100,000 iterations gives a master key, and three keys come from it: one encrypts, one names the items,
+    one signs the writes.
+  - **Items:** every item is encrypted on its own with AES-256-GCM (a new random IV each time), so a changed or wrong item is refused.
+  - **What the server sees:** one file per account, named after a SHA-256 of the username. Its items have ids that say nothing of their
+    content, their dates and the cipher text, so it cannot read anything.
+  - **Writes:** a change is accepted only with the account's write key (the server keeps only its hash). After 5 wrong attempts in a
+    day the account takes no more changes until the next day.
+  - **Where:** the data lives in the public repository
+    [andreadegiovinebk/xtream-iptv-client-bk](https://github.com/andreadegiovinebk/xtream-iptv-client-bk). The app never writes
+    there directly: its workflow checks and merges each change. Accounts unused for 30 days are deleted. How it works, and how to make
+    a new repository: [docs/SYNC_REPO.md](docs/SYNC_REPO.md).
 - **Settings.** *Settings → Sync*: username and password (at least 12 characters) the first time — the account is made if it
   does not exist; when it holds data, this TV's data is replaced by it after a confirmation. Then the account, the counts of what is on
   this TV and in sync, *Show password*, *Sync now* and *Remove* (this TV leaves the sync and is reset). At the first start of a new TV,
@@ -237,25 +250,26 @@ store listings). "Not advertised" means we found no mention of it, not that it i
 | | **Xtream IPTV** | [TiviMate](https://tivimate.com) | [IPTV Smarters Pro](https://www.iptvsmarters.com) | IBO Player |
 |---|---|---|---|---|
 | Platforms | Tizen, webOS, Android TV / Fire TV, Windows, macOS, Linux | Android TV / Fire TV | Android, Fire TV, Samsung, LG, iOS and others | Android TV / Fire TV, Samsung, LG |
-| Xtream Codes login, several providers | Yes, also active together as one catalog | Yes | Yes | Yes |
-| Programme guide (EPG grid) | Yes, with a custom XMLTV guide | Yes (its strong point) | Yes | Yes |
+| Xtream Codes login, several providers | ✅ also active together as one catalog | ✅ | ✅ | ✅ |
+| Programme guide (EPG grid) | ✅ with a custom XMLTV guide | ✅ (its strong point) | ✅ | ✅ |
 | Catch-up / recording | No (catch-up planned) | Catch-up; recording with premium | Catch-up | Not advertised |
-| Programmes in the search | Yes | Yes | Not advertised | Not advertised |
-| Scheduled viewing (opens the channel when it starts) | Yes | Not advertised | Not advertised | Not advertised |
-| Genres from the guide's categories | Yes | Not advertised | Not advertised | Not advertised |
-| Quality variants of a channel grouped into one card | Yes, automatic, with manual links | Not advertised | Not advertised | Not advertised |
-| TV networks (channels of the same broadcaster collected) | Yes, automatic, with manual links | Not advertised | Not advertised | Not advertised |
-| Duplicate movies and series merged into one card | Yes (by TMDB id) | No | No | No |
-| Clean titles (no language prefixes, quality tags) | Yes | Not advertised | Not advertised | Not advertised |
-| Favourite and pinned categories, genres, networks | Yes | Favourite channels | Favourites | Favourites |
-| Collections of movies, series and channels | Yes | Not advertised | Not advertised | Not advertised |
-| Favourites, collections and pins shared between providers | Yes (by TMDB id) | Not advertised | Not advertised | Not advertised |
-| End-credits point per series (next episode from there) | Yes | Not advertised | Not advertised | Not advertised |
-| TMDB posters, plots, cast, trailers | Yes (own free key) | Not advertised | Partly (trailers, info) | Not advertised |
-| Trakt history and progress sync | Yes | No | Not advertised | Not advertised |
-| Subtitles from OpenSubtitles | Yes, by file hash, with a guided alignment (delay and speed) | Not advertised | Not advertised | Not advertised |
-| Parental control | Yes (PIN, kids profiles) | Yes | Yes | Not advertised |
-| Open source, no account, no analytics | Yes | No | No | No |
+| Programmes in the search | ✅ | ✅ | Not advertised | Not advertised |
+| Scheduled viewing (opens the channel when it starts) | ✅ | Not advertised | Not advertised | Not advertised |
+| Genres from the guide's categories | ✅ | Not advertised | Not advertised | Not advertised |
+| Quality variants of a channel grouped into one card | ✅ automatic, with manual links | Not advertised | Not advertised | Not advertised |
+| TV networks (channels of the same broadcaster collected) | ✅ automatic, with manual links | Not advertised | Not advertised | Not advertised |
+| Duplicate movies and series merged into one card | ✅ (by TMDB id) | No | No | No |
+| Clean titles (no language prefixes, quality tags) | ✅ | Not advertised | Not advertised | Not advertised |
+| Favourite and pinned categories, genres, networks | ✅ | Favourite channels | Favourites | Favourites |
+| Collections of movies, series and channels | ✅ | Not advertised | Not advertised | Not advertised |
+| Favourites, collections and pins shared between providers | ✅ (by TMDB id) | Not advertised | Not advertised | Not advertised |
+| End-credits point per series (next episode from there) | ✅ | Not advertised | Not advertised | Not advertised |
+| TMDB posters, plots, cast, trailers | ✅ (own free key) | Not advertised | Partly (trailers, info) | Not advertised |
+| Trakt history and progress sync | ✅ | No | Not advertised | Not advertised |
+| Subtitles from OpenSubtitles | ✅ by file hash, with a guided alignment (delay and speed) | Not advertised | Not advertised | Not advertised |
+| Sync between TVs (providers, settings, profiles, favourites, watch state) | ✅ automatic, encrypted on the TV | Backup and restore by hand | Not advertised | Not advertised |
+| Parental control | ✅ (PIN, kids profiles) | ✅ | ✅ | Not advertised |
+| Open source, no analytics, no account required | ✅ | No | No | No |
 
 ## Screenshots
 

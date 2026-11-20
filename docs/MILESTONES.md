@@ -1147,3 +1147,11 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
 - On a sub-page of Settings, Down on the last control (the sync table has its buttons at the top) scrolls the page instead of doing nothing, about two thirds of the screen at a time, until its end.
 - Up first brings back the control that was scrolled out of the screen, then moves as before. This works on every sub-page with a long table, not only Sync.
 - Browser check on a shorter window (the table taller than the screen): two presses of Down reach the end of the table, Up comes back to the buttons. Not verified on the TV.
+
+### Patch 210 — README: how the sync encrypts the data, ✅ in the comparison
+- README › Sync between TVs: how the data is encrypted. It covers the keys (PBKDF2 → three keys), the items (AES-256-GCM), what the server sees, the write key with its daily lock, and the link to the data repository and to docs/SYNC_REPO.md.
+- Comparison table:
+  - "Yes" becomes ✅;
+  - a new row "Sync between TVs": TiviMate only offers a backup and restore by hand, the other two do not advertise any;
+  - "no account" becomes "no account required" (the sync account is optional).
+- Documentation only. Not verified on the TV.
