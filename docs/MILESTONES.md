@@ -1128,3 +1128,8 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
   - the server takes up to a minute to merge a send;
   - the GitHub token expires: a new build is needed.
 - Not verified on the TV (nor against the real GitHub repository: the token is a secret this environment does not have).
+
+### Patch 207 — The sync token stored encoded in the builds
+- The builds of the online updates are published on the public gh-pages branch. The token of the device sync is now stored encoded (`scripts/sync-token.js`: XOR 0x5a, hex, reversed) and decoded when the app starts (`decodeSyncToken`, src/services/sync/config.js), so its plain form never appears in them.
+- The token is part of the app's code: an update of the "_autoupdate" packages brings a new one (a new token = a new release).
+- Tests: encode / decode, a build with a token holds no plain copy of it, the two-TV browser check again (the fake GitHub accepts only the decoded token). Not verified on the TV.

@@ -10,6 +10,9 @@ repository of its own. This document says how it is set up, and how to make a ne
 - The token: the `SYNC_TOKEN` secret of this repository (Settings → Secrets and variables → Actions), put into every build by the
   release workflow (`__SYNC_TOKEN__`, webpack.config.js). A build without it has no sync: its Settings page and its first-start "Account"
   button are not shown. Local builds: `SYNC_TOKEN=... npm run build`.
+- The build stores the token encoded (`scripts/sync-token.js`: every character XOR 0x5a, as hex, reversed; decoded by
+  `decodeSyncToken` in config.js), so its plain form never appears in the builds published on the public gh-pages branch. It is part of
+  the app's code: the updates of the "_autoupdate" packages bring a new token; the store packages need a new package.
 - Current repository: `andreadegiovinebk/xtream-iptv-client-bk`, owned by a separate GitHub account (a problem there never touches the
   app's own account and releases).
 
@@ -38,8 +41,8 @@ repository of its own. This document says how it is set up, and how to make a ne
    - Delete both files afterwards.
 4. **Token.** Avatar → Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token:
    resource owner the account of the repository, *Only select repositories* (that one), Repository permissions → *Contents: Read and
-   write* (nothing else), the longest expiration available (note the date: a new token needs a new build). Put it in the app repository
-   as the `SYNC_TOKEN` secret.
+   write* (nothing else), the longest expiration available (note the date: a new token needs a new release, which the "_autoupdate"
+   packages receive by themselves). Put it in the app repository as the `SYNC_TOKEN` secret.
 5. **Rulesets.** Repository → Settings → Rules → Rulesets:
    - New branch ruleset `solo-workflow`: Enforcement *Active*; Bypass list: *Deploy keys* only (not *Repository admin*: the token's owner
      is the admin, it would bypass too); Target *Include all branches*; rules *Restrict creations*, *Restrict updates*, *Restrict
