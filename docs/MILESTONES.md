@@ -1167,3 +1167,6 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
   - ✅ yes, ❌ no, ⚠️ partly, ❓ not advertised;
   - a logo over each player, all the same size: ours from logo.svg, the others from their sites' icons.
 - Documentation only.
+
+### Patch 212 — README: the features in the contents one per line
+- In the contents the features were joined on a single sub-item: now each feature is a sub-item of its own under "Features". Documentation only.
