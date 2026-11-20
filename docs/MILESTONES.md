@@ -1155,3 +1155,15 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
   - a new row "Sync between TVs": TiviMate only offers a backup and restore by hand, the other two do not advertise any;
   - "no account" becomes "no account required" (the sync account is optional).
 - Documentation only. Not verified on the TV.
+
+### Patch 211 — README: contents, features by impact, icons in the comparison
+- **Contents:** a menu at the top, listing the sections and every feature.
+- **Features:**
+  - sorted by impact;
+  - each one has an "Impact N/10" line under its title;
+  - shortened to one paragraph and its settings (the sync keeps its encryption details).
+- **Top sections, in this order:** platforms, first steps, features, optional services, comparison, screenshots, remote control, custom EPG, documentation.
+- **Comparison table:**
+  - ✅ yes, ❌ no, ⚠️ partly, ❓ not advertised;
+  - a logo over each player, all the same size: ours from logo.svg, the others from their sites' icons.
+- Documentation only.

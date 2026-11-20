@@ -12,6 +12,20 @@ cast and guides in a clean interface designed for a 1920x1080 screen. One app, t
 > **For the best experience, set up TMDB, Trakt and OpenSubtitles** (all free, see [Optional services](#optional-services)): posters,
 > plots, cast and trailers, watch history on every device, and subtitles for any title.
 
+## Contents
+
+- [Platforms](#platforms)
+- [First steps](#first-steps)
+- [Features](#features)
+  - [One catalog, several providers](#one-catalog-several-providers) · [Fast with huge catalogs](#fast-with-huge-catalogs) · [Player](#player) · [Sync between TVs](#sync-between-tvs) · [TV guide (EPG)](#tv-guide-epg) · [Live TV](#live-tv) · [Home, favourites, collections and suggestions](#home-favourites-collections-and-suggestions) · [Title pages](#title-pages) · [Search](#search) · [Subtitles](#subtitles) · [Profiles](#profiles) · [Trakt](#trakt) · [Private and up to date](#private-and-up-to-date) · [Parental control](#parental-control) · [Clean titles, genres and categories](#clean-titles-genres-and-categories) · [Remote, mouse and touch](#remote-mouse-and-touch) · [Age ratings](#age-ratings) · [People and production companies](#people-and-production-companies) · [Look and language](#look-and-language)
+- [Optional services](#optional-services)
+- [Compared with popular players](#compared-with-popular-players)
+- [Screenshots](#screenshots)
+- [Remote control](#remote-control)
+- [Custom EPG](#custom-epg)
+- [Documentation](#documentation)
+- [License](#license)
+
 ## Platforms
 
 Every release on the [Releases](../../releases) page has one package per platform, named `xtream-iptv-<version>_<platform>.<ext>`
@@ -28,264 +42,6 @@ Every release on the [Releases](../../releases) page has one package per platfor
 Tizen is developed and tried on a 2021 QLED and the Windows app is tried as well; webOS, Android TV / Fire TV, macOS and Linux are
 still being tested on real devices.
 
-## Features
-
-Every feature below says **how it works**, what you can **set**, and what you **gain**. Settings are under **Settings** in the top
-bar (the gear); "Settings → X" names the page of its sidebar.
-
-### One catalog, several providers
-
-- **How it works.** Add as many providers as you like on the **Provider** page (Xtream API, or an M3U playlist with its XMLTV guide)
-  and switch on the ones you want. Their movies, series and channels form one catalog: the same title once (by TMDB id, otherwise by
-  clean name and year across providers), its versions from every provider in the version dropdown of its page (each ending with the
-  name of its provider), its categories grouped per provider ("Categories <provider>" in the sidebar and on the title page), the guides
-  of all of them joined. With several providers active the info line of a title says which ones have it. Within one provider, titles
-  are merged only when the provider itself gives them the same TMDB id (4K, HD and dubbed versions of the same film).
-- **Settings.** The **Provider** page: a switch per provider, its table of lists (movies, series, channels, categories shown and in
-  total, last update) with update and remove buttons. *Settings → Overview*: the table of the unified catalog (titles, grouped titles,
-  networks) with rebuild and remove. **Visible categories** on the Provider page: hide the categories you never use.
-- **What you gain.** One card per film instead of five copies; everything of every subscription in the same grids, search and guide;
-  favourites, progress and collections that follow a title from one provider to another.
-
-### Fast with huge catalogs
-
-- **How it works.** The provider's lists are downloaded and worked out in a background worker (tens of thousands of titles), stored on
-  the device and shown in grids that load as you scroll. At start the stored catalog is shown at once; lists older than 12 hours are
-  refreshed in the background, only what changed is written. TMDB metadata, genres, age ratings and the people of the titles are found
-  by background jobs too, at a pace the provider and TMDB accept, pausing while you browse.
-- **Settings.** *Settings → Overview*: operations in progress (each can be stopped), the state of the catalog, rebuild or empty the
-  derived data (no new download), the size on the device. *Settings → TMDB*: a row per background job (metadata, genres, ratings,
-  people, title details) with update and remove.
-- **What you gain.** No waiting at start, no freezing while the catalog updates, smooth grids even on old TVs.
-
-### Clean titles, genres and categories
-
-- **How it works.** Titles lose language prefixes, quality tags and year suffixes ("IT: Inception (2010) [4K]" → "Inception"). The genres
-  of the provider and of TMDB are merged under one name; the sidebar of Movies and TV Series lists the genres, the categories (one block
-  per provider) and the age ratings of the catalog. Any category, genre or guide genre can be pinned to the sidebar or added to the
-  favourites with the buttons at the top of its grid.
-- **Settings.** *Settings → Movies & TV Series*: clean titles on / off; **Visible categories** per provider on the Provider page.
-- **What you gain.** Readable names, one "Drama" instead of four spellings, the sections you use always at hand.
-
-### Age ratings
-
-- **How it works.** Every film and series with TMDB metadata gets the age rating of your country (from the language of the app; "VM14"
-  and "14+" count as the same age). The sidebar of Movies and TV Series has a **Rating** group after the categories (All ages, 6+, 14+…
-  with their numbers); the rating on a title page is clickable and opens that group with its grid. The ratings are worked out in the
-  background after the TMDB download, without any extra request.
-- **Settings.** *Settings → TMDB → Rating*: how many titles have one, work them out again, delete them.
-- **What you gain.** Find what suits a child or an evening in a moment; the same ratings drive the limits of the kids profiles.
-
-### Search
-
-- **How it works.** The magnifier in the top bar searches as you type: movies, series, channels, collections and the programmes on TV in
-  the next 24 hours, in rows by type. The last searches are kept and offered when the field is empty.
-- **Settings.** None.
-- **What you gain.** One field for the whole catalog and the guide.
-
-### Title pages
-
-- **How it works.** Picture, title, an info line (the TMDB logo when TMDB enriched the page, year, rating, the providers that have it,
-  duration or seasons), the action buttons (play, **Rewind** to bring the progress of a film or of a whole series back to the start, also
-  on Trakt, watched, trailer, favourite, collection, and for admins the shield that marks a title as adult content or not), plot,
-  categories, genres, age rating, director, production companies, episodes, cast and related titles. Director, cast and companies are
-  clickable (see the next section). Trailers play in the app on Samsung TVs, in the YouTube app or the browser elsewhere.
-- **Settings.** TMDB (see [Optional services](#optional-services)) adds pictures, plots, cast, trailers and ratings.
-- **What you gain.** Everything about a title on one page, and one press to reach the rest of the catalog from it.
-
-### People and production companies
-
-- **How it works.** The cast cards, the director and the production companies of a title page open a page laid out as a title page:
-  photo or logo, roles (acting, directing, production…) or, for a company, how many of its films and series are in your catalog, birth
-  and death with the age, the biography (a long one opens with "Show more" and scrolls with the arrows), a backdrop from one of their
-  titles, and the carousels of their films and series in your catalog, with their role under each card. With TMDB the data comes from
-  it by id; without TMDB the cast and director the provider names are found by name (production companies need TMDB). The heart puts a
-  person or a company in the favourites: they are listed on the Favorites page, in "People" and "Production companies".
-- **Settings.** *Settings → TMDB → People*: without TMDB, the search of the cast and directors in the provider's details (every title
-  asked once, at the provider's pace), with update and remove.
-- **What you gain.** "What else is there with this actor?" answered from your own catalog.
-
-### Player
-
-- **How it works.** The native engine of each platform (AVPlay on Tizen, the system player on webOS, ExoPlayer on Android and Fire TV,
-  the browser engine on desktop). A progress bar you can drag or move with the arrows (the jump happens when you stop), previous / next
-  episode, an end-credits point set once per series (the next episode is offered from there, otherwise 10 seconds before the end),
-  aspect ratio, audio tracks (the one in the language of the app is chosen by itself), resume where you left off and autoplay of the
-  next episode. Leaving the app and coming back keeps the player as it was, paused or playing.
-- **Settings.** *Settings → General*: buffering. *Settings → Movies & TV Series*: autoplay next episode.
-- **What you gain.** A player that behaves the same on every device and remembers where you were.
-
-### Subtitles
-
-- **How it works.** The **Subtitles** button lists the tracks of the player and, on MKV and MP4 files whose tracks the TV does not show,
-  the text tracks read by the app itself. With OpenSubtitles set up, **Download from OpenSubtitles** finds subtitles in your language
-  (then English) for movies and episodes with a TMDB id — the one the title page found, also by TMDB's search — sending the file's hash
-  so that subtitles made for that very file come first.
-  **Alignment of the downloaded subtitles** fixes subtitles that are early, late or drift: a guided procedure over the player with two
-  bars above the progress bar, zoomed on two minutes, one with the lines of the subtitles and one with the video. Choose a line with
-  Left / Right and OK; on the video bar move the green anchor (faster while the arrow is held) to the moment the line is spoken and press
-  OK to play video and subtitles together and check; then "Add point". From two points (about ten minutes apart, which the procedure
-  suggests) both the delay and the speed are corrected, which also fixes subtitles made for a 25 fps release. The points are saved for
-  that video and file, the alignment is used again whenever the same subtitles are downloaded, and its entry in the list shows a check.
-- **Settings.** *Settings → OpenSubtitles*: the API key (see [Optional services](#optional-services)).
-- **What you gain.** Subtitles for almost anything, in time with the voice, aligned once for good.
-
-### Live TV
-
-- **How it works.** The programme on air on every channel card, the next 24 hours on the channel page. Channels in several qualities are
-  grouped into one card (the best version plays, the others in the dropdown), the channels of a broadcaster (Rai, Sky, Dazn…) are
-  collected in a network. A live channel can be paused: play goes on from where you stopped, **Back to live** jumps to now. Channel up /
-  down switch channel in the player.
-- **Settings.** *Settings → Live TV*: group identical channels, words to remove from channel names before comparing them, custom EPG.
-  *Settings → Live TV networks*: build networks, similarity of the names, characters of difference, numbers left out.
-  On a channel page: merge it by hand with another channel, add it to a network.
-- **What you gain.** One "Rai 1" instead of six, the channels of a broadcaster together, a pause button on live TV.
-
-### TV guide (EPG)
-
-- **How it works.** A full grid guide in Live TV (each programme shows its full title and times after a moment, OK opens its actions),
-  the genres of the guide's categories (Sport, News, Movies…) in the sidebar, each opening the guide with only those programmes. The
-  guide is downloaded once a day after the rest of the start-up, joining the guides of every active provider and, if you set one, a
-  custom XMLTV guide; it is written in small steps so that the app stays responsive while it downloads. **Scheduled viewing** opens the
-  channel when a programme starts, with an alert of the system when the app is in the background or closed (Android TV / Fire TV and
-  desktop notifications; on Samsung TVs the app starts on the channel); scheduled programmes stay highlighted.
-- **Settings.** *Settings → Live TV → Custom EPG*: the address of an XMLTV guide (see [Custom EPG](#custom-epg)). *Settings → Overview*:
-  the guide's row with download again and delete. The rows of the guide can be hidden or moved (OK held on a row).
-- **What you gain.** A real guide on any provider, never missing the start of a match.
-
-### Home, favourites, collections and suggestions
-
-- **How it works.** Home shows **Continue watching**, new movies, new series and suggestions (from what you watch, by TMDB or Trakt).
-  **Favorites** collects titles, channels, categories, genres, people and production companies; **Collections** are lists you make of
-  movies, series and channels; both, and the pins of the sidebar, follow a title across providers. The entries of the top bar
-  (Favorites, Collections, Suggestions) appear only when they have something.
-- **Settings.** *Settings → General → Suggestions source*: TMDB or Trakt.
-- **What you gain.** What you care about one press away, the same on every provider.
-
-### Profiles
-
-- **How it works.** Until a second profile is made, nothing changes. With two or more, "Who's watching?" opens at every start (each
-  profile can have an access PIN) and the avatar in the top bar switches profile. Each profile has its avatar (20 to choose from), its
-  progress, favourites, collections, pins, scheduled viewing, Trakt account, language and guide order. Admin profiles see all the
-  settings and manage the providers; the others see only their profile, language and Trakt account. **Kids profiles** never see adult
-  content anywhere, and can have watching hours (no watching before / after a time), daily minutes of watching and a range of age ratings
-  (titles and guide programmes outside it are hidden); leaving a kids profile takes the parental PIN of an adult profile.
-- **Settings.** *Settings → Profiles*: add, edit (avatar, name, kids, admin, access PIN, the limits of a kids profile), switch, remove.
-- **What you gain.** One TV for the whole family, each with their own history and recommendations, children kept to what suits them.
-
-### Parental control
-
-- **How it works.** A PIN protects adult content: titles the provider flags, titles in categories with an adult name, and titles an
-  admin marked with the shield on their page (or unmarked, when the provider got it wrong). Their posters are hidden behind a lock and
-  opening them asks for the PIN; kids profiles do not see them at all.
-- **Settings.** *Settings → General → Parental control PIN*; the shield on a title page (admin profiles).
-- **What you gain.** Adult content out of sight without hiding it from the adults.
-
-### Trakt
-
-- **How it works.** What you watch is saved on your Trakt account and read back: watched marks and continue watching follow you between
-  the TV, the PC and the phone (and any other app that uses Trakt); suggestions can be based on your history. Every profile connects its
-  own account with a QR code.
-- **Settings.** *Settings → Trakt* (see [Optional services](#optional-services)): connect, sync now, remove; admins also see the keys and
-  the table of what is aligned.
-- **What you gain.** The same history everywhere, and an account that survives a reset of the TV.
-
-### Sync between TVs
-
-- **How it works.** Two or more TVs with the same account stay the same: providers, settings, profiles (and the limits of the kids
-  profiles, with the minutes watched on all TVs added up), TMDB / OpenSubtitles keys, Trakt account, watch state, favourites,
-  collections, pinned entries and subtitle alignments. Everything is encrypted on the TV with the account's password before it leaves:
-  the server (a GitHub repository) only stores what it cannot read. Changes are sent in the background (a minute after the start, then
-  every 10 minutes, and when the app goes to the background) and taken at the next start of the other TVs, or at once with *Sync now*.
-  Not synced: the parental PINs, scheduled viewing, and the settings of each TV (text size, screensaver, buffer).
-- **Encryption.** Everything is encrypted on the TV, before it leaves, with keys made from the username and password: the password
-  never leaves the TV.
-  - **Keys:** PBKDF2-SHA-256 with 100,000 iterations gives a master key, and three keys come from it: one encrypts, one names the items,
-    one signs the writes.
-  - **Items:** every item is encrypted on its own with AES-256-GCM (a new random IV each time), so a changed or wrong item is refused.
-  - **What the server sees:** one file per account, named after a SHA-256 of the username. Its items have ids that say nothing of their
-    content, their dates and the cipher text, so it cannot read anything.
-  - **Writes:** a change is accepted only with the account's write key (the server keeps only its hash). After 5 wrong attempts in a
-    day the account takes no more changes until the next day.
-  - **Where:** the data lives in the public repository
-    [andreadegiovinebk/xtream-iptv-client-bk](https://github.com/andreadegiovinebk/xtream-iptv-client-bk). The app never writes
-    there directly: its workflow checks and merges each change. Accounts unused for 30 days are deleted. How it works, and how to make
-    a new repository: [docs/SYNC_REPO.md](docs/SYNC_REPO.md).
-- **Settings.** *Settings → Sync*: username and password (at least 12 characters) the first time — the account is made if it
-  does not exist; when it holds data, this TV's data is replaced by it after a confirmation. Then the account, the counts of what is on
-  this TV and in sync, *Show password*, *Sync now* and *Remove* (this TV leaves the sync and is reset). At the first start of a new TV,
-  *Account* next to Xtream and M3U takes everything from an account another TV already set up (then only the parental PIN is asked).
-- **What you gain.** A second TV ready in a minute, the same history and favourites on every TV, and a backup that survives a reset.
-
-### Look and language
-
-- **How it works.** English and Italian, following the device or chosen per profile; text size; time and date formats; a screensaver
-  with the logo after some minutes without a key (not while a video plays).
-- **Settings.** *Settings → General*: language, text size, time format, date format, screensaver (off, 1, 5 or 15 minutes).
-- **What you gain.** Readable from the sofa, in your language, no image burnt into the screen.
-
-### Remote, mouse and touch
-
-- **How it works.** Made for the remote (see [Remote control](#remote-control)); every page has the same rules: Up from the first row
-  reaches the top bar, Down comes back, Right enters a grid from its sidebar and Left goes back to it. A mouse or a finger works too:
-  hover focuses, click or tap activates, the wheel scrolls; icon buttons show their name after a moment. A button runs its action once at
-  a time: a quick second press does not open the same list twice.
-- **Settings.** None.
-- **What you gain.** The same app on a TV, a PC or a touch screen.
-
-### Private and up to date
-
-- **How it works.** No analytics, no account needed (the device sync is optional): the keys stay on the device and are sent only to their own service, credentials are masked
-  in the logs. The "_autoupdate" packages download a newer build by themselves, keep it on the device (two slots, every file checked)
-  and offer to restart; a new version that does not start is removed and the previous one starts again. A start that fails shows the
-  error, the log and a button to look for a newer version. The other packages are updated from the Releases page. *Settings → Advanced → Diagnostics* shows the log, with a QR code to send it.
-- **Settings.** *Settings → Advanced*: check for updates (autoupdate packages), diagnostics, delete all data.
-- **What you gain.** Nothing leaves the device but what a service needs; problems can be reported with the log in a moment.
-
-## Compared with popular players
-
-A quick look at three widely used IPTV players, from their public descriptions (November 2026; features change, check the official
-store listings). "Not advertised" means we found no mention of it, not that it is missing.
-
-| | **Xtream IPTV** | [TiviMate](https://tivimate.com) | [IPTV Smarters Pro](https://www.iptvsmarters.com) | IBO Player |
-|---|---|---|---|---|
-| Platforms | Tizen, webOS, Android TV / Fire TV, Windows, macOS, Linux | Android TV / Fire TV | Android, Fire TV, Samsung, LG, iOS and others | Android TV / Fire TV, Samsung, LG |
-| Xtream Codes login, several providers | ✅ also active together as one catalog | ✅ | ✅ | ✅ |
-| Programme guide (EPG grid) | ✅ with a custom XMLTV guide | ✅ (its strong point) | ✅ | ✅ |
-| Catch-up / recording | No (catch-up planned) | Catch-up; recording with premium | Catch-up | Not advertised |
-| Programmes in the search | ✅ | ✅ | Not advertised | Not advertised |
-| Scheduled viewing (opens the channel when it starts) | ✅ | Not advertised | Not advertised | Not advertised |
-| Genres from the guide's categories | ✅ | Not advertised | Not advertised | Not advertised |
-| Quality variants of a channel grouped into one card | ✅ automatic, with manual links | Not advertised | Not advertised | Not advertised |
-| TV networks (channels of the same broadcaster collected) | ✅ automatic, with manual links | Not advertised | Not advertised | Not advertised |
-| Duplicate movies and series merged into one card | ✅ (by TMDB id) | No | No | No |
-| Clean titles (no language prefixes, quality tags) | ✅ | Not advertised | Not advertised | Not advertised |
-| Favourite and pinned categories, genres, networks | ✅ | Favourite channels | Favourites | Favourites |
-| Collections of movies, series and channels | ✅ | Not advertised | Not advertised | Not advertised |
-| Favourites, collections and pins shared between providers | ✅ (by TMDB id) | Not advertised | Not advertised | Not advertised |
-| End-credits point per series (next episode from there) | ✅ | Not advertised | Not advertised | Not advertised |
-| TMDB posters, plots, cast, trailers | ✅ (own free key) | Not advertised | Partly (trailers, info) | Not advertised |
-| Trakt history and progress sync | ✅ | No | Not advertised | Not advertised |
-| Subtitles from OpenSubtitles | ✅ by file hash, with a guided alignment (delay and speed) | Not advertised | Not advertised | Not advertised |
-| Sync between TVs (providers, settings, profiles, favourites, watch state) | ✅ automatic, encrypted on the TV | Backup and restore by hand | Not advertised | Not advertised |
-| Parental control | ✅ (PIN, kids profiles) | ✅ | ✅ | Not advertised |
-| Open source, no analytics, no account required | ✅ | No | No | No |
-
-## Screenshots
-
-| | |
-|---|---|
-| ![First run](docs/screenshots/first-run.jpg) **First run**: add your provider | ![Home](docs/screenshots/home.jpg) **Home**: new movies, new series, continue watching |
-| ![Movies](docs/screenshots/movies.jpg) **Movies**: genres, categories and filters | ![TV series](docs/screenshots/series.jpg) **TV series** |
-| ![Live TV](docs/screenshots/live-tv.jpg) **Live TV** with the programme now playing | ![Search](docs/screenshots/search.jpg) **Search** from the top bar |
-| ![Movie detail](docs/screenshots/movie-detail.jpg) **Movie**: play, trailer, watched, favorite | ![Series detail](docs/screenshots/series-detail.jpg) **Series**: seasons and episodes |
-| ![Player](docs/screenshots/player.jpg) **Player** | ![Settings](docs/screenshots/settings.jpg) **Settings**: catalog, guide, services, preferences |
-| ![Providers](docs/screenshots/providers.jpg) **Providers**: two active, each with its lists | ![Title of two providers](docs/screenshots/movie-providers.jpg) **One catalog**: the providers of a title, its categories per provider, versions from both |
-| ![Profiles](docs/screenshots/profiles.jpg) **Profiles** in Settings | ![Profile form](docs/screenshots/profile-form.jpg) **A profile**: avatar, name, kids, admin, access PIN |
-| ![Who's watching](docs/screenshots/who-is-watching.jpg) **Who's watching?** at start and when switching | |
-
-The screenshots use the fictional demo catalog of the mock server (`npm run screenshots`).
-
 ## First steps
 
 1. **Install the app** with the guide of your platform (see [Platforms](#platforms)).
@@ -293,6 +49,208 @@ The screenshots use the fictional demo catalog of the mock server (`npm run scre
 3. **Recommended:** type the TMDB, Trakt and OpenSubtitles keys in **Settings** (see below).
 4. **Optional:** add more providers from the **Provider** page (each one can be switched on or off; the active ones form one catalog),
    and profiles for the family in **Settings → Profiles**.
+
+## Features
+
+Sorted by impact: how much each feature adds to watching IPTV on a TV. Settings are under **Settings** (the gear in the top bar).
+
+### One catalog, several providers
+
+*Impact 9/10*
+
+Add any number of providers (Xtream API, or M3U with its XMLTV guide) and switch on the ones you want: their movies, series and
+channels become **one catalog**. The same title appears once (by TMDB id, otherwise by clean name and year), with the versions of every
+provider in its dropdown, its categories grouped per provider and all the guides joined. One card per film instead of five copies, and
+favourites, progress and collections that follow a title from one provider to another.
+
+**Settings:** the **Provider** page (a switch per provider, its lists, visible categories); *Settings → Overview* (the unified catalog).
+
+### Fast with huge catalogs
+
+*Impact 9/10*
+
+Tens of thousands of titles are downloaded and worked out in background workers and stored on the device. The stored catalog shows at
+once at start, lists older than 12 hours refresh in the background (only what changed is written), and grids load as you scroll. TMDB
+metadata, genres, ratings and people are found by background jobs that pause while you browse. No waiting, no freezing, smooth grids on
+old TVs.
+
+**Settings:** *Settings → Overview* (operations in progress, catalog state, rebuild, size); *Settings → TMDB* (one row per background job).
+
+### Player
+
+*Impact 9/10*
+
+The native engine of each platform (AVPlay on Tizen, the system player on webOS, ExoPlayer on Android / Fire TV, the browser on
+desktop): a progress bar to drag or move with the arrows, previous / next episode, an end-credits point per series, aspect ratio, audio
+tracks (the one in your language picked by itself), resume where you left off and autoplay of the next episode.
+
+**Settings:** *Settings → General* (buffering); *Settings → Movies & TV Series* (autoplay).
+
+### Sync between TVs
+
+*Impact 8/10*
+
+Two or more TVs with the same account stay the same: providers, settings, profiles (with the kids limits and their minutes added up),
+keys, Trakt account, watch state, favourites, collections, pinned entries and subtitle alignments. Changes are sent a minute after the
+start, every 10 minutes and when the app goes to the background; the other TVs take them at their next start, or at once with *Sync now*.
+Not synced: the parental PINs, scheduled viewing, the settings of each TV (text size, screensaver, buffer). A second TV is ready in a
+minute, and the data survives a reset.
+
+- **Encryption:** everything is encrypted on the TV before it leaves; the password never leaves it. PBKDF2-SHA-256 (100,000 iterations)
+  gives a master key and three keys from it (encrypt, name the items, sign the writes); every item is sealed on its own with AES-256-GCM
+  (a new random IV each time).
+- **Server:** one file per account, named after a SHA-256 of the username, with ids that say nothing and cipher text only, in the public
+  repository [andreadegiovinebk/xtream-iptv-client-bk](https://github.com/andreadegiovinebk/xtream-iptv-client-bk). Its workflow
+  accepts a change only with the account's write key (5 wrong attempts lock the writes for the day) and deletes accounts unused for
+  30 days. Details and how to make a new repository: [docs/SYNC_REPO.md](docs/SYNC_REPO.md).
+
+**Settings:** *Settings → Sync* (username and password, at least 12 characters; then the account, the counts, show password, sync now,
+remove). At the first start of a new TV, **Account** takes everything from an existing account.
+
+### TV guide (EPG)
+
+*Impact 8/10*
+
+A full grid guide in Live TV joining the guides of every active provider and, if you set one, a custom XMLTV guide; the guide's genres
+(Sport, News…) in the sidebar. **Scheduled viewing** opens the channel when a programme starts, with a system alert when the app is in
+the background or closed. A real guide on any provider, never missing the start of a match.
+
+**Settings:** *Settings → Live TV → Custom EPG* (see [Custom EPG](#custom-epg)); *Settings → Overview* (download again, delete); OK held on
+a guide row hides or moves it.
+
+### Live TV
+
+*Impact 8/10*
+
+The programme on air on every channel card and the next 24 hours on its page. Channels in several qualities are grouped into one card,
+the channels of a broadcaster (Rai, Sky, Dazn…) collected in a network. Live TV can be paused (**Back to live** jumps to now); channel up
+/ down switch channel in the player.
+
+**Settings:** *Settings → Live TV* (group identical channels, words to ignore); *Settings → Live TV networks*; on a channel page, merge it
+by hand or add it to a network.
+
+### Home, favourites, collections and suggestions
+
+*Impact 8/10*
+
+Home shows **Continue watching**, new movies, new series and suggestions (by TMDB or Trakt). **Favorites** keeps titles, channels,
+categories, genres, people and companies; **Collections** are your own lists of movies, series and channels. Both follow a title across
+providers; Favorites, Collections and Suggestions appear in the top bar only when they have something.
+
+**Settings:** *Settings → General → Suggestions source*.
+
+### Title pages
+
+*Impact 8/10*
+
+Picture, an info line (TMDB logo, year, rating, providers, duration or seasons), the actions (play, **Rewind** to restart a film or a
+whole series, watched, trailer, favourite, collection, the adult shield for admins), plot, categories, genres, age rating, director,
+companies, episodes, cast and related titles. Trailers play in the app on Samsung TVs, in YouTube elsewhere.
+
+**Settings:** TMDB (see [Optional services](#optional-services)) adds pictures, plots, cast, trailers and ratings.
+
+### Search
+
+*Impact 7/10*
+
+The magnifier in the top bar searches as you type: movies, series, channels, collections and the programmes of the next 24 hours, in
+rows by type; the last searches are offered when the field is empty.
+
+**Settings:** none.
+
+### Subtitles
+
+*Impact 7/10*
+
+The player's tracks, the text tracks of MKV / MP4 files the TV does not show, and **Download from OpenSubtitles** (your language, then
+English), sending the file's hash so that subtitles made for that very file come first. **Alignment** fixes subtitles that are early,
+late or drift: pick a line, move the green anchor to where it is spoken, add two points about ten minutes apart, and delay and speed are
+corrected (also 25 fps subtitles). Saved for that file and used again every time.
+
+**Settings:** *Settings → OpenSubtitles* (see [Optional services](#optional-services)).
+
+### Profiles
+
+*Impact 7/10*
+
+With two or more profiles "Who's watching?" opens at start (each can have an access PIN). Each profile has its avatar, progress,
+favourites, collections, pins, scheduled viewing, Trakt account, language and guide order; admins see all the settings. **Kids
+profiles** never see adult content and can have watching hours, daily minutes and a range of age ratings.
+
+**Settings:** *Settings → Profiles*.
+
+### Trakt
+
+*Impact 7/10*
+
+What you watch is saved on your Trakt account and read back: watched marks and continue watching follow you on the TV, the PC and
+the phone, and suggestions can come from your history. Every profile connects its own account with a QR code.
+
+**Settings:** *Settings → Trakt* (see [Optional services](#optional-services)).
+
+### Private and up to date
+
+*Impact 7/10*
+
+No analytics and no account required: keys stay on the device and go only to their own service, credentials are masked in the logs.
+The "_autoupdate" packages download a newer build by themselves, keep it on the device (two slots, every file checked) and go back to
+the previous version if the new one does not start; a failed start shows the error, the log and an update check.
+
+**Settings:** *Settings → Advanced* (check for updates, diagnostics with a log QR code, delete all data).
+
+### Parental control
+
+*Impact 6/10*
+
+A PIN protects adult content: titles the provider flags, categories with an adult name, and titles an admin marked with the shield.
+Their posters are locked and opening them asks for the PIN; kids profiles do not see them at all.
+
+**Settings:** *Settings → General → Parental control PIN*; the shield on a title page (admins).
+
+### Clean titles, genres and categories
+
+*Impact 6/10*
+
+Titles lose language prefixes, quality tags and years ("IT: Inception (2010) [4K]" → "Inception"); provider and TMDB genres are merged
+under one name. Any category, genre or guide genre can be pinned to the sidebar or added to the favourites.
+
+**Settings:** *Settings → Movies & TV Series* (clean titles); visible categories on the Provider page.
+
+### Remote, mouse and touch
+
+*Impact 6/10*
+
+Made for the remote with the same rules on every page (see [Remote control](#remote-control)); a mouse or a finger works too (hover
+focuses, click or tap activates, the wheel scrolls), and a button never runs twice on a quick double press.
+
+**Settings:** none.
+
+### Age ratings
+
+*Impact 5/10*
+
+Every title with TMDB metadata gets the age rating of your country; the sidebar of Movies and TV Series has a **Rating** group (All
+ages, 6+, 14+…) and the rating on a title page opens it. The same ratings drive the limits of the kids profiles.
+
+**Settings:** *Settings → TMDB → Rating*.
+
+### People and production companies
+
+*Impact 5/10*
+
+Cast, director and companies on a title page open their own page: photo or logo, roles, biography, and their films and series in
+your catalog; the heart adds them to the favourites. "What else is there with this actor?", answered from your own catalog.
+
+**Settings:** *Settings → TMDB → People* (without TMDB, cast and directors found by name).
+
+### Look and language
+
+*Impact 4/10*
+
+English and Italian (from the device or per profile), text size, time and date formats, and a screensaver with the logo after some
+minutes without a key.
+
+**Settings:** *Settings → General*.
 
 ## Optional services
 
@@ -334,12 +292,49 @@ file come first ("for this file").
 Without logging in, OpenSubtitles allows a few downloads a day (5 at the time of writing): each new title uses one, the same title
 again in the same session does not.
 
-## Custom EPG
+## Compared with popular players
 
-If your provider's guide is missing or poor, *Settings → Live TV → Custom EPG* accepts the address of an XMLTV guide (`http://` or
-`https://`). It is saved only if it answers with a valid XMLTV file and joins the guides of the active providers: a programme found in
-more than one is kept once (the custom guide's). Channels are matched by the provider's `epg_channel_id`, so the guide must use the
-same ids. The field's "x" removes it.
+A quick look at three widely used IPTV players, from their public descriptions (November 2026; features change, check the official
+store listings). ✅ yes · ❌ no · ⚠️ partly · ❓ not advertised (we found no mention of it, which does not mean it is missing).
+
+| | <img src="logo.svg" width="32" height="32" alt=""><br>**Xtream IPTV** | <img src="https://www.google.com/s2/favicons?domain=tivimate.com&sz=64" width="32" height="32" alt=""><br>[TiviMate](https://tivimate.com) | <img src="https://www.google.com/s2/favicons?domain=iptvsmarters.com&sz=64" width="32" height="32" alt=""><br>[IPTV Smarters Pro](https://www.iptvsmarters.com) | <img src="https://www.google.com/s2/favicons?domain=iboplayer.com&sz=64" width="32" height="32" alt=""><br>IBO Player |
+|---|---|---|---|---|
+| Platforms | Tizen, webOS, Android TV / Fire TV, Windows, macOS, Linux | Android TV / Fire TV | Android, Fire TV, Samsung, LG, iOS and others | Android TV / Fire TV, Samsung, LG |
+| Xtream Codes login, several providers | ✅ also active together as one catalog | ✅ | ✅ | ✅ |
+| Programme guide (EPG grid) | ✅ with a custom XMLTV guide | ✅ (its strong point) | ✅ | ✅ |
+| Catch-up / recording | ❌ (catch-up planned) | ✅ catch-up; recording with premium | ✅ catch-up | ❓ |
+| Programmes in the search | ✅ | ✅ | ❓ | ❓ |
+| Scheduled viewing (opens the channel when it starts) | ✅ | ❓ | ❓ | ❓ |
+| Genres from the guide's categories | ✅ | ❓ | ❓ | ❓ |
+| Quality variants of a channel grouped into one card | ✅ automatic, with manual links | ❓ | ❓ | ❓ |
+| TV networks (channels of the same broadcaster collected) | ✅ automatic, with manual links | ❓ | ❓ | ❓ |
+| Duplicate movies and series merged into one card | ✅ (by TMDB id) | ❌ | ❌ | ❌ |
+| Clean titles (no language prefixes, quality tags) | ✅ | ❓ | ❓ | ❓ |
+| Favourite and pinned categories, genres, networks | ✅ | ⚠️ favourite channels only | ⚠️ favourites only | ⚠️ favourites only |
+| Collections of movies, series and channels | ✅ | ❓ | ❓ | ❓ |
+| Favourites, collections and pins shared between providers | ✅ (by TMDB id) | ❓ | ❓ | ❓ |
+| End-credits point per series (next episode from there) | ✅ | ❓ | ❓ | ❓ |
+| TMDB posters, plots, cast, trailers | ✅ (own free key) | ❓ | ⚠️ partly (trailers, info) | ❓ |
+| Trakt history and progress sync | ✅ | ❌ | ❓ | ❓ |
+| Subtitles from OpenSubtitles | ✅ by file hash, with a guided alignment (delay and speed) | ❓ | ❓ | ❓ |
+| Sync between TVs (providers, settings, profiles, favourites, watch state) | ✅ automatic, encrypted on the TV | ⚠️ backup and restore by hand | ❓ | ❓ |
+| Parental control | ✅ (PIN, kids profiles) | ✅ | ✅ | ❓ |
+| Open source, no analytics, no account required | ✅ | ❌ | ❌ | ❌ |
+
+## Screenshots
+
+| | |
+|---|---|
+| ![First run](docs/screenshots/first-run.jpg) **First run**: add your provider | ![Home](docs/screenshots/home.jpg) **Home**: new movies, new series, continue watching |
+| ![Movies](docs/screenshots/movies.jpg) **Movies**: genres, categories and filters | ![TV series](docs/screenshots/series.jpg) **TV series** |
+| ![Live TV](docs/screenshots/live-tv.jpg) **Live TV** with the programme now playing | ![Search](docs/screenshots/search.jpg) **Search** from the top bar |
+| ![Movie detail](docs/screenshots/movie-detail.jpg) **Movie**: play, trailer, watched, favorite | ![Series detail](docs/screenshots/series-detail.jpg) **Series**: seasons and episodes |
+| ![Player](docs/screenshots/player.jpg) **Player** | ![Settings](docs/screenshots/settings.jpg) **Settings**: catalog, guide, services, preferences |
+| ![Providers](docs/screenshots/providers.jpg) **Providers**: two active, each with its lists | ![Title of two providers](docs/screenshots/movie-providers.jpg) **One catalog**: the providers of a title, its categories per provider, versions from both |
+| ![Profiles](docs/screenshots/profiles.jpg) **Profiles** in Settings | ![Profile form](docs/screenshots/profile-form.jpg) **A profile**: avatar, name, kids, admin, access PIN |
+| ![Who's watching](docs/screenshots/who-is-watching.jpg) **Who's watching?** at start and when switching | |
+
+The screenshots use the fictional demo catalog of the mock server (`npm run screenshots`).
 
 ## Remote control
 
@@ -355,6 +350,13 @@ same ids. The field's "x" removes it.
 
 The desktop app opens as a normal window (the player has a full-screen button) and the keyboard is the remote: arrows, `Enter`,
 `Esc` / `Backspace` for Back, `PageUp` / `PageDown` for channel up / down, `Space` for play / pause.
+
+## Custom EPG
+
+If your provider's guide is missing or poor, *Settings → Live TV → Custom EPG* accepts the address of an XMLTV guide (`http://` or
+`https://`). It is saved only if it answers with a valid XMLTV file and joins the guides of the active providers: a programme found in
+more than one is kept once (the custom guide's). Channels are matched by the provider's `epg_channel_id`, so the guide must use the
+same ids. The field's "x" removes it.
 
 ## Documentation
 
