@@ -190,6 +190,20 @@ bar (the gear); "Settings → X" names the page of its sidebar.
   the table of what is aligned.
 - **What you gain.** The same history everywhere, and an account that survives a reset of the TV.
 
+### Sync devices
+
+- **How it works.** Two or more TVs with the same account stay the same: providers, settings, profiles (and the limits of the kids
+  profiles, with the minutes watched on all TVs added up), TMDB / OpenSubtitles keys, Trakt account, watch state, favourites,
+  collections, pinned entries and subtitle alignments. Everything is encrypted on the TV with the account's password before it leaves:
+  the server (a GitHub repository) only stores what it cannot read. Changes are sent in the background (a minute after the start, then
+  every 10 minutes, and when the app goes to the background) and taken at the next start of the other TVs, or at once with *Sync now*.
+  Not synced: the parental PINs, scheduled viewing, and the settings of each TV (text size, screensaver, buffer).
+- **Settings.** *Settings → Sync devices*: username and password (at least 12 characters) the first time — the account is made if it
+  does not exist; when it holds data, this TV's data is replaced by it after a confirmation. Then the account, the counts of what is on
+  this TV and in sync, *Show password*, *Sync now* and *Remove* (this TV leaves the sync and is reset). At the first start of a new TV,
+  *Account* next to Xtream and M3U takes everything from an account another TV already set up (then only the parental PIN is asked).
+- **What you gain.** A second TV ready in a minute, the same history and favourites on every TV, and a backup that survives a reset.
+
 ### Look and language
 
 - **How it works.** English and Italian, following the device or chosen per profile; text size; time and date formats; a screensaver
@@ -208,7 +222,7 @@ bar (the gear); "Settings → X" names the page of its sidebar.
 
 ### Private and up to date
 
-- **How it works.** No account, no analytics: the keys stay on the device and are sent only to their own service, credentials are masked
+- **How it works.** No analytics, no account needed (the device sync is optional): the keys stay on the device and are sent only to their own service, credentials are masked
   in the logs. The "_autoupdate" packages download a newer build by themselves, keep it on the device (two slots, every file checked)
   and offer to restart; a new version that does not start is removed and the previous one starts again. A start that fails shows the
   error, the log and a button to look for a newer version. The other packages are updated from the Releases page. *Settings → Advanced → Diagnostics* shows the log, with a QR code to send it.
@@ -338,6 +352,7 @@ The desktop app opens as a normal window (the player has a full-screen button) a
 | [`docs/DESIGN.md`](docs/DESIGN.md) | Design decisions; read before changing the code |
 | [`docs/MILESTONES.md`](docs/MILESTONES.md) | Development history, with what has and has not been verified on a real device |
 | [`docs/MOCK-TEST.md`](docs/MOCK-TEST.md) | The fake Xtream server and the performance measurements |
+| [`docs/SYNC_REPO.md`](docs/SYNC_REPO.md) | The repository of the device sync: how it works and how to make a new one |
 
 Plain HTML, JavaScript and SCSS (no UI framework), with an extensive unit test suite.
 

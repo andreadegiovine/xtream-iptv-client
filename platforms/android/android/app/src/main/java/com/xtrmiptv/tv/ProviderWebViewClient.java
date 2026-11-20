@@ -99,6 +99,7 @@ class ProviderWebViewClient extends BridgeWebViewClient {
             headers.put(name, header.getValue().get(0));
         }
         headers.put("Access-Control-Allow-Origin", "*");
+        headers.put("Access-Control-Expose-Headers", "*"); // the page reads ETag and the like (the device sync reads its file only when it changed)
         InputStream body = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
         String reason = connection.getResponseMessage();
         if (reason == null || reason.trim().isEmpty()) reason = status >= 400 ? "Error" : "OK";

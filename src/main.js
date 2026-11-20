@@ -15,6 +15,7 @@ import { slotsApi, takeFailedUpdate, skipVersion } from './services/slotUpdates.
 import { confirmTrial } from './app/trialStart.js';
 import { showStartupFailure } from './app/startupFailure.js';
 import { showStartSkeleton, removeStartBar } from './ui/startSkeleton.js';
+import { createDeviceSync } from './services/sync/index.js';
 import { FocusManager } from './ui/focus/FocusManager.js';
 import { Router } from './ui/router.js';
 import { createBackgroundQueue, Priority } from './services/backgroundQueue.js';
@@ -129,6 +130,14 @@ async function boot() {
     setTimeout(() => location.reload(), 500);
   });
   const db = await openAppDb();
+  // Device sync: what the other TVs of the account changed is written now, before anything reads the data (offline: as it is).
+  let deviceSync = null;
+  try {
+    deviceSync = createDeviceSync({ db });
+    if (deviceSync) await deviceSync.start();
+  } catch (err) {
+    log.warn('Sync at start failed', err && err.message);
+  }
   const globalSettings = new SettingsService(db);
   const providers = new ProviderStore(db);
 
@@ -193,6 +202,7 @@ async function boot() {
     openEntry: null,
     enrich: null,
     meta: null,
+    deviceSync,
   };
   ctx.favorites = createFavoritesService({ db: pdb });
   ctx.collections = createCollectionsService({ db: pdb });
@@ -264,6 +274,13 @@ async function boot() {
   });
   keysReady.catch((err) => log.warn('API keys: read failed', err && err.message));
   ctx.trakt = createTraktService({ db: pdb, client: createTraktClient({ getCredentials: () => ({ clientId: ctx.apiKeys.get().traktId, clientSecret: ctx.apiKeys.get().traktSecret }) }) });
+  // The Trakt token is shared by the TVs of a sync account: the latest one is fetched before renewing, a renewed one sent at once.
+  if (deviceSync) {
+    deviceSync.engine
+      .connected()
+      .then((on) => on && ctx.trakt.setRemote(deviceSync.traktRemote(profile.id)))
+      .catch(() => undefined);
+  }
   ctx.watch = createWatchState({ store: new WatchStore(pdb), trakt: ctx.trakt });
   ctx.openSubtitles = createOpenSubtitles({ getKey: () => ctx.apiKeys.get().openSubtitlesKey });
   const tmdb = createTmdbService({ db, client: createTmdbClient({ getApiKey: () => ctx.apiKeys.get().tmdbKey }), getLanguage: () => i18n.getLocale(), onActivity: (count) => ctx.genres && ctx.genres.hold('ui', count > 0) });
@@ -843,6 +860,7 @@ async function boot() {
     notices.show({ type: 'warning', message: t('update.trialFailed', { version: failedUpdate.version }), permanent: true, key: 'update' });
   }
   setTimeout(() => updateInBackground(notices, askRestart).catch((err) => log.warn('Update failed', err && err.message)), 3000);
+  if (deviceSync) deviceSync.background(); // this TV's changes sent to the sync account (a minute after the start, then every 10 minutes)
   // Settings › Advanced › "Check for updates" (only the packages that update themselves): now, with a word on what came out.
   ctx.updates = {
     available: canUpdateItself(),

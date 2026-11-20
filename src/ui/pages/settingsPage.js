@@ -35,6 +35,7 @@ import { createAvatar } from '../atoms/avatar.js';
 import { openProfileForm } from '../components/profileForm.js';
 import { MAIN_ID } from '../../services/profiles.js';
 import { sidebarNavigation } from './templates.js';
+import { createSyncSubpage } from './syncSettings.js';
 
 const ZONE_ID = 'settings';
 const NAV_ZONE = 'settingsNav';
@@ -676,6 +677,8 @@ export function createSettingsPage(ctx) {
     { id: 'tmdb', icon: 'info', label: 'TMDB', blocks: [tmdbPanel.el, h('div', { class: 'fields' }, tmdbTokenRow.root), h('div', { class: 'list' }, titleSearchRow.el)], rows: [...tmdbRows, tmdbTokenRow, tmdbTokenRow.clearRow, titleSearchRow] },
     { id: 'trakt', icon: 'user', label: 'Trakt', blocks: [traktPanel.el, h('div', { class: 'fields' }, traktIdRow.root, traktSecretRow.root)], rows: [traktConnectRow, traktSyncRow, traktRemoveRow, traktIdRow, traktIdRow.clearRow, traktSecretRow, traktSecretRow.clearRow] },
     { id: 'opensubtitles', icon: 'subtitles', label: 'OpenSubtitles', blocks: [h('div', { class: 'fields' }, openSubtitlesRow.root)], rows: [openSubtitlesRow, openSubtitlesRow.clearRow] },
+    // Device sync (only in builds that have it): before Advanced.
+    ...(ctx.deviceSync ? [createSyncSubpage(ctx)] : []),
     ...advancedPage,
   ];
   // A profile that is not an admin sees only what it can change: its profile, its language (and parental PIN), its Trakt account (only

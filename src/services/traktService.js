@@ -170,13 +170,44 @@ export function createTraktService({ db, client, now = Date.now, wait = sleep })
     return res;
   }
 
+  // Device sync (services/sync): the token is shared by the TVs of an account. `remote.fetch()` gives the account's latest one (written
+  // here), `remote.renewed()` sends a renewed one at once. Set by main.js only while this TV uses an account.
+  let remote = null;
+  const fresh = (stored) => stored && stored.expiresAt - now() > 24 * 3600 * 1000;
+  async function fetchRemoteToken() {
+    try {
+      return remote ? await remote.fetch() : null;
+    } catch (err) {
+      log.warn('Trakt: the synced token could not be read', err && err.message);
+      return null;
+    }
+  }
+
   async function token() {
     const stored = await kvGet(db, TOKEN_KEY, null);
     if (!stored) return null;
-    if (stored.expiresAt - now() > 24 * 3600 * 1000) return stored.accessToken;
-    const res = await client.refresh(stored.refreshToken);
-    if (!res.ok) return null; // expired for good: the user must reconnect
+    if (fresh(stored)) return stored.accessToken;
+    // Another TV of the account may have renewed it already: its token, before renewing (a refresh token works once).
+    if (remote) {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const synced = await fetchRemoteToken();
+        if (fresh(synced)) return synced.accessToken;
+        if (attempt === 0) await wait(3000);
+      }
+    }
+    const current = (await kvGet(db, TOKEN_KEY, null)) || stored;
+    const res = await client.refresh(current.refreshToken);
+    if (!res.ok) {
+      // Refused: most likely renewed by another TV a moment ago, its token reaches the server within a minute.
+      if (remote) {
+        await wait(30000);
+        const synced = await fetchRemoteToken();
+        if (fresh(synced)) return synced.accessToken;
+      }
+      return null; // expired for good: the user must reconnect
+    }
     await saveToken(res.data);
+    if (remote && remote.renewed) remote.renewed();
     return res.data.access_token;
   }
 
@@ -231,6 +262,10 @@ export function createTraktService({ db, client, now = Date.now, wait = sleep })
   const service = {
     get enabled() {
       return client.enabled;
+    },
+    /** The device sync of the token (see `remote` above); null to stop. */
+    setRemote(next) {
+      remote = next;
     },
     async isConnected() {
       return Boolean(await kvGet(db, TOKEN_KEY, null));

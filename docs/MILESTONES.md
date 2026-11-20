@@ -1093,3 +1093,38 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
 - From then on (`ui/startSkeleton.js`, the first thing `boot()` does), the start shows the bar (logo and placeholders) and the Home skeleton, as the first start and "Who is watching?" do. The trial of an update and the opening of the databases happen behind it.
 - The placeholder bar goes when the real one is added, the skeleton when the first page replaces it. "Who is watching?" uses the same bar.
 - Browser check: the skeleton with the database start held back. Not verified on the TV.
+
+### Patch 206 — Sync devices
+- **Settings › Sync devices** (only in builds with the `SYNC_TOKEN` secret):
+  - **First visit:** username and password (at least 12 characters, no other check); the account is created if it does not exist. If it holds data, a confirmation replaces the synced data of this TV with the account's, then the app starts again.
+  - **Then:** the account and a password shown on request, the last sync, the state (in sync / changes waiting / last error / locked), and a table per section (providers, profiles, settings and keys, Trakt, watch state, favourites, collections, pinned) with the counts on this TV and in sync.
+  - **Buttons:** *Show password*, *Sync now* (both ways; the app restarts when something came), *Remove* (this TV leaves the sync, with a warning, and the app is reset).
+- **First start:** *Account* next to Xtream / M3U. The account must exist and the password must open it; then everything comes from it, and only the parental PIN is asked (as at every first start).
+- **What is synced** (src/services/sync/items.js, one item per thing):
+  - providers, the shared settings, the profiles with the limits of the kids profiles, the keys, adult marks;
+  - per profile: Trakt account and token, watch state, favourites, collections, pinned, subtitle alignments, and the kids minutes of each TV (added up by the limits).
+  - **Never:** the PINs, the settings of the device (text size, screensaver, buffer), scheduled viewing, catalogs, guides, caches.
+- **Encryption:** on the TV (`src/core/crypto.js`: Web Crypto or the same algorithms in JavaScript, tested against Node; services/sync/account.js). The server sees one file per account named after a hash of the username, with items it cannot read.
+- **When:**
+  - at the start, before the app reads its data (6 s at most for the server): the other TVs' changes are written here;
+  - this TV's changes are sent a minute after the start, every 10 minutes and when the app goes to the background;
+  - if both TVs changed the same item, this TV wins.
+- **Trakt:** a token near its expiry is first fetched from the account (another TV may have renewed it), then renewed and sent at once. A renewal refused waits and fetches again.
+- **Server:** the repository `andreadegiovinebk/xtream-iptv-client-bk` (`src/services/sync/config.js`):
+  - workflow with merge, write key checked, 5 wrong keys a day lock the writes, daily cleanup (30 days unused, 1 day empty) and history squash;
+  - rulesets let only the deploy key push; the token in the build can only read and start the workflow.
+  
+  How to make a new one: docs/SYNC_REPO.md (a copy of its files in docs/sync-repo-template/). Android: `Access-Control-Expose-Headers: *` on the native requests, so the page reads the ETag.
+- **Tests:**
+  - crypto against Node; workflow merge and cleanup (node --test);
+  - engine with two "TVs" and a server that merges like the workflow: upload, replacement without PINs and device settings, changes both ways, removals, nothing sent twice, changes seen in the background written at the next start, Trakt token fetched.
+  - In Chromium with the build and the real merge script behind a fake GitHub API:
+    - TV A creates the account from Settings;
+    - TV B at its first start ("Account"): a wrong password refused, then provider, favourite and watch state received, its own PIN kept;
+    - a favourite added on A arrives on B after *Sync now* on A and a new start of B.
+- **Limits:**
+  - changes of the other TVs arrive at the next start, not while the app runs (except *Sync now*);
+  - two TVs editing the same item between two sends: the last one sent wins;
+  - the server takes up to a minute to merge a send;
+  - the GitHub token expires: a new build is needed.
+- Not verified on the TV (nor against the real GitHub repository: the token is a secret this environment does not have).

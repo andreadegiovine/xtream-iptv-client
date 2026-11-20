@@ -73,6 +73,7 @@ export const rangeOf = (profile) => (profile && profile.kids && hasRange(profile
 
 const dayOf = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 const USAGE_KEY = 'kidsUsage';
+const OTHER_USAGE_KEY = 'kidsUsage.others'; // the minutes of the other TVs of a sync account today: { <device>: { day, ms } }
 
 /**
  * The limits of the profile in use (`getLimits()`: null for a profile without any) and the minutes watched today, kept in the profile's
@@ -80,11 +81,21 @@ const USAGE_KEY = 'kidsUsage';
  */
 export function createKidsLimits({ db, getLimits, now = () => new Date() }) {
   let usage = null; // { day, ms }
+  let others = null; // ms watched today on the other TVs (device sync), read once per start
   async function load() {
     const today = dayOf(now());
     if (!usage) usage = (await kvGet(db, USAGE_KEY, null)) || { day: today, ms: 0 };
     if (usage.day !== today) usage = { day: today, ms: 0 };
     return usage;
+  }
+  async function watchedToday() {
+    const own = (await load()).ms;
+    if (others === null) {
+      const today = dayOf(now());
+      const all = (await kvGet(db, OTHER_USAGE_KEY, null)) || {};
+      others = Object.keys(all).reduce((sum, device) => sum + (all[device] && all[device].day === today ? Number(all[device].ms) || 0 : 0), 0);
+    }
+    return own + others;
   }
   return {
     active: () => Boolean(getLimits()),
@@ -92,7 +103,7 @@ export function createKidsLimits({ db, getLimits, now = () => new Date() }) {
       const limits = getLimits();
       if (!limits) return '';
       if (outsideHours(limits, now())) return 'hours';
-      if (limits.minutes > 0 && (await load()).ms >= limits.minutes * 60000) return 'minutes';
+      if (limits.minutes > 0 && (await watchedToday()) >= limits.minutes * 60000) return 'minutes';
       return '';
     },
     /** Adds watching time (ms) to today's count. */
@@ -106,7 +117,7 @@ export function createKidsLimits({ db, getLimits, now = () => new Date() }) {
     async minutesLeft() {
       const limits = getLimits();
       if (!limits || !(limits.minutes > 0)) return Infinity;
-      return Math.max(0, limits.minutes - (await load()).ms / 60000);
+      return Math.max(0, limits.minutes - (await watchedToday()) / 60000);
     },
   };
 }

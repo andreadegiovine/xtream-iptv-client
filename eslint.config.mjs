@@ -10,13 +10,14 @@ const appGlobals = {
   __YOUTUBE__: 'readonly',
   __AUTOUPDATE__: 'readonly',
   __UPDATE_CHANNEL__: 'readonly',
+  __SYNC_TOKEN__: 'readonly',
   __JS_DEMUX__: 'readonly',
 };
 
 export default [
   // platforms/tizen/youtube/service.js is a template for the on-TV service (placeholders filled in by webpack), not app code.
   // platforms/android: its own node_modules (Capacitor) and the Android project (with a copy of the built app in its assets).
-  { ignores: ['dist/**', 'build/**', 'coverage/**', 'node_modules/**', 'platforms/tizen/youtube/service.js', 'platforms/android/node_modules/**', 'platforms/android/android/**', 'release/**'] },
+  { ignores: ['dist/**', 'build/**', 'coverage/**', 'node_modules/**', 'platforms/tizen/youtube/service.js', 'platforms/android/node_modules/**', 'platforms/android/android/**', 'release/**', 'docs/sync-repo-template/**'] },
   js.configs.recommended,
   {
     files: ['src/**/*.js', 'platforms/**/*.js'],

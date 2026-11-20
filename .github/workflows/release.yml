@@ -15,6 +15,7 @@ name: Release
 #
 # Secrets: TIZEN_CERT_PASSWORD (password of platforms/tizen/tizencert.p12); ANDROID_KEYSTORE_PASSWORD (and optionally ANDROID_KEY_ALIAS,
 # ANDROID_KEY_PASSWORD) for platforms/android/release.keystore — without them the APKs are signed with a debug key.
+# SYNC_TOKEN: the token of the device sync repository (docs/SYNC_REPO.md); without it the builds have no sync.
 # TMDB and Trakt keys are not part of the build: they are typed in the app Settings.
 on:
   release:
@@ -57,6 +58,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       VERSION: ${{ needs.verify.outputs.version }}
+      SYNC_TOKEN: ${{ secrets.SYNC_TOKEN }} # device sync (src/services/sync/config.js, docs/SYNC_REPO.md); empty: no sync
     steps:
       - uses: actions/checkout@v4
 
@@ -96,6 +98,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       VERSION: ${{ needs.verify.outputs.version }}
+      SYNC_TOKEN: ${{ secrets.SYNC_TOKEN }} # device sync (src/services/sync/config.js, docs/SYNC_REPO.md); empty: no sync
     steps:
       - uses: actions/checkout@v4
 
@@ -145,6 +148,7 @@ jobs:
         shell: bash
     env:
       VERSION: ${{ needs.verify.outputs.version }}
+      SYNC_TOKEN: ${{ secrets.SYNC_TOKEN }} # device sync (src/services/sync/config.js, docs/SYNC_REPO.md); empty: no sync
     steps:
       - uses: actions/checkout@v4
 
@@ -181,6 +185,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       VERSION: ${{ needs.verify.outputs.version }}
+      SYNC_TOKEN: ${{ secrets.SYNC_TOKEN }} # device sync (src/services/sync/config.js, docs/SYNC_REPO.md); empty: no sync
     steps:
       - uses: actions/checkout@v4
 
@@ -230,6 +235,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       VERSION: ${{ needs.verify.outputs.version }}
+      SYNC_TOKEN: ${{ secrets.SYNC_TOKEN }} # device sync (src/services/sync/config.js, docs/SYNC_REPO.md); empty: no sync
     steps:
       - uses: actions/checkout@v4
 

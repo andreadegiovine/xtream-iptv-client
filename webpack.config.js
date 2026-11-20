@@ -70,6 +70,9 @@ module.exports = (env = {}, argv = {}) => {
         __YOUTUBE__: JSON.stringify(youtube),
         __AUTOUPDATE__: JSON.stringify(autoupdate),
         __UPDATE_CHANNEL__: JSON.stringify(channel),
+        // Device sync: the token of its GitHub repository (src/services/sync/config.js), from the SYNC_TOKEN secret of the release workflow;
+        // empty in builds without it (no sync).
+        __SYNC_TOKEN__: JSON.stringify(process.env.SYNC_TOKEN || ''),
         // hls.js / mpegts.js in the build: development, and the platforms that play HLS / MPEG-TS with them (build.js `demux`).
         __JS_DEMUX__: JSON.stringify(!isProd || Boolean(target.build.demux)),
       }),

@@ -9,6 +9,7 @@ import { AppError, ErrorCode, toAppError } from '../../core/errors.js';
 import { log } from '../../core/logger.js';
 import { createForm, framedPage } from '../components/formPage.js';
 import { createHomeSkeleton } from './homePage.js';
+import { loginAndTake, MIN_PASSWORD } from '../../services/sync/index.js';
 
 const ZONE_ID = 'providerSetup';
 
@@ -63,6 +64,8 @@ export function createProviderSetup(ctx, { editId = null, firstRun = false, zone
     const actions = [];
     if (onCancel && !firstRun) actions.push({ label: t('setup.cancel'), run: () => onCancel() });
     actions.push({ label: t('setup.type.xtream'), primary: true, run: () => fillIn(ProviderType.XTREAM) }, { label: t('setup.type.m3u'), primary: true, run: () => fillIn(ProviderType.M3U) });
+    // First start, in a build with the device sync: everything from an account another TV already set up.
+    if (firstRun && ctx.deviceSync) actions.push({ label: t('sync.fromAccount'), primary: true, run: () => fromAccount() });
     const next = createForm({ id: zoneId, focus: ctx.focus, fields: [], actions });
     next.el.insertBefore(createHint({ text: t('setup.type.hint'), className: 'setup-hint' }), next.el.firstChild);
     next.el.classList.add('setup-types');
@@ -83,6 +86,52 @@ export function createProviderSetup(ctx, { editId = null, firstRun = false, zone
       const values = m3u ? [editing.name, editing.playlistUrl, editing.epgUrl] : [editing.name, editing.baseUrl, editing.username, editing.password];
       form.fields.forEach((field, i) => field.setValue(values[i] || ''));
     }
+  }
+
+  /** The first start from a sync account: its username and password; the account must exist (another TV made it). */
+  function fromAccount() {
+    kind = 'account';
+    const actions = [{ label: t('setup.back'), run: () => chooseKind() }, { label: t('sync.login'), primary: true, run: () => loginToAccount() }];
+    show(createForm({ id: zoneId, focus: ctx.focus, fields: [{ label: t('sync.username') }, { label: t('sync.password'), type: 'password' }], actions }));
+    form.el.insertBefore(createHint({ text: t('sync.fromAccountHint'), className: 'setup-hint' }), form.el.firstChild);
+  }
+
+  async function loginToAccount() {
+    if (busy) return;
+    const username = form.fields[0].getValue().trim();
+    const password = form.fields[1].getValue();
+    if (!username || password.length < MIN_PASSWORD) {
+      form.status.textContent = !username ? t('sync.usernameMissing') : t('sync.passwordShort', { min: MIN_PASSWORD });
+      return;
+    }
+    busy = true;
+    const button = form.actionButtons[confirmIndex()];
+    button.textContent = t('sync.loggingIn');
+    form.status.textContent = '';
+    let outcome = '';
+    try {
+      outcome = await loginAndTake(ctx, ctx.deviceSync, { username, password, create: false, confirmReplace: async () => true });
+    } catch (err) {
+      log.warn('Sync: login failed', err && err.message);
+      outcome = 'offline';
+    } finally {
+      busy = false;
+      if (form && !destroyed) form.actionButtons[confirmIndex()].textContent = t('sync.login');
+    }
+    if (destroyed) return;
+    if (outcome === 'replaced') {
+      // Everything of the account is here: the app starts again with it (and asks for the parental PIN, never synced).
+      form.status.textContent = t('sync.replaced');
+      setTimeout(() => window.location.reload(), 800);
+      return;
+    }
+    if (outcome === 'empty') {
+      // Logged in, but the account holds nothing yet: a provider is added as usual, and sent to the account.
+      ctx.notices.info(t('sync.emptyAccount'), { key: 'sync' });
+      chooseKind();
+      return;
+    }
+    form.status.textContent = t({ none: 'sync.noAccount', wrong: 'sync.wrongPassword', offline: 'sync.offline' }[outcome] || 'sync.offline');
   }
 
   /** What a provider of the chosen kind is saved with, once its server or playlist answered. */
