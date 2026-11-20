@@ -13,6 +13,9 @@
   <tizen:privilege name="http://developer.samsung.com/privilege/productinfo"/>
   <tizen:privilege name="http://tizen.org/privilege/alarm"/>
   <tizen:privilege name="http://tizen.org/privilege/network.public"/>
+  <!-- The updates kept by the app (src/boot/loader.js) are files of wgt-private (only the "_autoupdate" packages). -->
+  <tizen:privilege name="http://tizen.org/privilege/filesystem.read"/>
+  <tizen:privilege name="http://tizen.org/privilege/filesystem.write"/>
   <!-- Scheduled viewing (platforms/tizen/alerts.js): an alarm starts the app with this operation; reload="disable" brings a running app
        to the front with an `appcontrol` event instead of reloading it. -->
   <tizen:app-control>
@@ -22,7 +25,7 @@
   <access origin="*" subdomains="true"/>
   <tizen:allow-navigation>*</tizen:allow-navigation>
   <!-- The trailer player is an iframe on http://localhost:8125 (see the ytresolver service below). -->
-  <tizen:content-security-policy>default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; script-src * 'unsafe-inline' 'unsafe-eval' blob:; worker-src * blob:; frame-src * http://localhost:8125; connect-src *;</tizen:content-security-policy>
+  <tizen:content-security-policy>default-src * 'unsafe-inline' 'unsafe-eval' data: blob: file:; script-src * 'unsafe-inline' 'unsafe-eval' blob: file:; worker-src * blob: file:; frame-src * http://localhost:8125; connect-src *;</tizen:content-security-policy>
   <tizen:allow-mixed-content>true</tizen:allow-mixed-content>
   <tizen:service id="XtrmIptv01.ytresolver" type="service">
     <tizen:content src="service/service.js"/>

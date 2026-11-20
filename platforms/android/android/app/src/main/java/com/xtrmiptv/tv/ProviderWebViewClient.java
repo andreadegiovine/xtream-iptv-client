@@ -17,8 +17,8 @@ import java.util.Map;
 /**
  * Capacitor's WebView client, plus: every GET to another host (the provider's API, its pictures, TMDB...) is made here, natively, and
  * answered to the page with "Access-Control-Allow-Origin: *". The Xtream servers send no CORS headers and are often plain http; this
- * way the page (and its workers) read them as on the TV. The app's own files (http://localhost) stay with Capacitor; other methods
- * (Trakt's POSTs, which allow CORS) go out normally.
+ * way the page (and its workers) read them as on the TV. The app's own files (http://localhost) stay with Capacitor, except the files of
+ * the updates kept on the device (http://localhost/__slot/..., UpdateSlots); other methods (Trakt's POSTs, which allow CORS) go out normally.
  */
 class ProviderWebViewClient extends BridgeWebViewClient {
 
@@ -36,6 +36,10 @@ class ProviderWebViewClient extends BridgeWebViewClient {
         String scheme = url.getScheme();
         String host = url.getHost();
         boolean external = ("http".equals(scheme) || "https".equals(scheme)) && host != null && !"localhost".equalsIgnoreCase(host);
+        // The files of an update kept on the device (UpdateSlots): on the app's own origin, from its private storage.
+        if (!external && "localhost".equalsIgnoreCase(host) && UpdateSlots.isSlotPath(url.getPath())) {
+            return UpdateSlots.serve(view.getContext(), url.getPath());
+        }
         if (external && "GET".equalsIgnoreCase(request.getMethod())) {
             try {
                 return fetch(url.toString(), request.getRequestHeaders());

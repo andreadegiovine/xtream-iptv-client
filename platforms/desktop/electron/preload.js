@@ -1,5 +1,5 @@
-/* Preload of the desktop window: the page may only ask the main process for the full-screen state of its own window and to bring it to
- * the front (a scheduled viewing notification was clicked). */
+/* Preload of the desktop window: the page may only ask the main process for the full-screen state of its own window, to bring it to
+ * the front (a scheduled viewing notification was clicked) and to keep the files of an update in its two slots. */
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('xtreamDesktop', {
@@ -8,4 +8,9 @@ contextBridge.exposeInMainWorld('xtreamDesktop', {
   isFullscreen: () => ipcRenderer.invoke('window:fullscreen', false),
   /** Restores and focuses the window. */
   show: () => ipcRenderer.invoke('window:show'),
+  /** The slots of the updates kept by the app (src/boot/loader.js): write a file of one, empty one. */
+  slots: {
+    write: (slot, path, bytes) => ipcRenderer.invoke('slots:write', slot, path, bytes),
+    remove: (slot) => ipcRenderer.invoke('slots:remove', slot),
+  },
 });

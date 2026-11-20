@@ -6,6 +6,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const KEEP = 3;
 // The web code of a build: what the app loads from a build published online (the package's own files stay in the package).
@@ -41,6 +42,19 @@ function writeLogsPage(pagesDir) {
   fs.writeFileSync(path.join(pagesDir, 'logs.html'), logsPage());
 }
 
+/**
+ * files.json of a build: `files` (scripts and stylesheets: the packages that load a build from the network) and `all` (every file with
+ * its SHA-256, fonts too: the packages that keep the update on the device check each file against it, src/services/slotUpdates.js).
+ */
+function filesManifest(target, files) {
+  const fonts = fs.existsSync(path.join(target, 'fonts')) ? fs.readdirSync(path.join(target, 'fonts')).map((f) => `fonts/${f}`) : [];
+  const all = files
+    .concat(fonts)
+    .sort()
+    .map((file) => ({ path: file, sha256: crypto.createHash('sha256').update(fs.readFileSync(path.join(target, file))).digest('hex') }));
+  return { files: files.slice().sort(), all };
+}
+
 function main() {
   const [pagesDir, version, ...builds] = process.argv.slice(2);
   if (!pagesDir || !/^\d+\.\d+\.\d+$/.test(version || '') || !builds.length) {
@@ -60,7 +74,7 @@ function main() {
     if (!fs.existsSync(path.join(target, 'js', 'main.js'))) throw new Error(`${name}: no js/main.js in ${dir}`);
     // The scripts and stylesheets of the build (pages and workers are files of their own): the app downloads them all when it installs it.
     const files = ['js', 'css'].flatMap((sub) => (fs.existsSync(path.join(target, sub)) ? fs.readdirSync(path.join(target, sub)).map((f) => `${sub}/${f}`) : []));
-    fs.writeFileSync(path.join(target, 'files.json'), `${JSON.stringify({ files: files.sort() })}\n`);
+    fs.writeFileSync(path.join(target, 'files.json'), `${JSON.stringify(filesManifest(target, files))}\n`);
     platforms[name] = { base: `bundles/${version}/${name}/`, minShell };
   });
   fs.writeFileSync(path.join(pagesDir, 'version.json'), `${JSON.stringify({ version, date: new Date().toISOString(), platforms }, null, 2)}\n`);
@@ -72,4 +86,4 @@ function main() {
 }
 
 if (require.main === module) main();
-module.exports = { logsPage };
+module.exports = { logsPage, filesManifest };

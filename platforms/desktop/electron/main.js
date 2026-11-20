@@ -8,6 +8,7 @@
  * (trailers, links) goes to the system browser.
  */
 const path = require('path');
+const fs = require('fs');
 const { pathToFileURL } = require('url');
 const { app, BrowserWindow, protocol, net, shell, screen, ipcMain, powerSaveBlocker } = require('electron');
 
@@ -19,13 +20,39 @@ const DESIGN = { width: 1920, height: 1080 };
 
 protocol.registerSchemesAsPrivileged([{ scheme: SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
 
-/** app://xtream/<path> → the file under ROOT (never outside it). */
+// The updates kept by the app (src/boot/loader.js): two slots of files in the user's data folder, served at app://xtream/__slot/<slot>/.
+const SLOTS = () => path.join(app.getPath('userData'), 'slots');
+const SLOT_NAME = /^[ab]$/;
+const SLOT_FILE = /^(slot\.json|(js|css|fonts)\/[\w.-]+)$/;
+
+/** A file under `root` (never outside it), or null. */
+function inside(root, relative) {
+  const file = path.normalize(path.join(root, relative));
+  return file === root || file.startsWith(root + path.sep) ? file : null;
+}
+
+/** app://xtream/<path> → the file under ROOT; app://xtream/__slot/<slot>/<path> → the file of that slot. */
 function serveFile(request) {
-  const { pathname } = new URL(request.url);
-  const file = path.normalize(path.join(ROOT, decodeURIComponent(pathname === '/' ? '/index.html' : pathname)));
-  if (file !== ROOT && !file.startsWith(ROOT + path.sep)) return new Response('Not found', { status: 404 });
+  const pathname = decodeURIComponent(new URL(request.url).pathname);
+  const slot = /^\/__slot\/([ab])\/(.+)$/.exec(pathname);
+  const file = slot ? inside(path.join(SLOTS(), slot[1]), slot[2]) : inside(ROOT, pathname === '/' ? '/index.html' : pathname);
+  if (!file || (slot && !fs.existsSync(file))) return new Response('Not found', { status: 404 });
   return net.fetch(pathToFileURL(file).toString());
 }
+
+// The page writes the files of an update into a slot and empties a slot (preload.js); only the names the loader uses.
+ipcMain.handle('slots:write', async (event, slot, relative, bytes) => {
+  if (!SLOT_NAME.test(slot) || !SLOT_FILE.test(relative)) throw new Error('invalid slot file');
+  const file = inside(path.join(SLOTS(), slot), relative);
+  await fs.promises.mkdir(path.dirname(file), { recursive: true });
+  await fs.promises.writeFile(file, Buffer.from(bytes));
+  return true;
+});
+ipcMain.handle('slots:remove', async (event, slot) => {
+  if (!SLOT_NAME.test(slot)) throw new Error('invalid slot');
+  await fs.promises.rm(path.join(SLOTS(), slot), { recursive: true, force: true });
+  return true;
+});
 
 function createWindow() {
   // A 16:9 window, 1280x720 at most as large as 85% of the work area (the interface scales with it).

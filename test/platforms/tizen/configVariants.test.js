@@ -14,3 +14,12 @@ test('the store widget has no <tizen:service> (partners only) nor its iframe ori
   expect(youtube).toMatch(/<tizen:service id="XtrmIptv01.ytresolver"/);
   expect(youtube).toContain('frame-src * http://localhost:8125');
 });
+
+test('only the _autoupdate widgets may use the files (the updates kept on the TV)', () => {
+  const store = tizenConfig(xml, { version: '1.4.0', youtube: false, autoupdate: false });
+  expect(store).not.toContain('filesystem');
+  expect(store).toContain('privilege/network.public');
+  const autoupdate = tizenConfig(xml, { version: '1.4.0', youtube: false, autoupdate: true });
+  expect(autoupdate).toContain('privilege/filesystem.read');
+  expect(autoupdate).toContain('privilege/filesystem.write');
+});

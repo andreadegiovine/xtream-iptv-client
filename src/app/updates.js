@@ -2,6 +2,7 @@ import { log } from '../core/logger.js';
 import { t } from '../i18n/index.js';
 import { IS_DEV, APP_VERSION } from '../core/env.js';
 import { checkForUpdate, installUpdate, runningVersions } from '../services/updates.js';
+import { slotsApi, installToSlot, skippedVersion } from '../services/slotUpdates.js';
 
 /** Whether this package updates itself (the "_autoupdate" packages of Tizen and webOS, each from the online build of its variant). */
 export const canUpdateItself = () => !IS_DEV && Boolean(runningVersions().shell) && typeof __AUTOUPDATE__ !== 'undefined' && Boolean(__AUTOUPDATE__);
@@ -9,9 +10,11 @@ export const canUpdateItself = () => !IS_DEV && Boolean(runningVersions().shell)
 /**
  * Looks at version.json: a newer build this package can run is downloaded (used from the next start: the loader in index.html picks it)
  * and `askRestart(version)` offers to restart now; a newer version that needs a new package: a notice. Resolves with what happened:
- * 'off' (this package does not update itself), 'failed', 'latest', 'package', 'ready'.
+ * 'off' (this package does not update itself), 'failed', 'latest', 'package', 'ready'. The packages that keep updates on the device
+ * download it into a slot (services/slotUpdates.js); the older ones only note where it is online. `background`: a version that failed
+ * its trial start is not downloaded again (only when asked).
  */
-export async function checkUpdates({ notices, askRestart = null }) {
+export async function checkUpdates({ notices, askRestart = null, background = false }) {
   if (!canUpdateItself()) return 'off';
   const versions = runningVersions();
   let update = null;
@@ -22,13 +25,18 @@ export async function checkUpdates({ notices, askRestart = null }) {
     return 'failed';
   }
   if (!update) return 'latest';
+  if (background && update.version && update.version === skippedVersion()) {
+    log.info(`Version ${update.version} failed to start before: not downloaded again by itself`);
+    return 'latest';
+  }
   if (update.needsPackage) {
     log.info(`Version ${update.version} needs a new package`);
     notices.show({ type: 'info', message: t('update.needsPackage', { version: update.version }), permanent: true, key: 'update' });
     return 'package';
   }
   try {
-    await installUpdate(update);
+    if (slotsApi()) await installToSlot(update);
+    else await installUpdate(update);
     log.info(`Update ${update.version} downloaded: used from the next start`);
   } catch (err) {
     log.warn('Update failed', err && err.message);
@@ -43,7 +51,7 @@ export async function checkUpdates({ notices, askRestart = null }) {
 export async function updateInBackground(notices, askRestart) {
   const versions = runningVersions();
   log.info(`App ${versions.bundle || APP_VERSION} (package ${versions.shell || APP_VERSION})`);
-  await checkUpdates({ notices, askRestart });
+  await checkUpdates({ notices, askRestart, background: true });
 }
 
 /**

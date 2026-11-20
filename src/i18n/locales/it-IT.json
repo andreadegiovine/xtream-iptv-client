@@ -501,5 +501,16 @@
   "align.edit": "Modifica",
   "align.remove": "Rimuovi",
   "align.add": "Aggiungi punto",
-  "align.conclude": "Concludi"
+  "align.conclude": "Concludi",
+  "update.trialFailed": "La versione {version} non si è avviata: è di nuovo in uso la versione precedente. Non verrà riscaricata da sola (Impostazioni › Cerca aggiornamenti la riprova).",
+  "startup.title": "L'app non è riuscita ad avviarsi",
+  "startup.text": "Qui sotto l'errore e il log. Una versione più recente potrebbe risolvere: cerca aggiornamenti, oppure riavvia l'app.",
+  "startup.package": "pacchetto {version}",
+  "startup.qr": "Inquadra per leggere il log sul telefono",
+  "startup.available": "È disponibile la versione {version}. Installarla ora?",
+  "startup.install": "Installa",
+  "startup.cancel": "Annulla",
+  "startup.downloading": "Download dell'aggiornamento: {done} di {total} file…",
+  "startup.installFailed": "Impossibile scaricare l'aggiornamento: {error}",
+  "startup.restart": "Riavvia"
 }

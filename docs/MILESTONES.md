@@ -1059,3 +1059,31 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
 - Title page: the age rating is the first of the chips (before collections, categories, genres) and is named as in the sidebar's Rating group ("TV-14" → "14+", "T" → "All ages"); a rating whose age is unknown stays as TMDB writes it.
 - Favorites page: under the card of a person their roles (as in the info line of their page), under a company the number of its films and TV series in the catalog. Saved with the favourite and kept up to date each time its page is opened.
 - Tests: the line under the favourite cards (saved, updated). Browser check with a simulated TMDB: the rating first and named "13+" (PG-13), the roles under a favourite person; plus the earlier scripts. Not verified on the TV.
+
+### Patch 204 — Updates kept on the device, in two slots; a start that fails shows the log and the update check
+- **Why:** a Fire TV kept failing at start until the app was reinstalled, which lost its data. The online build was loaded from the network at every start. When it failed once, the app went back to the package's copy (2.2.0), which could not open the databases the newer build had already upgraded (provider database v7, IndexedDB VersionError). So every start failed, and the update check never ran.
+- **Two slots on the device** (`src/boot/loader.js`, inlined in `index.html`):
+  - An update is downloaded into the slot not in use. Every file is listed in `files.json` (`all`: path and SHA-256, fonts included, written by `scripts/publish-updates.js`). Each file is checked, then `slot.json` is written with state "trial" (`services/slotUpdates.js`).
+  - Storage per platform:
+    - Android / Fire TV: real files in the app's private storage (`UpdateSlots.java`, `TvHost.slotWrite` / `slotRemove`, served at `http://localhost/__slot/`).
+    - Desktop: real files in the user's data folder (`app://xtream/__slot/`).
+    - Tizen: real files in `wgt-private` (filesystem privileges only in the `_autoupdate` widgets).
+    - webOS: a database of its own, with every file started from a blob address. Tizen switches to it if its files fail before any version has worked from them.
+- **Trial start** (`app/trialStart.js`): the first thing `boot()` does, before any database is opened. Every page is read and a worker answers, then the slot becomes "ok" and the other slot is emptied.
+  - An error, no confirmation within 90 s, or a start that never came back: the slot is removed and the previous version starts again, its databases untouched.
+  - A notice tells the user. The version is not downloaded again by the background check, only from *Settings → Check for updates*.
+- **Every start** runs the newest of the package and the slots. Slots not newer than the package are removed (a newer package was installed). An update is never replaced by an older copy. If its files are gone, the package's copy starts in rescue mode.
+- **A start that fails** (`app/startupFailure.js`) shows:
+  - the error, the log and a QR code to read it on a phone;
+  - *Check for updates*: a newer version, once confirmed, is downloaded and started;
+  - *Restart*.
+  
+  The remote's keys work on it (Left / Right, Up / Down scroll the log, OK). `boot().catch` no longer forgets an update.
+- **Older packages:** they still load the build from the network (`xi.bundle`) and keep working with new builds. They switch to slots once the new package is installed over them, without uninstalling.
+- **Tests:**
+  - `pickStart`, the SHA-256 against Node, the database store, `installToSlot` (checked, wrong hash, missing file, already downloaded, invalid list), `files.json`, the Tizen privileges per variant.
+  - In Chromium, with the webOS `_autoupdate` build (database slots), package 0.0.1 and version 0.1.0 published locally:
+    - downloaded, started on trial, confirmed and kept;
+    - a broken 0.2.0 removed, back to 0.1.0 with the notice;
+    - the files of 0.1.0 removed: the failed start screen, and with the remote *Check for updates → Install* repaired it.
+- Not verified: the Android, desktop and Tizen file slots (the Java was not compiled here: no Android SDK). Not verified on the TV.

@@ -46,7 +46,8 @@ Alternative without a computer: install the **Downloader** app from the Amazon A
 
 Each release has two sets of APKs: `_androidtv.apk` / `_firetv.apk` (no online updates, for the stores) and `_androidtv_autoupdate.apk` /
 `_firetv_autoupdate.apk`, which update their web code themselves like the `_autoupdate` packages of Tizen and webOS: at every start, in
-the background, they look for a newer build of the `android` channel on GitHub Pages and use it from the next start. Changes to the
+the background, they look for a newer build of the `android` channel on GitHub Pages, keep it in the app's private storage (two slots,
+`UpdateSlots.java`) and use it from the next start; a new build that does not start is removed and the previous one used. Changes to the
 native parts (the Java plugins, the manifest) still need a new APK (`updates.minShell` in package.json asks for it). Build one locally
 with `npx webpack --mode production --env platform=android --env autoupdate` and `VARIANT=_autoupdate bash platforms/android/package.sh <version>`.
 

@@ -209,8 +209,9 @@ bar (the gear); "Settings → X" names the page of its sidebar.
 ### Private and up to date
 
 - **How it works.** No account, no analytics: the keys stay on the device and are sent only to their own service, credentials are masked
-  in the logs. The "_autoupdate" packages of Tizen and webOS download a newer build by themselves and offer to restart; the others are
-  updated from the Releases page. *Settings → Advanced → Diagnostics* shows the log, with a QR code to send it.
+  in the logs. The "_autoupdate" packages download a newer build by themselves, keep it on the device (two slots, every file checked)
+  and offer to restart; a new version that does not start is removed and the previous one starts again. A start that fails shows the
+  error, the log and a button to look for a newer version. The other packages are updated from the Releases page. *Settings → Advanced → Diagnostics* shows the log, with a QR code to send it.
 - **Settings.** *Settings → Advanced*: check for updates (autoupdate packages), diagnostics, delete all data.
 - **What you gain.** Nothing leaves the device but what a service needs; problems can be reported with the log in a moment.
 

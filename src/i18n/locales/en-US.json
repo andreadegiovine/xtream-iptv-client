@@ -501,5 +501,16 @@
   "align.edit": "Edit",
   "align.remove": "Remove",
   "align.add": "Add point",
-  "align.conclude": "Conclude"
+  "align.conclude": "Conclude",
+  "update.trialFailed": "Version {version} did not start: the previous version is in use again. It is not downloaded again by itself (Settings › Check for updates tries it again).",
+  "startup.title": "The app could not start",
+  "startup.text": "Here is what went wrong and the log. A newer version may solve it: check for updates, or restart the app.",
+  "startup.package": "package {version}",
+  "startup.qr": "Scan to read the log on a phone",
+  "startup.available": "Version {version} is available. Install it now?",
+  "startup.install": "Install",
+  "startup.cancel": "Cancel",
+  "startup.downloading": "Downloading the update: {done} of {total} files…",
+  "startup.installFailed": "The update could not be downloaded: {error}",
+  "startup.restart": "Restart"
 }

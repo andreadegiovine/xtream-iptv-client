@@ -1,5 +1,5 @@
 import './styles/main.scss';
-import { i18n, t, detectLocale } from './i18n/index.js';
+import { i18n, t, detectLocale, DEFAULT_LOCALE } from './i18n/index.js';
 import { openAppDb } from './db/appDb.js';
 import { InputService, Action, isTextEditing } from './core/input.js';
 import { createPointer } from './ui/pointer.js';
@@ -7,10 +7,13 @@ import { createProfiles, profileSettings } from './services/profiles.js';
 import { pickProfile } from './ui/profilePicker.js';
 import { startTooltips } from './ui/tooltip.js';
 import { log } from './core/logger.js';
+import { APP_VERSION } from './core/env.js';
 import { onVersionChange } from './core/idb.js';
 import { providerHiddenSections } from './services/providerTypes.js';
 import { visibleFavorites } from './services/favoriteEntries.js';
-import { forgetUpdate, runningVersions } from './services/updates.js';
+import { slotsApi, takeFailedUpdate, skipVersion } from './services/slotUpdates.js';
+import { confirmTrial } from './app/trialStart.js';
+import { showStartupFailure } from './app/startupFailure.js';
 import { FocusManager } from './ui/focus/FocusManager.js';
 import { Router } from './ui/router.js';
 import { createBackgroundQueue, Priority } from './services/backgroundQueue.js';
@@ -108,6 +111,11 @@ import { updateInBackground, restartDialog, checkUpdates, canUpdateItself } from
 import { startInAppScheduling } from './app/scheduling.js';
 
 async function boot() {
+  // The files of the update in use did not load (src/boot/loader.js): this is the package's copy, which may not read what the update
+  // wrote. Only the screen of a failed start, with the update check.
+  if (window.__XI_RESCUE__) throw new Error(window.__XI_RESCUE__.reason || 'the update in use did not load');
+  // The first start of an update: it shows that it works before the databases are opened (only then a newer version changes them).
+  await confirmTrial(slotsApi(), LAZY_PAGES);
   // A database of this app opened with a newer schema elsewhere closes ours: every read would fail from then on (pages empty, "never
   // run", the integration boxes shown). Logged, then the app starts again on the new schema.
   let reloading = false;
@@ -818,11 +826,18 @@ async function boot() {
   startOpened.splice(0).forEach(([id, action]) => openedAlert(id, action));
   ctx.scheduleAlerts.sync();
   // The code of the other pages is read once the start-up work is done (the first opening is then as quick as the others).
-  // A build loaded online reads them sooner (the network may drop later).
+  // A build loaded from the network (an older package) reads them sooner (the network may drop later).
   // The section pages first (the top bar opens them), then the others.
-  setTimeout(() => preloadPages([LAZY_PAGES.browse, LAZY_PAGES.detail, LAZY_PAGES.player, LAZY_PAGES.settings, LAZY_PAGES.collections, LAZY_PAGES.collection, LAZY_PAGES.network, LAZY_PAGES.providers, LAZY_PAGES.categories, LAZY_PAGES.diagnostics]), window.__XI_BASE__ ? 2000 : 15000);
+  setTimeout(() => preloadPages([LAZY_PAGES.browse, LAZY_PAGES.detail, LAZY_PAGES.player, LAZY_PAGES.settings, LAZY_PAGES.collections, LAZY_PAGES.collection, LAZY_PAGES.network, LAZY_PAGES.providers, LAZY_PAGES.categories, LAZY_PAGES.diagnostics]), window.__XI_BASE__ && !slotsApi() ? 2000 : 15000);
   // A newer build is looked for once the first page is up (a few seconds later: the start-up work goes first).
   const askRestart = restartDialog({ dialogs, notices, isBusy: () => dialogs.isOpen() || topbar.isSearching() });
+  // An update that failed its first start (the loader went back to the previous version): said once, and not downloaded again by itself.
+  const failedUpdate = takeFailedUpdate();
+  if (failedUpdate && failedUpdate.version) {
+    log.warn(`Version ${failedUpdate.version} did not start (${failedUpdate.reason}): back to ${window.__XI_BUNDLE__ || APP_VERSION}`);
+    skipVersion(failedUpdate.version);
+    notices.show({ type: 'warning', message: t('update.trialFailed', { version: failedUpdate.version }), permanent: true, key: 'update' });
+  }
   setTimeout(() => updateInBackground(notices, askRestart).catch((err) => log.warn('Update failed', err && err.message)), 3000);
   // Settings › Advanced › "Check for updates" (only the packages that update themselves): now, with a word on what came out.
   ctx.updates = {
@@ -857,9 +872,11 @@ function showSubscriptionNotice(notices, provider) {
   notices.show({ type: status.type, title: provider.name, message: t(key, { days: status.days, date }), permanent: true, key: 'subscription' });
 }
 
-boot().catch((err) => {
+boot().catch(async (err) => {
   log.error('Fatal startup error', err);
-  // A build installed online that does not start: back to the package's copy at the next start.
-  if (runningVersions().bundle) forgetUpdate();
-  document.getElementById('content').textContent = 'Startup failed. Please restart the app.';
+  // An update on its first start: the loader removes it and starts the previous version (the databases were not touched).
+  const slots = slotsApi();
+  if (slots && slots.onTrial() && (await slots.fail((err && err.message) || String(err)))) return;
+  if (i18n.getLocale() === DEFAULT_LOCALE) i18n.setLocale(detectLocale(navigator.language));
+  showStartupFailure(err, { canUpdate: canUpdateItself() });
 });

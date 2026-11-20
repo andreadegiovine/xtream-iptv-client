@@ -6,9 +6,13 @@ const path = require('path');
 const YOUTUBE_SERVICE_PORT = 8125; // keep in sync with platforms/tizen/youtubeEngine.js
 const here = (file) => path.resolve(__dirname, file);
 
-/** config.xml of a variant: the version, and without `youtube` no trailer service (nor its iframe origin in the CSP). */
-function tizenConfig(xml, { version, youtube }) {
+/**
+ * config.xml of a variant: the version, without `youtube` no trailer service (nor its iframe origin in the CSP), without `autoupdate`
+ * no access to the files (only the updates kept by the app use them).
+ */
+function tizenConfig(xml, { version, youtube, autoupdate = true }) {
   let out = xml.replace(/__VERSION__/g, version);
+  if (!autoupdate) out = out.replace(/\s*<!-- The updates kept by the app[^>]*-->(\s*<tizen:privilege name="http:\/\/tizen.org\/privilege\/filesystem\.\w+"\/>)+/, '');
   if (!youtube) {
     out = out
       .replace(/\s*<!-- The trailer player[^>]*-->/, '')
@@ -25,8 +29,8 @@ module.exports = {
   html: ({ isProd }) => ({ includeWebapis: isProd }),
   // Without `youtube` (the store package: Samsung allows a <tizen:service> to partners only) there is no trailer service: config.xml loses
   // its <tizen:service> and the iframe origin, and trailers open in the TV's YouTube app. Development builds keep the player page.
-  copy: ({ version, youtube, isProd }) => [
-    { from: here('config.xml'), to: 'config.xml', transform: (content) => tizenConfig(content.toString(), { version, youtube }) },
+  copy: ({ version, youtube, autoupdate, isProd }) => [
+    { from: here('config.xml'), to: 'config.xml', transform: (content) => tizenConfig(content.toString(), { version, youtube, autoupdate }) },
     ...(youtube || !isProd
       ? [
           // YouTube player page: served by the on-TV service (service/service.js) and, for development, by the dev server.

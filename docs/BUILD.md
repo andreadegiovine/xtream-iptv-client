@@ -160,19 +160,31 @@ To try a release without publishing a real one, create a pre-release with a tag 
 
 Installed apps update their web code (JavaScript, styles, fonts) by themselves, without the store or the system (`src/services/updates.js`):
 
-- Only the `_autoupdate` packages of Tizen and webOS check for updates; each follows its own channel (`tizen`, `tizen_youtube`, `webos`),
+- Only the `_autoupdate` packages check for updates; each follows its own channel (`tizen`, `tizen_youtube`, `webos`, `android`, `desktop`),
   so a package receives builds of its own variant. Store packages never load code from outside (the loader ignores any stored build).
 - The release workflow's `pages` job builds those channels (with `--env autoupdate`) and writes `bundles/<version>/<channel>/` and
   `version.json` on the `gh-pages` branch (`scripts/publish-updates.js`, last three versions kept). GitHub Pages must serve that branch (Settings → Pages → Deploy from a
   branch → `gh-pages`, `/ (root)`); the app reads `https://andreadegiovine.github.io/xtream-iptv-client/version.json`.
-- At start-up the check is the first thing the app does (5 s at most): a newer build that the installed package can run is downloaded
-  ("Updating to version X…" in a notice over the start screen), the app starts again with it and only then runs its usual start-up work. The loader in
-  `src/index.html` picks the newer of the package's own copy and the installed build at every start, and falls back to the package's copy when
-  the online build cannot be loaded (offline); a build that fails to start is forgotten.
+- The update is kept on the device, in two slots (`src/boot/loader.js`, `src/services/slotUpdates.js`): real files where the platform
+  allows it (Android / Fire TV: the app's private storage, served at `http://localhost/__slot/<slot>/`; desktop: the user's data folder,
+  served at `app://xtream/__slot/<slot>/`; Tizen: `wgt-private`, with the `filesystem` privileges of the `_autoupdate` widgets), otherwise
+  a database of their own (webOS, and Tizen if its files do not work). Once the app is up, the check in the background downloads a
+  newer build into the slot not in use: every file listed in its `files.json` (`all`, with the SHA-256 of each, fonts included), each
+  one checked, then `slot.json` with state `trial`; the app offers to restart.
+- At the next start the loader starts the update on trial: the app reads all its pages and starts a worker before it opens any
+  database, then confirms it (state `ok`) and the other slot is emptied. A trial that fails (an error, nothing within 90 s, a start
+  that never came back) removes its slot and the previous version starts again: its databases were not touched. That version is not
+  downloaded again by the background check (*Settings → Check for updates* tries it again).
+- Every start runs the newest of the package's own copy and the slots; a slot not newer than the package is removed. A version that
+  changed the databases is never replaced by an older copy: when its files are gone, the package's copy shows the failed start screen.
+- Any start that fails shows the error, the log (with a QR code) and *Check for updates*: a newer version is downloaded and started
+  once the user confirms, so a fix published later solves a start that fails.
+- Packages older than this loader still load the build from GitHub Pages at every start (`xi.bundle`); they keep working with new
+  builds until the new package is installed over them.
 - Native parts are not updated this way (Tizen `config.xml` privileges and the YouTube service, webOS `appinfo.json`, Android plugins, Electron):
   when a release changes them, raise `updates.minShell` in `package.json` to that version; older packages then show a notice asking to install
   the new package instead of loading the build.
-- Not used in development builds. The web code is checked by HTTPS only (no signature yet).
+- Not used in development builds. The web code is checked by HTTPS and the SHA-256 of `files.json` (no signature yet).
 
 ## Screenshots and store material
 

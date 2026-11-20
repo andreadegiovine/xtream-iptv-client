@@ -13,10 +13,11 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import java.io.IOException;
 
 /**
  * What the app asks the device (platforms/android/platform.js): leave the app, open a link in another app, the device's facts, the
- * settings screen of exact alarms.
+ * settings screen of exact alarms; and the loader of the page (src/boot/loader.js) the files of the updates it keeps (UpdateSlots).
  */
 @CapacitorPlugin(name = "TvHost")
 public class TvHostPlugin extends Plugin {
@@ -85,6 +86,28 @@ public class TvHostPlugin extends Plugin {
             call.resolve();
         } catch (ActivityNotFoundException | SecurityException e) {
             call.reject("no settings screen for exact alarms", e);
+        }
+    }
+
+    /** A file of an update kept on the device: { slot: "a" | "b", path: "js/main.js" | "slot.json" ..., data: its bytes in base64 }. */
+    @PluginMethod
+    public void slotWrite(PluginCall call) {
+        try {
+            UpdateSlots.write(getContext(), call.getString("slot"), call.getString("path"), call.getString("data"));
+            call.resolve();
+        } catch (IOException | IllegalArgumentException e) {
+            call.reject("cannot write the file of the update", e);
+        }
+    }
+
+    /** Empties a slot of the updates kept on the device: { slot: "a" | "b" }. */
+    @PluginMethod
+    public void slotRemove(PluginCall call) {
+        try {
+            UpdateSlots.remove(getContext(), call.getString("slot"));
+            call.resolve();
+        } catch (IOException e) {
+            call.reject("cannot empty the slot", e);
         }
     }
 }

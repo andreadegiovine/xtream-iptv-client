@@ -82,6 +82,7 @@ module.exports = (env = {}, argv = {}) => {
         appVersion: pkg.version,
         autoupdate,
         logoSvg: fs.readFileSync(LOGO, 'utf8'), // the start screen shows the logo while the app loads
+        loaderScript: fs.readFileSync(path.join(__dirname, 'src', 'boot', 'loader.js'), 'utf8'), // inlined: it starts the app
         ...(target.build.html ? target.build.html(buildOptions) : {}),
       }),
       new CopyPlugin({
