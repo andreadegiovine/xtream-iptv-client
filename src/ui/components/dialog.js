@@ -54,6 +54,45 @@ export function createDialogService({ focus, root = document.body }) {
     resolve(result);
   }
 
+  // A dialog taller than the screen (a long form on a TV that shows less: the profile form on a Fire TV) scrolls inside itself: whatever
+  // gets the focus (the `focused` class, whichever zone gives it) is brought into its view, as on the pages.
+  const observers = new Map();
+  function reveal(el) {
+    const box = el.closest ? el.closest('.dialog') : null;
+    if (!box || box.scrollHeight <= box.clientHeight) return;
+    const margin = 24;
+    const boxRect = box.getBoundingClientRect();
+    const rect = el.getBoundingClientRect();
+    // Within the first screen of the dialog: its top (the title) is shown too.
+    if (rect.top - boxRect.top + box.scrollTop + rect.height + margin <= box.clientHeight) {
+      box.scrollTop = 0;
+      return;
+    }
+    if (rect.top < boxRect.top + margin) box.scrollTop -= boxRect.top + margin - rect.top;
+    else if (rect.bottom > boxRect.bottom - margin) box.scrollTop += rect.bottom - (boxRect.bottom - margin);
+  }
+  function show(overlay) {
+    root.appendChild(overlay);
+    if (typeof MutationObserver === 'undefined') return;
+    const observer = new MutationObserver((records) => {
+      for (const record of records) {
+        const el = record.target;
+        if (el.classList && el.classList.contains('focused') && String(record.oldValue || '').split(' ').indexOf('focused') < 0) {
+          reveal(el);
+          return;
+        }
+      }
+    });
+    observer.observe(overlay, { subtree: true, attributes: true, attributeFilter: ['class'], attributeOldValue: true });
+    observers.set(overlay, observer);
+  }
+  function hide(overlay) {
+    const observer = observers.get(overlay);
+    if (observer) observer.disconnect();
+    observers.delete(overlay);
+    overlay.remove();
+  }
+
   /** Where the focus goes back to when the dialog closes. */
   function snapshot() {
     return { id: focus.activeId, index: focus.active ? focus.active.index : 0 };
@@ -65,7 +104,7 @@ export function createDialogService({ focus, root = document.body }) {
     const { overlay, previous, resolve, cleanup } = current;
     current = null;
     if (cleanup) cleanup();
-    overlay.remove();
+    hide(overlay);
     focus.unregister(DIALOG_ZONE);
     if (previous.id && focus.zones.has(previous.id)) focus.focus(previous.id, previous.index);
     resolve(result);
@@ -83,7 +122,7 @@ export function createDialogService({ focus, root = document.body }) {
       { class: 'dialog-backdrop', role: 'dialog', 'aria-modal': 'true' },
       h('div', { class: 'dialog' }, createHeading({ text: title }), content || createHint({ text: message, muted: false }), h('div', { class: 'dialog-actions' }, buttons)),
     );
-    root.appendChild(overlay);
+    show(overlay);
 
     const zone = new FocusZone({
       id: DIALOG_ZONE,
@@ -117,7 +156,7 @@ export function createDialogService({ focus, root = document.body }) {
     const nodes = options.map((option, i) => createChoice({ label: option.label, icon: option.icon || null, trailingIcon: option.trailingIcon || null, className: option.trailingIcon ? 'with-trailing' : '', current: option.value === selected, index: i }));
     const list = h('div', { class: 'choice-list' }, nodes);
     const overlay = h('div', { class: 'dialog-backdrop', role: 'dialog', 'aria-modal': 'true' }, h('div', { class: 'dialog' }, createHeading({ text: title }), list));
-    root.appendChild(overlay);
+    show(overlay);
     const start = Math.max(0, options.findIndex((o) => o.value === selected));
     const zone = new FocusZone({
       id: zoneId,
@@ -160,7 +199,7 @@ export function createDialogService({ focus, root = document.body }) {
     const list = h('div', { class: 'choice-list' });
     const status = createHint({ className: 'search-status' });
     const overlay = h('div', { class: 'dialog-backdrop', role: 'dialog', 'aria-modal': 'true' }, h('div', { class: 'dialog search-dialog' }, createHeading({ text: title }), field, status, list));
-    root.appendChild(overlay);
+    show(overlay);
     let nodes = [];
     const rowsAt = (i) => (i === 0 ? field : nodes[i - 1]);
 
@@ -241,7 +280,7 @@ export function createDialogService({ focus, root = document.body }) {
     const list = h('div', { class: 'choice-list' }, rows);
     const buttons = [createButton({ label: cancelLabel }), createButton({ label: saveLabel, variant: 'primary' })];
     const overlay = h('div', { class: 'dialog-backdrop', role: 'dialog', 'aria-modal': 'true' }, h('div', { class: 'dialog search-dialog' }, createHeading({ text: title }), named ? field : null, list, h('div', { class: 'dialog-actions' }, buttons)));
-    root.appendChild(overlay);
+    show(overlay);
     const total = () => lead + items.length + 2;
     const nodeAt = (i) => (i < lead ? field : i < lead + items.length ? rows[i - lead] : buttons[i - lead - items.length]);
     input.addEventListener('keydown', (event) => {
@@ -304,7 +343,7 @@ export function createDialogService({ focus, root = document.body }) {
       { class: 'dialog-backdrop', role: 'dialog', 'aria-modal': 'true' },
       h('div', { class: 'dialog pin-dialog' }, createHeading({ text: title }), message ? createHint({ text: message, muted: false }) : null, h('div', { class: 'pin-dots' }, dots), error, h('div', { class: 'pin-pad' }, nodes)),
     );
-    root.appendChild(overlay);
+    show(overlay);
 
     async function press(key) {
       if (busy) return;
@@ -366,7 +405,7 @@ export function createDialogService({ focus, root = document.body }) {
     const previous = snapshot();
     const body = h('div', { class: className ? `dialog ${className}` : 'dialog' });
     const overlay = h('div', { class: 'dialog-backdrop', role: 'dialog', 'aria-modal': 'true' }, body);
-    root.appendChild(overlay);
+    show(overlay);
     const promise = new Promise((resolve) => {
       current = { overlay, previous, resolve, promise: null, cancelValue };
     });

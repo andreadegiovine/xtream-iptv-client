@@ -1170,3 +1170,21 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
 
 ### Patch 212 — README: the features in the contents one per line
 - In the contents the features were joined on a single sub-item: now each feature is a sub-item of its own under "Features". Documentation only.
+
+### Patch 213 — Dialogs taller than the screen scroll with the focus
+- On a Fire TV the profile form (more so a kids profile with its limits) was taller than the screen: its last fields and Save could not be reached on screen.
+- Every dialog is now at most the height of the screen (minus a margin) and scrolls inside itself, without a bar.
+- Whatever gets the focus in a dialog is brought into view (dialog.js, whatever zone gives the focus: forms, lists, the PIN pad). Near the top of the dialog it scrolls back to its top, so the title shows again.
+- Browser check on a 620 px high window with the profile form: Down reaches Save with the form scrolled, Up comes back to the avatars with the title on screen. Not verified on the TV.
+
+### Patch 214 — Up / Down scroll where the focus cannot follow, on every page and dialog
+- One rule in the focus manager (FocusManager.js), for every page (`.page`) and dialog (`.dialog`) taller than its view:
+  - **Down, nothing visible below to focus:** the page or dialog scrolls by 40 % of its height. The focus goes to the next element as soon as it shows (at once, when one step is enough). At the end of the content Down does nothing.
+  - **Up, the focused element scrolled out of view:** each Up scrolls back by a step, until an element shows; that one takes the focus (the last visible above for Up, the first below for Down).
+  - **Next element far below past text or a table:** a step of scroll first, the focus moves when it shows.
+- Lists that scroll by themselves (carousels, the guide, drop-downs) are not concerned. Settings' own rule of patch 209 is gone (replaced by this one).
+- **Browser check:**
+  - Home and the Movies grid move as before, one row per press;
+  - Settings › Overview on a 620 px high window: Down scrolls the catalog table and the focus enters the last buttons when they show, Up comes back the same way;
+  - the profile form reaches Save and comes back to the avatars.
+- Not verified on the TV.

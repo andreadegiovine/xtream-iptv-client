@@ -39,6 +39,34 @@ export class FocusZone {
   }
 }
 
+/**
+ * Scrolling with Up / Down where the focus cannot follow (content without anything to focus: a long table, a text, a form taller than
+ * the screen). The box that scrolls is the page or the dialog of the focused element (`.page`, `.dialog`), only when it is taller than
+ * its view; lists that scroll by themselves (carousels, the guide, drop-downs) are not concerned.
+ */
+const SCROLL_STEP = 0.4; // of the height of the view
+function scrollerOf(node) {
+  const box = node && node.closest ? node.closest('.dialog, .page') : null;
+  if (!box || box.scrollHeight <= box.clientHeight + 2) return null;
+  return box;
+}
+const viewOf = (box) => box.getBoundingClientRect();
+function visibleIn(node, view) {
+  const r = node.getBoundingClientRect();
+  return r.bottom > view.top + 1 && r.top < view.bottom - 1 && (r.width > 0 || r.height > 0);
+}
+/** Below (Down) or above (Up) the view, not visible at all. */
+function beyond(node, view, down) {
+  const r = node.getBoundingClientRect();
+  return down ? r.top >= view.bottom - 1 : r.bottom <= view.top + 1;
+}
+/** Scrolls the box by a step; false when it is already at that end. */
+function scrollStep(box, down) {
+  const before = box.scrollTop;
+  box.scrollTop = before + (down ? 1 : -1) * Math.max(80, Math.round(box.clientHeight * SCROLL_STEP));
+  return box.scrollTop !== before;
+}
+
 /** Moves focus inside a zone, and between zones through explicit links (zone A --down--> zone B). */
 /**
  * Runs the action of an entry of a zone once at a time: while what it started has not ended (the promise it returns: a dialog closed, a
@@ -158,8 +186,25 @@ export class FocusManager {
     if (!dir) return false;
     if (!zone.canFocus()) return true;
 
+    const vertical = dir === Dir.UP || dir === Dir.DOWN;
+    const down = dir === Dir.DOWN;
+    const nodeAt = (i) => (zone.nodes ? (zone.nodes() || [])[i] : null);
+    const here = vertical ? nodeAt(zone.clamp(zone.index)) : null;
+    const box = here ? scrollerOf(here) : null;
+    // The focused element was scrolled out of view: the arrow scrolls on, and the focus goes to an element of the zone as soon as one
+    // shows (the first below for Down, the last above for Up); at the end of the content nothing happens.
+    if (box && !visibleIn(here, viewOf(box))) {
+      scrollStep(box, down);
+      this.focusShown(zone, box, down);
+      return true;
+    }
+
     const result = zone.model.navigate(dir, zone.clamp(zone.index));
     if (result.type === 'move') {
+      // The next element is far below (or above), past content that takes no focus: a step of scroll first; the focus moves once it
+      // shows (at once, when a step is enough).
+      const target = box ? nodeAt(zone.clamp(result.index)) : null;
+      if (target && beyond(target, viewOf(box), down) && scrollStep(box, down) && !visibleIn(target, viewOf(box))) return true;
       zone.onBlur(zone.index);
       zone.index = zone.clamp(result.index);
       zone.onFocus(zone.index);
@@ -174,6 +219,29 @@ export class FocusManager {
       if (this.focus(targetId)) return true;
       fromId = targetId;
     }
+    // Nothing more to focus that way, but the page or the dialog goes on (a table, a text under the last button): it scrolls.
+    if (box) scrollStep(box, down);
     return true;
+  }
+
+  /** After a step of scroll: the focus to an element of `zone` now on screen (the first below for Down, the last above for Up), if any. */
+  focusShown(zone, box, down) {
+    const list = (zone.nodes && zone.nodes()) || [];
+    const view = viewOf(box);
+    const here = zone.clamp(zone.index);
+    if (list[here] && visibleIn(list[here], view)) return;
+    let pick = -1;
+    for (let i = 0; i < list.length; i += 1) {
+      if (!list[i] || !visibleIn(list[i], view)) continue;
+      if (down) {
+        if (i > here || pick < 0) pick = i;
+        if (i > here) break;
+      } else if (i < here) pick = i;
+      else if (pick < 0) pick = i;
+    }
+    if (pick < 0 || pick === here) return;
+    zone.onBlur(zone.index);
+    zone.index = zone.clamp(pick);
+    zone.onFocus(zone.index);
   }
 }

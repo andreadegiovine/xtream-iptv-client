@@ -88,7 +88,11 @@
   padding: 40px 48px;
   border-radius: 8px;
   background: $bg-raised;
-  overflow: hidden; // no scrollbars in dialogs: lists scroll with the focus
+  // Never taller than the screen: a long dialog (a form on a TV that shows less) scrolls inside, following the focus (dialog.js), without
+  // a bar.
+  max-height: calc(100vh - 64px);
+  overflow-x: hidden;
+  overflow-y: auto;
 
   ::-webkit-scrollbar {
     display: none;
