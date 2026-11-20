@@ -7,9 +7,7 @@ import { ListModel } from './focus/models.js';
 import { createDialogService } from './components/dialog.js';
 import { InputService, Action } from '../core/input.js';
 import { createPointer } from './pointer.js';
-import { createLogo } from './components/logo.js';
-import { createTopbarItemSkeleton } from './atoms/topbarItem.js';
-import { createHomeSkeleton } from './pages/homePage.js';
+import { createStartBar, createStartBackdrop } from './startSkeleton.js';
 
 const ZONE = 'profilePicker';
 
@@ -34,18 +32,20 @@ export function pickProfile({ profiles, list, root = document.body }) {
     const dialogs = createDialogService({ focus, root });
     const tiles = list.map((p) => createProfileTile(p));
     // As the first start: the bar (logo + placeholders) and the Home skeleton behind; the profiles centred over it, without a box.
-    const bar = h('nav', { class: 'topbar' }, createLogo(), [0, 1, 2, 3, 4].map(() => createTopbarItemSkeleton()), h('span', { class: 'topbar-spacer' }), [0, 1, 2].map(() => createTopbarItemSkeleton({ icon: true })));
+    // The start's bar (startSkeleton.js) when it is there, otherwise its own.
+    const startBar = document.querySelector('#topbar .start-bar');
+    const bar = startBar ? null : createStartBar();
     const el = h(
       'section',
       { class: 'page setup first-run profile-picker' },
-      h('div', { class: 'setup-backdrop home-skeleton', 'aria-hidden': 'true' }, createHomeSkeleton()),
+      createStartBackdrop(),
       h('div', { class: 'profile-choice' }, h('h1', { text: t('profiles.who') }), h('div', { class: 'profile-tiles' }, tiles)),
     );
     const barHost = document.getElementById('topbar') || root;
     const pageHost = document.getElementById('content') || root;
     const splash = pageHost.querySelector ? pageHost.querySelector('.boot-splash') : null;
     if (splash) splash.style.display = 'none'; // back once a profile is chosen, until the first page replaces it
-    barHost.appendChild(bar);
+    if (bar) barHost.appendChild(bar);
     pageHost.appendChild(el);
     const input = new InputService(document);
     let busy = false;
@@ -55,7 +55,7 @@ export function pickProfile({ profiles, list, root = document.body }) {
       pointer.destroy();
       focus.unregister(ZONE);
       el.remove();
-      bar.remove();
+      if (bar) bar.remove();
       if (splash) splash.style.display = '';
       resolve(profile);
     }

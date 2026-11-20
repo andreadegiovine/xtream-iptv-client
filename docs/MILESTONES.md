@@ -1087,3 +1087,9 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
     - a broken 0.2.0 removed, back to 0.1.0 with the notice;
     - the files of 0.1.0 removed: the failed start screen, and with the remote *Check for updates → Install* repaired it.
 - Not verified: the Android, desktop and Tizen file slots (the Java was not compiled here: no Android SDK). Not verified on the TV.
+
+### Patch 205 — The start shows the skeleton instead of the pulsing logo
+- The logo of the first paint no longer pulses (the animation stuttered on the TV while the app loads). It stays still only until the app's code runs.
+- From then on (`ui/startSkeleton.js`, the first thing `boot()` does), the start shows the bar (logo and placeholders) and the Home skeleton, as the first start and "Who is watching?" do. The trial of an update and the opening of the databases happen behind it.
+- The placeholder bar goes when the real one is added, the skeleton when the first page replaces it. "Who is watching?" uses the same bar.
+- Browser check: the skeleton with the database start held back. Not verified on the TV.

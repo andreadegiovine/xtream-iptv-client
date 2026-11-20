@@ -14,6 +14,7 @@ import { visibleFavorites } from './services/favoriteEntries.js';
 import { slotsApi, takeFailedUpdate, skipVersion } from './services/slotUpdates.js';
 import { confirmTrial } from './app/trialStart.js';
 import { showStartupFailure } from './app/startupFailure.js';
+import { showStartSkeleton, removeStartBar } from './ui/startSkeleton.js';
 import { FocusManager } from './ui/focus/FocusManager.js';
 import { Router } from './ui/router.js';
 import { createBackgroundQueue, Priority } from './services/backgroundQueue.js';
@@ -111,6 +112,8 @@ import { updateInBackground, restartDialog, checkUpdates, canUpdateItself } from
 import { startInAppScheduling } from './app/scheduling.js';
 
 async function boot() {
+  // From the first moment the code runs: the bar and the Home skeleton, as at the first start (instead of the logo of the first paint).
+  showStartSkeleton();
   // The files of the update in use did not load (src/boot/loader.js): this is the package's copy, which may not read what the update
   // wrote. Only the screen of a failed start, with the update check.
   if (window.__XI_RESCUE__) throw new Error(window.__XI_RESCUE__.reason || 'the update in use did not load');
@@ -476,6 +479,7 @@ async function boot() {
       if (router.page && router.page.ready) router.page.ready.then(toBar);
     },
   });
+  removeStartBar();
   document.getElementById('topbar').appendChild(topbar.el);
   ctx.renderTopbar = () => topbar.render(); // the profile's avatar changed
   ctx.linkSearchDown = (zoneId) => topbar.linkSearchDown(zoneId);

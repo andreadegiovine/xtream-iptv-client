@@ -29,7 +29,8 @@
   }
 }
 
-// Shown from the first paint until the first page replaces it (the router empties #content).
+// Shown from the first paint until the first page replaces it (the router empties #content): the logo, still (an animation stuttered
+// on the TV while the app loads), then the Home skeleton as soon as the app's code runs (ui/startSkeleton.js).
 .boot-splash {
   display: flex;
   align-items: center;
@@ -39,18 +40,15 @@
   svg {
     width: 160px;
     height: 160px;
-    animation: boot-pulse 1.4s ease-in-out infinite;
-  }
-}
-
-@keyframes boot-pulse {
-  0%,
-  100% {
-    opacity: 0.45;
+    opacity: 0.6;
   }
 
-  50% {
-    opacity: 1;
+  &.with-skeleton {
+    display: block;
+
+    .page {
+      height: 100%;
+    }
   }
 }
 
