@@ -4,7 +4,6 @@ import { resetApp } from '../../services/resetApp.js';
 import { clearDerived } from '../../services/derivedStore.js';
 import { removeUnifiedCatalog } from '../../services/catalogSync.js';
 import { DERIVED_STORES } from '../../services/dbSize.js';
-import { Priority } from '../../services/backgroundQueue.js';
 import { transactionDone, dbDelete } from '../../core/idb.js';
 import { GENRES_SOURCE_KEY } from '../../services/genreBackfill.js';
 import { h } from '../dom.js';
@@ -357,7 +356,7 @@ export function createSettingsPage(ctx) {
     await ctx.genres.restore().catch(() => undefined);
     ctx.catalogChanged();
     ctx.notices.success(t('notice.removed'));
-    if (ctx.queue) ctx.queue.add({ name: 'genres', priority: Priority.METADATA, run: () => ctx.genres.backfill().catch(() => undefined) });
+    if (ctx.queueGenres) ctx.queueGenres({ changed: true });
     devicePanel.refresh().catch(() => undefined);
   }
   const traktConnectRow = { el: traktPanel.connectButton, refresh: async () => undefined, activate: connectTrakt };
@@ -522,9 +521,9 @@ export function createSettingsPage(ctx) {
     const checked = lastCheck();
     const version = versions.bundle || APP_VERSION;
     const autoupdate = typeof __AUTOUPDATE__ !== 'undefined' && __AUTOUPDATE__;
-    const lines = [`v${version}`];
-    if (versions.shell && versions.bundle && versions.shell !== versions.bundle) lines.push(t('settings.packageVersion', { version: versions.shell }));
-    if (autoupdate) lines.push(t('settings.lastCheck'), checked ? formatDateTime(checked, i18n.getLocale()) : t('common.never'));
+    const build = versions.shell && versions.bundle && versions.shell !== versions.bundle ? ` (${t('settings.packageVersion', { version: versions.shell })})` : '';
+    const lines = [`v${version}${build}`];
+    if (autoupdate) lines.push(`${t('settings.lastCheck')} ${checked ? formatDateTime(checked, i18n.getLocale()) : t('common.never')}`);
     return lines;
   };
   const versionHint = h('div', { class: 'settings-version' });

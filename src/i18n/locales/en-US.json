@@ -563,5 +563,5 @@
   "sync.providerLoginHint": "\"{name}\" came from your sync account. Its server, username and password are never synced: type them for this TV.",
   "tmdb.withGenres": "{count} titles with genres",
   "settings.lastCheck": "Last check",
-  "settings.packageVersion": "package {version}"
+  "settings.packageVersion": "build v{version}"
 }

@@ -126,6 +126,13 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
    * Starts (or queues) the background work for the active provider: first the TMDB download of every title
    * (`force` downloads again what is still fresh), then the provider's genres for what is still without.
    */
+  // The catalog changed since the genres and ratings were last worked out (true at start: the first run does everything once).
+  let dirty = true;
+  /** The catalog changed (a sync, new TMDB ids from the title details): the next run works genres and ratings out again. */
+  const markDirty = () => {
+    dirty = true;
+  };
+
   function backfill({ force = false } = {}) {
     if (running) {
       again = true;
@@ -137,6 +144,7 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
 
   /** Stops what is running (a provider genre search, say) and starts the work again from the first phase, the TMDB download. */
   async function restart() {
+    dirty = true; // a new key: everything again
     stop();
     await inFlight.catch(() => 0);
     again = false;
@@ -175,11 +183,18 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
     running = true;
     let done = 0;
     try {
-      if (getTmdbKey()) done += await track('tmdb', force);
+      const downloaded = getTmdbKey() ? await track('tmdb', force) : 0;
+      done += downloaded;
+      // Genres and ratings are worked out again only when something can have changed: new metadata, or a catalog that changed since the
+      // last run (markDirty) — they used to run, and tell it, after every trigger (each sync, each batch of title details).
+      const wasDirty = dirty;
+      dirty = false; // a change from now on asks for the next run
+      const needed = force || wasDirty || downloaded > 0;
       // With TMDB the genres are its own, written from the metadata (titles still without any): logged as the Genres row.
-      if (!cancelled && getTmdbKey()) await trackAs('genres', 'restore');
+      if (!cancelled && getTmdbKey() && needed) await trackAs('genres', 'restore');
       // The ratings of the metadata just downloaded (also of titles added by a sync).
-      if (!cancelled && getTmdbKey()) await track('ratings', false);
+      if (!cancelled && getTmdbKey() && needed) await track('ratings', false);
+      if (cancelled && wasDirty) dirty = true; // stopped before genres and ratings were worked out: still to do
       // The provider's genre search only without TMDB: with a key TMDB's genres replace the provider's, asking the provider is wasted.
       if (!cancelled && !getTmdbKey()) done += await track('genres', false);
       // Without TMDB the person page reads the cast and directors the provider names: every title asked once, slowly.
@@ -235,6 +250,7 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
 
   return {
     backfill,
+    markDirty,
     restart,
     download,
     findGenres,

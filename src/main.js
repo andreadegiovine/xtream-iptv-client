@@ -229,6 +229,24 @@ async function boot() {
     onTask: ({ name, ms, error }) => { if (!error) log.info(`Task ${name} done in ${ms} ms`); },
   });
   ctx.queue = queue;
+  /**
+   * The genre worker's run (TMDB metadata, genres, ratings), as one task of the queue: asked again while it waits, it still runs once.
+   * `changed`: the catalog changed since (a sync, new TMDB ids), so genres and ratings are worked out again even without new metadata.
+   */
+  const queueGenres = ({ changed = false } = {}) => {
+    if (changed && ctx.genres) ctx.genres.markDirty();
+    queue.add({
+      name: 'genres',
+      priority: Priority.METADATA,
+      run: async () => {
+        await ctx.genres.backfill().catch(() => undefined);
+        ctx.ratings.invalidate(); // the ratings just worked out (the backfill's last phase) join the "Rating" group
+        // A kids profile with a rating range: the ratings just worked out hide more titles.
+        if (rangeOf(ctx.profile)) await ctx.refreshAdult().then(() => ctx.catalogChanged());
+      },
+    });
+  };
+  ctx.queueGenres = queueGenres;
   const queueSearchWarm = () => queue.add({ name: 'search', priority: Priority.SEARCH, run: () => ctx.search.warm().catch(() => undefined) });
   // Everything read from the catalog is out of date (a rebuild, a sync, hidden categories): caches emptied, the search index rebuilt.
   ctx.catalogChanged = () => {
@@ -346,7 +364,7 @@ async function boot() {
     isBusy: () => Boolean(catalog.getState().running || (router.current && router.current.name === 'player')),
     onChanged: () => {
       ctx.catalogChanged();
-      queue.add({ name: 'genres', priority: Priority.METADATA, run: () => ctx.genres.backfill().catch(() => undefined) });
+      queueGenres({ changed: true });
     },
   });
   ctx.suggestions = createSuggestionsService({ active, watch: ctx.watch, tmdb, trakt: ctx.trakt, getSource: async () => (await settings.get()).suggestionSource });
@@ -666,7 +684,7 @@ async function boot() {
       // A kids profile: what it must not see is worked out again on the new catalog, then the pages read it again.
       ctx.refreshAdult().then(() => ctx.profile.kids && ctx.catalogChanged());
       queue.add({ name: 'share-keys', priority: Priority.METADATA, run: () => ctx.shareKeys().catch(() => undefined) });
-      queue.add({ name: 'genres', priority: Priority.METADATA, run: () => ctx.genres.backfill().catch(() => undefined) }); // the genre worker finds genres the lists did not carry
+      queueGenres({ changed: true }); // the genre worker finds genres the lists did not carry
       ctx.titleInfo.run(); // titles listed without a TMDB id: their details, in their own worker (not in the queue: it can take long)
       queueEpg(); // a provider added or changed: its guide after the rest
     }
@@ -691,7 +709,7 @@ async function boot() {
     ctx.pageCache.clear(); // titles and genres change with the language
     topbar.render();
     router.reload();
-    queue.add({ name: 'genres', priority: Priority.METADATA, run: () => ctx.genres.backfill().catch(() => undefined) }); // metadata and genres in the new language
+    queueGenres({ changed: true }); // metadata and genres in the new language
   });
 
   const dialogs = createDialogService({ focus });
@@ -723,13 +741,31 @@ async function boot() {
       }
     },
   });
-  // Operations tell when they start and finish (the Trakt sync reports its own result).
+  // Operations tell when they start and finish, only when they take a while: a run that ends within OP_NOTICE_MS (a check with
+  // nothing to do: Trakt every 15 minutes, genres already worked out) says nothing at all. A cancel always says it. The Trakt sync
+  // reports its own result.
+  const OP_NOTICE_MS = 3000;
+  const shownOps = new Map(); // id → 'waiting' (timer) | 'shown'
   ctx.operations.onEvent(({ kind, id }) => {
-    if (id === 'trakt' && kind === 'end') return;
     const name = t(`operations.${id}`);
-    if (kind === 'start') notices.info(t('notice.opStart', { name }), { key: `op:${id}` });
-    else if (kind === 'end') notices.success(t('notice.opEnd', { name }), { key: `op:${id}` });
-    else notices.warning(t('notice.opCancel', { name }), { key: `op:${id}` });
+    const state = shownOps.get(id);
+    if (kind === 'start') {
+      if (state) return; // already told (or about to be)
+      const timer = setTimeout(() => {
+        shownOps.set(id, 'shown');
+        notices.info(t('notice.opStart', { name }), { key: `op:${id}` });
+      }, OP_NOTICE_MS);
+      shownOps.set(id, timer);
+      return;
+    }
+    shownOps.delete(id);
+    if (state && state !== 'shown') {
+      clearTimeout(state); // ended before its start was told: silent
+      if (kind !== 'cancel') return;
+    }
+    if (kind === 'end') {
+      if (id !== 'trakt' && state === 'shown') notices.success(t('notice.opEnd', { name }), { key: `op:${id}` });
+    } else notices.warning(t('notice.opCancel', { name }), { key: `op:${id}` });
   });
   const onBack = createBackHandler({
     dialogs: {
@@ -830,7 +866,7 @@ async function boot() {
     // Stale-while-revalidate: the cached catalog is usable at once, lists older than 12 h refresh in background.
     catalog.start();
     queue.add({
-      name: 'genres',
+      name: 'tmdb-once',
       priority: Priority.METADATA,
       run: async () => {
         // Once: titles saved in another script before they were localized are downloaded again by this run (patch 161).
@@ -846,12 +882,10 @@ async function boot() {
           if (count) log.info(`TMDB: ${count} titles to download again for their age rating`);
           await kvSet(db, 'tmdbCertifications', true).catch(() => undefined);
         }
-        await ctx.genres.backfill().catch(() => undefined);
-        ctx.ratings.invalidate(); // the ratings just worked out (the backfill's last phase) join the "Rating" group
-        // A kids profile with a rating range: the ratings just worked out hide more titles.
-        if (rangeOf(ctx.profile)) await ctx.refreshAdult().then(() => ctx.catalogChanged());
       },
     });
+    // Then the backfill (a catalog sync ending meanwhile asks for it too: it runs once).
+    queueGenres();
     // The series of "continue watching" the provider no longer serves (details without episodes) leave the catalog (details cached a day).
     queue.add({
       name: 'unavailable',

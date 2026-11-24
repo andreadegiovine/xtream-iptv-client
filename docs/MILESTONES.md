@@ -1219,3 +1219,17 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
   - a carousel of 60 cards: the focus in the middle until the end, then the last cards;
   - the version lines.
 - Not verified on the TV.
+
+### Patch 216 — Background work told once, no runs without a reason; the version line
+- **Notices of the operations** (main.js):
+  - an operation is told only when it takes a while: its "started" shows after 3 s, and its "finished" only when its start was shown;
+  - a run that ends sooner says nothing (the Trakt check every 15 minutes, genres already worked out, a sync with nothing new);
+  - a cancel is always told.
+- **Genre worker (genreIndex.js):**
+  - Genres and ratings are worked out again only when something can have changed: new TMDB metadata, or a catalog changed since the last run (`markDirty`: catalog sync, new TMDB ids from the title details, another language, Settings). They used to run, and to say so, after each of those triggers even with nothing new.
+  - A new TMDB key (restart) does everything again; a run stopped before them leaves them to do.
+- **One task for the backfill** (`queueGenres`): every trigger asks for the same queue task, so it runs once however many ask while it waits.
+  - The start's one-time TMDB steps are a task of their own (`tmdb-once`): the "genres" task added when a sync ends used to replace them.
+  - The ratings group and the kids range are refreshed after every backfill, not only after the start's.
+- **Settings, bottom of the sidebar:** "v5.0.3 (build v4.0.0)" when the package is another version; "Last check …" on one smaller line under it.
+- **Browser check:** a first start with a 3000-title catalog: one notice per long operation (title details, genre search, people search), none for the short ones; a second start: no notices. Not verified on the TV.

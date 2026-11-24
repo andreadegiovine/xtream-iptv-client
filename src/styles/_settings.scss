@@ -206,7 +206,9 @@
       font-weight: 700;
     }
 
+    // "Last check …": smaller, under the version.
     .settings-version-line {
+      font-size: 1.125rem;
       overflow: hidden;
       white-space: nowrap;
       text-overflow: ellipsis;

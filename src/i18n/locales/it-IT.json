@@ -563,5 +563,5 @@
   "sync.providerLoginHint": "\"{name}\" arriva dal tuo account di sincronizzazione. Server, username e password non vengono mai sincronizzati: inseriscili per questa TV.",
   "tmdb.withGenres": "{count} titoli con generi",
   "settings.lastCheck": "Ultimo controllo",
-  "settings.packageVersion": "pacchetto {version}"
+  "settings.packageVersion": "build v{version}"
 }
