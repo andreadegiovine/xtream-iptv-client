@@ -1,4 +1,5 @@
 import { kvGet, kvSet, kvDelete } from '../../db/kv.js';
+import { syncedWriteCount } from '../../core/idb.js';
 import { log } from '../../core/logger.js';
 import { collectLocal, applyChanges, clearLocal, canonical, hashText, sectionOf } from './items.js';
 import { deriveAccount, itemId, seal, open, sealCheck, checkOpens, normalizeUsername } from './account.js';
@@ -89,8 +90,17 @@ export function createSyncEngine({ db, openProfileDb, transport, now = Date.now 
   let running = Promise.resolve();
   const ids = new Map(); // kind → id (HMAC), computed once
 
+  // syncedWriteCount() after the last round that read this TV's data (its own writes included): unchanged, nothing new to send. Once
+  // an hour the data is read anyway (a write made while a round ran).
+  let seenWrites = -1;
+  let lastFull = 0;
+  const FULL_EVERY_MS = 60 * 60 * 1000;
   const load = async () => {
-    if (!state) state = await kvGet(db, STATE_KEY, null);
+    if (!state) {
+      state = await kvGet(db, STATE_KEY, null);
+      // The ids already agreed with the server need no HMAC again (thousands of watch states).
+      if (state) Object.keys(state.items || {}).forEach((id) => state.items[id].k && ids.set(state.items[id].k, id));
+    }
     return state;
   };
   const save = () => kvSet(db, STATE_KEY, state);
@@ -159,29 +169,45 @@ export function createSyncEngine({ db, openProfileDb, transport, now = Date.now 
   }
 
   /** One round. `pull`: read the server; `applyRemote`: write its changes here (only before the app reads its data). */
-  async function round({ pull = true, applyRemote = false, readTimeoutMs } = {}) {
+  /**
+   * One round. `pull`: read the server; `applyRemote`: write its changes here (only before the app reads its data); `sendLocal`: send
+   * this TV's changes (not at the start: the background round does it a minute later, so the start never waits for them).
+   */
+  async function round({ pull = true, applyRemote = false, sendLocal = true, readTimeoutMs } = {}) {
     await load();
     if (!state) return { applied: 0, sent: 0 };
-    const local = await localItems();
     let remote = new Map();
     let times = null;
     let create = null;
     let etag = state.etag;
     const pending = Object.keys(state.items).some((id) => state.items[id].p);
+    const today = dayOf(now());
+    // Nothing written to the synced stores since the last round, nothing waiting, the day already told: nothing to do (no read of the data).
+    if (!pull && !pending && sendLocal && seenWrites === syncedWriteCount() && state.touched === today && now() - lastFull < FULL_EVERY_MS) return { applied: 0, sent: 0 };
+    let remoteChanged = false;
     if (pull || pending) {
       const res = await transport.read(state.keys.account, state.etag, readTimeoutMs ? { timeoutMs: readTimeoutMs } : undefined);
       if (res.status === 'ok') {
         etag = res.etag;
         state.rev = res.file.rev;
         ({ remote, times } = await openChanged(res.file));
-        if (res.file.fails && res.file.fails.day === dayOf(now()) && res.file.fails.count >= 5) state.locked = res.file.fails.day;
+        remoteChanged = remote.size > 0;
+        if (res.file.fails && res.file.fails.day === today && res.file.fails.count >= 5) state.locked = res.file.fails.day;
       } else if (res.status === 'none' && !pending) {
         // The account is not there (removed by the server's cleanup after 30 days without use): made again with what this TV has.
         state.items = {};
         create = { check: await sealCheck(state.keys) };
       }
     }
+    // The start: the server unchanged, nothing to write here: this TV's data is not even read (the start never waits for it).
+    if (!sendLocal && !remoteChanged) {
+      if (etag) state.etag = etag;
+      await save();
+      return { applied: 0, sent: 0 };
+    }
+    const local = await localItems();
     const plan = planRound({ local, items: state.items, remote, remoteTimes: times, idOf: (k) => ids.get(k), now: now(), applyRemote });
+    if (!sendLocal) plan.send = [];
     // Changes of the server left for the next start: the file is read again then (not answered "unchanged").
     if (!plan.skipped) state.etag = etag;
     if (plan.apply.length) {
@@ -192,13 +218,17 @@ export function createSyncEngine({ db, openProfileDb, transport, now = Date.now 
     }
     const sent = await send(plan.send, create);
     // Once a day at least the server hears from this TV (an account not heard from for 30 days is removed).
-    if (!sent && (create || state.touched !== dayOf(now()))) {
+    if (sendLocal && !sent && (create || state.touched !== today)) {
       await transport.send({ account: state.keys.account, auth: state.keys.auth, ...(create ? { create } : {}), items: [] });
-      state.touched = dayOf(now());
+      state.touched = today;
     }
     state.lastSync = now();
     state.lastError = '';
     await save();
+    if (sendLocal) {
+      seenWrites = syncedWriteCount();
+      lastFull = now();
+    }
     return { applied: plan.apply.length, sent };
   }
 
@@ -284,7 +314,7 @@ export function createSyncEngine({ db, openProfileDb, transport, now = Date.now 
      * At the start, before the app reads its data: the server's changes written here, this TV's sent. The server is waited for
      * `readTimeoutMs` at most (offline: the app starts with what it has).
      */
-    atStart: ({ readTimeoutMs = 6000 } = {}) => serial(() => round({ pull: true, applyRemote: true, readTimeoutMs })),
+    atStart: ({ readTimeoutMs = 3000 } = {}) => serial(() => round({ pull: true, applyRemote: true, sendLocal: false, readTimeoutMs })),
     /** In the background: this TV's changes sent (the server read only to confirm what was sent). */
     push: () => serial(() => round({ pull: false, applyRemote: false })),
     /** "Sync now": both ways; resolves with { applied } (the page starts the app again when something was written). */

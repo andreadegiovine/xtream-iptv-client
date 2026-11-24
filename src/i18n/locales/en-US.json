@@ -27,8 +27,6 @@
   "setup.playlistUrl": "M3U playlist URL",
   "setup.epgUrl": "XMLTV guide URL (optional)",
   "setup.epgUrlHint": "empty = the one the playlist names",
-  "settings.versionNever": "v{version} • last check never",
-  "settings.versionLine": "v{version} • last check {time}",
   "settings.promo.tmdb.title": "Turn on TMDB",
   "settings.promo.tmdb.text": "Posters, plots, cast, ratings, trailers and suggestions; the same title merged across categories and providers. Free key from themoviedb.org, typed below.",
   "settings.promo.trakt.title": "Connect Trakt",
@@ -514,7 +512,7 @@
   "startup.installFailed": "The update could not be downloaded: {error}",
   "startup.restart": "Restart",
   "sync.title": "Sync",
-  "sync.hint": "Keep several TVs the same: providers, settings, profiles, keys, Trakt, watch state, favourites, collections and pinned entries. Everything is encrypted on the TV with your password: the server cannot read it. Not synced: the parental PINs and the settings of each TV (text size, screensaver, buffer).",
+  "sync.hint": "Keep several TVs the same: provider names and their categories, settings, profiles, keys, Trakt, watch state, favourites, collections and pinned entries. Everything is encrypted on the TV with your password: the server cannot read it. Never synced: the providers' server, username and password (typed on each TV), the parental PINs and the settings of each TV (text size, screensaver, buffer).",
   "sync.username": "Username",
   "sync.password": "Password",
   "sync.login": "Log in",
@@ -560,5 +558,10 @@
   "sync.replace": "Replace",
   "sync.fromAccount": "Account",
   "sync.fromAccountHint": "Everything from a sync account another TV already set up (Settings › Sync there).",
-  "sync.hidePassword": "Hide password"
+  "sync.hidePassword": "Hide password",
+  "sync.providerLoginTitle": "Provider access",
+  "sync.providerLoginHint": "\"{name}\" came from your sync account. Its server, username and password are never synced: type them for this TV.",
+  "tmdb.withGenres": "{count} titles with genres",
+  "settings.lastCheck": "Last check",
+  "settings.packageVersion": "package {version}"
 }

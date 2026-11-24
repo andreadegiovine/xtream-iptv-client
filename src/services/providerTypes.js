@@ -22,3 +22,13 @@ export function providerHiddenSections(provider) {
 export function providerMediaTypes(provider) {
   return providerType(provider) === ProviderType.M3U ? ['movie', 'live'] : ['movie', 'series', 'live'];
 }
+
+/** The connection data of a provider: never synced between TVs (services/sync/items.js); typed again on every TV. */
+export const PROVIDER_ACCESS_FIELDS = ['baseUrl', 'username', 'password', 'playlistUrl', 'epgUrl'];
+
+/** A provider without its connection data (it came from a sync account): its server, username and password must be typed on this TV. */
+export function providerNeedsLogin(provider) {
+  if (!provider) return false;
+  if (providerType(provider) === ProviderType.M3U) return !provider.playlistUrl;
+  return !provider.baseUrl || !provider.username || !provider.password;
+}

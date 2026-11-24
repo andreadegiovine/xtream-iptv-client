@@ -1188,3 +1188,34 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
   - Settings › Overview on a 620 px high window: Down scrolls the catalog table and the focus enters the last buttons when they show, Up comes back the same way;
   - the profile form reaches Save and comes back to the avatars.
 - Not verified on the TV.
+
+### Patch 215 — Faster start, smoother guide download, providers' access never synced, centered carousels
+- **Start:**
+  - **Server read:** the sync round of the start only reads the server (3 s at most, was 6). The data of this TV is read only when the server changed, and nothing is sent at the start (the background round does it a minute later). Before, every start read and signed every synced thing (all the watch states) before the first page.
+  - **Item ids:** the ids already agreed come from the state; the HMAC key is imported once.
+  - **Background:** the round reads the data only when the synced stores were written (`syncedWriteCount`) or once an hour.
+  - **Skeleton:** the start skeleton and its bar are still (no animations while the app gets ready).
+- **Guide download:**
+  - its writes and its parsing wait while the user moves around: every key, wheel or tap holds it, and it goes on 1.5 s after the last;
+  - held for 10 s, it gets 3 s, so it still ends;
+  - batches of 500 programmes with 80 ms between them (were 1000 and 40).
+- **Sync and providers:**
+  - Server, username, password, playlist and guide addresses of the providers are never synced: only their name, kind and category choices. Removing them from the items already on the server happens at the next send of each TV.
+  - A TV that takes an account asks, before anything starts, the access of each provider without it ("Provider access", one after the other), then starts again.
+  - What a TV typed stays its own when the account's provider changes.
+- **Settings › TMDB:**
+  - the Genres row says how many titles have a genre;
+  - the Title details row adds up every run (`total`; it showed the last run's counts, 0 once every title was done).
+- **Settings, bottom of the sidebar:**
+  - the version, the package's version when it is another (an update downloaded by the app running in an older package, which the system lists), "Last check" and its time;
+  - one short line each, as large as the entries.
+- **Carousels:**
+  - moving right, the focus goes to the middle of the row and stays there while the row scrolls;
+  - near the end of what was read, placeholder cards follow while the next are read (the focus stops on the last real card meanwhile);
+  - at the real end they go and the focus moves on to the last cards.
+- **Tests:** sync (providers' access never on the server, kept on the TV when the account's provider changes), carousel placeholders.
+- **Browser checks:**
+  - two TVs through a fake GitHub with the real merge script: provider completed on the second TV, then Home, no password on the server;
+  - a carousel of 60 cards: the focus in the middle until the end, then the last cards;
+  - the version lines.
+- Not verified on the TV.

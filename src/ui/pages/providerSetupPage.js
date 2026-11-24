@@ -37,8 +37,9 @@ export function normalizeAddress(input, { required = true } = {}) {
  * `zoneId`: the focus zone of its form; `onCancel()`; `onSaved({ added })` once the provider is checked and saved. Returns
  * { title, body, start(), destroy(), step() }.
  */
-export function createProviderSetup(ctx, { editId = null, firstRun = false, zoneId, onCancel = null, onSaved }) {
-  const title = createHeading({ level: 1, text: t(editId ? 'setup.editTitle' : 'setup.title') });
+export function createProviderSetup(ctx, { editId = null, firstRun = false, completing = false, zoneId, onCancel = null, onSaved }) {
+  // `completing`: a provider from a sync account, without its connection data (never synced): only its data to type, no way back.
+  const title = createHeading({ level: 1, text: t(completing ? 'sync.providerLoginTitle' : editId ? 'setup.editTitle' : 'setup.title') });
   const body = h('div', { class: 'setup-step' });
   let form = null;
   let kind = null; // chosen provider type (null: the choice is on screen)
@@ -77,7 +78,8 @@ export function createProviderSetup(ctx, { editId = null, firstRun = false, zone
     kind = type;
     const m3u = type === ProviderType.M3U;
     // Cancel (or Back to the choice) on the left, Confirm on the right.
-    const actions = [editId ? { label: t('setup.cancel'), run: () => onCancel && onCancel() } : { label: t('setup.back'), run: () => chooseKind() }, { label: t('setup.verify'), primary: true, run: () => save() }];
+    const back = editId ? { label: t('setup.cancel'), run: () => onCancel && onCancel() } : { label: t('setup.back'), run: () => chooseKind() };
+    const actions = (completing ? [] : [back]).concat([{ label: t('setup.verify'), primary: true, run: () => save() }]);
     const fields = m3u
       ? [{ label: t('setup.name') }, { label: t('setup.playlistUrl'), inputmode: 'url' }, { label: t('setup.epgUrl'), placeholder: t('setup.epgUrlHint'), inputmode: 'url' }]
       : [{ label: t('setup.name') }, { label: t('setup.url') }, { label: t('setup.username') }, { label: t('setup.password'), type: 'password' }];
@@ -85,6 +87,10 @@ export function createProviderSetup(ctx, { editId = null, firstRun = false, zone
     if (editing) {
       const values = m3u ? [editing.name, editing.playlistUrl, editing.epgUrl] : [editing.name, editing.baseUrl, editing.username, editing.password];
       form.fields.forEach((field, i) => field.setValue(values[i] || ''));
+    }
+    if (completing && editing) {
+      form.el.insertBefore(createHint({ text: t('sync.providerLoginHint', { name: editing.name }), className: 'setup-hint' }), form.el.firstChild);
+      ctx.focus.focus(zoneId, 1); // the first empty field (the name came with the account)
     }
   }
 
@@ -165,7 +171,7 @@ export function createProviderSetup(ctx, { editId = null, firstRun = false, zone
         const changed = ['baseUrl', 'username', 'password', 'playlistUrl', 'epgUrl'].some((key) => (editing[key] || '') !== (data[key] || ''));
         await ctx.providers.update(editing.id, data);
         // Different server, account or playlist: its catalog may differ, so refresh the active provider.
-        if (changed && (await ctx.providers.getActiveId()) === editing.id) ctx.catalog.start({ force: true });
+        if (changed && !completing && (await ctx.providers.getActiveId()) === editing.id) ctx.catalog.start({ force: true });
         ctx.notices.success(t('notice.saved'), { key: 'provider' });
       } else {
         const provider = await ctx.providers.add(data);
@@ -216,13 +222,18 @@ export function createProviderSetup(ctx, { editId = null, firstRun = false, zone
  * the bar (logo + placeholders); otherwise in the framed page (a link to the route).
  */
 export function createProviderSetupPage(ctx, params = {}) {
+  // `complete`: the providers of a sync account still without their connection data, one after the other; then the app starts again.
+  const complete = Array.isArray(params.complete) ? params.complete : [];
   const setup = createProviderSetup(ctx, {
-    editId: params.providerId || null,
+    editId: complete[0] || params.providerId || null,
     firstRun: Boolean(params.firstRun),
+    completing: complete.length > 0,
     zoneId: ZONE_ID,
     onCancel: () => ctx.router.back(),
     onSaved: () => {
-      if (params.firstRun) ctx.router.reset('home', { section: 'home', focusTopbar: true }); // as at every start: Home of the bar
+      if (complete.length > 1) ctx.router.reset('providerSetup', { firstRun: true, complete: complete.slice(1) });
+      else if (complete.length) window.location.reload(); // every provider has its data: the usual start (catalog, guide...)
+      else if (params.firstRun) ctx.router.reset('home', { section: 'home', focusTopbar: true }); // as at every start: Home of the bar
       else ctx.router.reset('providers', { section: 'provider' });
     },
   });

@@ -252,7 +252,10 @@ export function createTmdbPanel(ctx) {
         continue;
       }
       const text = describeMeta(log[row.name], locale, row.name === 'genres' || ready(), active.get(row.name)); // ratings: how many titles have one
-      row.status.textContent = row.name === 'tmdb' && ready() ? `${formatNumber(await ctx.tmdb.countMeta(), locale)} ${t('tmdb.count').toLowerCase()} · ${text}` : text;
+      if (row.name === 'tmdb' && ready()) row.status.textContent = `${formatNumber(await ctx.tmdb.countMeta(), locale)} ${t('tmdb.count').toLowerCase()} · ${text}`;
+      // The genres: how many titles have one (the last run's own count is 0 once every title has its genres).
+      else if (row.name === 'genres' && ctx.genres && ctx.genres.countWithGenres) row.status.textContent = `${t('tmdb.withGenres', { count: formatNumber(await ctx.genres.countWithGenres(), locale) })} · ${text}`;
+      else row.status.textContent = text;
     }
   }
   /**
@@ -267,9 +270,11 @@ export function createTmdbPanel(ctx) {
       return parts.length ? parts.join(' · ') : describeMeta(entry, locale, true, running);
     }
     const byType = await info.read().catch(() => ({}));
+    // Every title asked so far (`total`; older records: the last run's).
+    const sums = (type) => byType[type] && (byType[type].total || byType[type]);
     const parts = ['movie', 'series']
-      .filter((type) => byType[type] && (byType[type].asked || byType[type].searched))
-      .map((type) => t('tmdb.infoDone', { type: t(TYPE_LABEL[type]), asked: formatNumber(byType[type].asked, locale), found: formatNumber(byType[type].found + byType[type].matched, locale) }));
+      .filter((type) => sums(type) && (sums(type).asked || sums(type).searched))
+      .map((type) => t('tmdb.infoDone', { type: t(TYPE_LABEL[type]), asked: formatNumber(sums(type).asked, locale), found: formatNumber((sums(type).found || 0) + (sums(type).matched || 0), locale) }));
     return [describeMeta(entry, locale, true, running)].concat(parts).join(' · ');
   }
   let unsubscribe = null;

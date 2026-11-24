@@ -1,7 +1,7 @@
 import { dbGetAllKeys, dbDeleteMany, dbGetAll, dbPutMany, dbDelete } from '../core/idb.js';
 import { buildEntryGenreRows } from './grouping.js';
 import { bumpGenresRev } from './derivedStore.js';
-import { listGenres, genreEntryKeys, genreCounts } from './catalogQuery.js';
+import { listGenres, genreEntryKeys, genreCounts, countTitlesWithGenres } from './catalogQuery.js';
 import { removeRatings } from './ratingBuild.js';
 import { removePeople, countPeople } from './peopleIndex.js';
 /** The genre work on the main thread (no worker): its code is loaded only then. */
@@ -255,6 +255,11 @@ export function createGenreIndex({ active, syncLog = null, getTmdbKey = () => ''
     async entryKeys(type, genreKey) {
       const current = await active.get();
       return current ? genreEntryKeys(current.db, type, genreKey) : [];
+    },
+    /** How many movies and series have a genre (Settings › TMDB). */
+    async countWithGenres() {
+      const current = await active.get();
+      return current ? countTitlesWithGenres(current.db).catch(() => 0) : 0;
     },
     /** Forgets the people found in the provider's details (asked again at the next run). */
     async clearPeople() {

@@ -82,7 +82,14 @@ test('a TV uploads, another takes everything except the PINs and the settings of
   const login = await b.engine.login('ANDREA', 'password-long-enough', {});
   expect(login.status).toBe('remote');
   await b.engine.replace();
-  expect((await dbGet(b.db, 'providers', 'p1')).password).toBe('pw');
+  // The provider comes with its name only: server, username and password are typed again on this TV.
+  const synced = await dbGet(b.db, 'providers', 'p1');
+  expect(synced.name).toBe('Prov');
+  expect(synced.password).toBeUndefined();
+  expect(synced.baseUrl).toBeUndefined();
+  expect(JSON.stringify(server.files)).not.toContain('"pw"');
+  // Typed here, they stay here when the account's provider changes (renamed on A).
+  await dbPut(b.db, 'providers', { ...synced, baseUrl: 'http://b', username: 'ub', password: 'pb' });
   expect(await kvGet(b.db, 'settings')).toEqual({ language: 'it-IT', cleanTitles: false, textSize: 75 });
   expect(await kvGet(b.db, 'apiKeys')).toEqual({ tmdbKey: 'k1' });
   expect(await kvGet(b.db, 'parental', null)).toBeNull();
@@ -103,6 +110,11 @@ test('a TV uploads, another takes everything except the PINs and the settings of
   await b.engine.atStart();
   expect((await kvGet(b.db, 'favorites')).map((f) => f.entryKey)).toEqual(['movie:t1', 'movie:t2', 'movie:t3']);
   expect((await dbGet(a.db, 'watch', 'movie:t1')).position).toBe(90);
+  clock += 10000;
+  await dbPut(a.db, 'providers', { id: 'p1', name: 'Prov renamed', baseUrl: 'http://x', username: 'u', password: 'pw', createdAt: 1, slot: 1 });
+  await a.engine.push();
+  await b.engine.atStart();
+  expect(await dbGet(b.db, 'providers', 'p1')).toMatchObject({ name: 'Prov renamed', baseUrl: 'http://b', username: 'ub', password: 'pb' });
 
   // A removal goes too.
   clock += 10000;

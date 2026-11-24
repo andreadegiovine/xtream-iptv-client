@@ -33,3 +33,35 @@ test('a row without `more` shows the cards it was given', () => {
   const c = createCarousel({ id: 'r', title: '', items: [item(1)] });
   expect(c.cards).toHaveLength(1);
 });
+
+test('near the last card read, placeholder cards follow while the next are read; at the end they go', async () => {
+  let release = null;
+  let served = 12;
+  const more = jest.fn((offset, count) => {
+    if (offset < 12) return Promise.resolve(Array.from({ length: count }, (_, i) => item(offset + i)));
+    // Slow: the next page waits until released; then a short one (the end of the row).
+    return new Promise((resolve) => {
+      release = () => {
+        served = offset + 3;
+        resolve(Array.from({ length: 3 }, (_, i) => item(offset + i)));
+      };
+    });
+  });
+  const c = createCarousel({ id: 'slow', title: 'Row', items: [], more });
+  await wait();
+  expect(c.cards).toHaveLength(12);
+  const skeletons = () => c.el.querySelectorAll('.skeleton-card').length;
+  expect(skeletons()).toBe(0); // not before the focus gets close to the end
+  c.zone.onFocus(10);
+  await wait();
+  expect(skeletons()).toBeGreaterThan(0); // reading: placeholders after the last real card
+  expect(c.zone.model.getCount()).toBe(12); // the focus cannot go past the last real card meanwhile
+  release();
+  await wait();
+  await wait();
+  expect(c.cards).toHaveLength(served);
+  expect(skeletons()).toBe(0); // the end of the row: no placeholders
+  // The real cards stay in order, before where the placeholders were.
+  const keys = Array.from(c.el.querySelectorAll('.card')).length;
+  expect(keys).toBe(served);
+});

@@ -3,11 +3,13 @@ import { createHeading } from '../atoms/heading.js';
 import { FocusZone } from '../focus/FocusManager.js';
 import { ListModel } from '../focus/models.js';
 import { ensureVisible, scrollHeld } from '../scroll.js';
-import { createCard } from './card.js';
+import { createCard, createSkeletonCard } from './card.js';
 
 /** Cards a row shows on a 1920 px screen, and how many more are kept ready past the right edge (the rest come while scrolling). */
 export const VISIBLE_CARDS = 7;
 export const AHEAD_CARDS = 5;
+/** Placeholders after the last card while more are being read: the focused card can stay in the middle meanwhile. */
+const SKELETON_CARDS = Math.ceil(VISIBLE_CARDS / 2);
 
 /**
  * Horizontal row of cards with its own focus zone.
@@ -15,6 +17,9 @@ export const AHEAD_CARDS = 5;
  * Every row is lazy: only the cards on screen plus AHEAD_CARDS exist; the next ones are made as the focus moves right. A long `items` list
  * is shown that way by itself; `more(offset, count)` (optional) reads the next items of a row whose list is not known yet (resolves with
  * [] at the end). `onAdded(items, cards)` is called with the cards added later (the first ones are returned in `cards`).
+ * Moving right, the focus goes to the middle of the row and stays there while the row scrolls under it; near the end of what was read,
+ * grey placeholder cards follow while the next cards are read (the focus stops on the last real card until they come); at the real end
+ * the placeholders go and the focus moves on to the last cards.
  */
 export function createCarousel({ id, title, items: given, onOpen, className = '', revealTop = false, startIndex = 0, more: moreItems = null, onAdded = null }) {
   const track = h('div', { class: 'carousel-track' });
@@ -23,16 +28,26 @@ export function createCarousel({ id, title, items: given, onOpen, className = ''
   const items = moreItems ? given : given.slice(0, firstCount);
   const more = moreItems || (given.length > items.length ? (offset, count) => given.slice(offset, offset + count) : null);
   const cards = [];
+  let skeletons = []; // placeholder cards after the last real one, while the next ones are read
   const add = (list) =>
     list.map((item) => {
       const card = createCard(item.entry, item.type, item.meta);
-      track.appendChild(card.el);
+      track.insertBefore(card.el, skeletons.length ? skeletons[0] : null);
       cards.push(card);
       return card;
     });
   add(items);
   let ended = !more;
   let reading = null;
+  const showSkeletons = () => {
+    if (skeletons.length || ended || !moreItems) return;
+    skeletons = Array.from({ length: SKELETON_CARDS }, () => createSkeletonCard());
+    skeletons.forEach((node) => track.appendChild(node));
+  };
+  const hideSkeletons = () => {
+    skeletons.forEach((node) => node.remove());
+    skeletons = [];
+  };
   /** Reads the next items until the row holds `want` cards (or it has no more). */
   function fill(want) {
     if (ended || reading || items.length >= want) return reading;
@@ -40,6 +55,7 @@ export function createCarousel({ id, title, items: given, onOpen, className = ''
     const take = (next) => {
       const list = next || [];
       if (list.length < count) ended = true;
+      if (ended) hideSkeletons(); // the real end: the last cards can take the focus, the row stops at them
       if (!list.length) return;
       items.push(...list);
       const made = add(list);
@@ -59,6 +75,7 @@ export function createCarousel({ id, title, items: given, onOpen, className = ''
       .catch(() => {
         reading = null;
         ended = true;
+        hideSkeletons();
       });
     return reading;
   }
@@ -71,10 +88,13 @@ export function createCarousel({ id, title, items: given, onOpen, className = ''
     model: new ListModel({ orientation: 'horizontal', getCount: () => (moreItems ? items.length : given.length) }),
     onFocus: (i) => {
       fill(i + VISIBLE_CARDS + AHEAD_CARDS);
+      if (i >= cards.length - SKELETON_CARDS) showSkeletons(); // close to the last card read: placeholders while the next come
       if (!cards[i]) return;
       const node = cards[i].el;
       node.classList.add('focused');
-      if (!scrollHeld()) track.scrollLeft = Math.max(0, node.offsetLeft - 48); // the pointer never moves the row under it
+      // The focused card in the middle of the row (the first ones from the left edge, the last ones up to the right edge): the row
+      // scrolls under a still focus. The pointer never moves the row under it.
+      if (!scrollHeld()) track.scrollLeft = Math.max(0, node.offsetLeft + node.offsetWidth / 2 - track.clientWidth / 2);
       ensureVisible(el, { first: revealTop }); // the first row also brings the page heading back into view
     },
     onBlur: (i) => cards[i] && cards[i].el.classList.remove('focused'),

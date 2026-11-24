@@ -1,4 +1,5 @@
 import { runEpgForProvider, getEpgMeta, shouldSyncEpg, clearEpg } from './epgSync.js';
+import { createGate } from '../core/gate.js';
 import { openProviderDb } from '../db/providerDb.js';
 import { requestToPromise, dbGet } from '../core/idb.js';
 import { log } from '../core/logger.js';
@@ -127,6 +128,10 @@ export function createEpgService({ active, providers, createWorker, runLocal = r
   }
 
   /** Runs the sync in a worker, or on the main thread when no worker can be created. */
+  // Held while the user moves around the app (setHeld, from main.js): the guide's writes and parsing wait, the screens go first.
+  const gate = createGate();
+  let currentWorker = null;
+
   function runJob(provider, force, custom, others = []) {
     return new Promise((resolve) => {
       let settled = false;
@@ -136,7 +141,7 @@ export function createEpgService({ active, providers, createWorker, runLocal = r
           resolve(outcome);
         }
       };
-      const local = () => runLocal({ provider, others, customUrl: custom, force, emit: (m) => m.event === 'done' && finish(m) }).then(finish);
+      const local = () => runLocal({ provider, others, customUrl: custom, force, gate: gate.wait, emit: (m) => m.event === 'done' && finish(m) }).then(finish);
       let worker = null;
       cancelJob = () => {
         if (worker) worker.terminate();
@@ -156,8 +161,11 @@ export function createEpgService({ active, providers, createWorker, runLocal = r
         const m = event.data || {};
         if (m.event === 'ready') {
           clearTimeout(timer);
+          currentWorker = worker;
           worker.postMessage({ op: 'start', provider, others, customUrl: custom, force });
+          if (gate.isPaused()) worker.postMessage({ op: 'pause' });
         } else if (m.event === 'done') {
+          currentWorker = null;
           worker.terminate();
           finish(m);
         }
@@ -171,6 +179,13 @@ export function createEpgService({ active, providers, createWorker, runLocal = r
   }
 
   return {
+    /** While held, a guide download waits between its steps (the user is moving around: the screens get the database and the CPU). */
+    setHeld(held) {
+      if (held === gate.isPaused()) return;
+      if (held) gate.pause();
+      else gate.resume();
+      if (currentWorker) currentWorker.postMessage({ op: held ? 'pause' : 'resume' });
+    },
     /** Called after every guide download that went well (the programme grid reads its programmes again). Returns the unsubscribe. */
     onUpdated(handler) {
       updated.add(handler);

@@ -5,11 +5,11 @@ import { createChannelSummary, EPG_CHANNELS_KEY } from './epgChannels.js';
 import { wrapApiUrl } from '../core/env.js';
 import { toAppError, AppError, ErrorCode } from '../core/errors.js';
 
-export const EPG_BATCH = 1000;
+export const EPG_BATCH = 500;
 // After each batch the guide waits this long: the rest of the app reads its databases in between (Chromium runs the IndexedDB work of an
 // origin in one queue: a guide written back to back kept the catalog, the logs and the keys waiting until it ended, the pages showing
 // their empty state).
-export const EPG_YIELD_MS = 40;
+export const EPG_YIELD_MS = 80;
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 export const EPG_TTL_MS = 24 * 3600 * 1000;
 const META_KEY = 'epg';
@@ -75,7 +75,7 @@ export async function readGuide(url, onText, { signal, fetchImpl = fetch } = {})
  * Several guides into one (`summary` shared, `finish: false` but for the last): their programmes are stored together, one per channel and
  * start (the store's key), so the same programme of two guides is kept once.
  */
-export async function syncEpg({ db, url, now = Date.now(), signal, emit = () => {}, fetchImpl, channels, summary: shared = null, finish = true }) {
+export async function syncEpg({ db, url, now = Date.now(), signal, emit = () => {}, fetchImpl, channels, summary: shared = null, finish = true, gate = () => Promise.resolve() }) {
   const wanted = channels || (await liveChannelIds(db));
   if (wanted.size === 0) {
     emit({ event: 'progress', phase: 'skipped' });
@@ -91,7 +91,8 @@ export async function syncEpg({ db, url, now = Date.now(), signal, emit = () => 
     buffer = [];
     written += batch.length;
     queued += 1;
-    writes = writes.then(() => dbPutMany(db, 'epg', batch)).then(() => pause(EPG_YIELD_MS)).then(() => {
+    // Each batch waits for the gate: while the user moves around the app (gate held by the page) the database is left to the screens.
+    writes = writes.then(() => gate()).then(() => dbPutMany(db, 'epg', batch)).then(() => pause(EPG_YIELD_MS)).then(() => {
       queued -= 1;
     });
     writes.catch(() => undefined); // a failed write is thrown where `writes` is awaited, not as an unhandled rejection meanwhile
@@ -110,6 +111,7 @@ export async function syncEpg({ db, url, now = Date.now(), signal, emit = () => 
   const t0 = Date.now();
   // At most one batch waits while the next is read: the download waits for the database instead of piling writes up.
   await readGuide(url, async (text) => {
+    await gate(); // parsing waits too: a big guide is a lot of work for a TV
     parser.push(text);
     if (queued > 1) await writes;
   }, { signal, fetchImpl });
@@ -179,7 +181,7 @@ async function finishEpg({ db, now, summary, channels }) {
 }
 
 /** `others`: the other active providers (catalogUnion.js): their guides join the main one's. */
-export async function runEpgForProvider({ provider, others = [], customUrl = '', force = false, signal, emit = () => {}, openDb = openProviderDb, fetchImpl, now = Date.now() }) {
+export async function runEpgForProvider({ provider, others = [], customUrl = '', force = false, signal, emit = () => {}, openDb = openProviderDb, fetchImpl, now = Date.now(), gate = () => Promise.resolve() }) {
   let db = null;
   let failure = null;
   let meta = null;
@@ -199,7 +201,7 @@ export async function runEpgForProvider({ provider, others = [], customUrl = '',
       let lastError = null;
       for (let i = 0; i < urls.length; i += 1) {
         try {
-          const got = await syncEpg({ db, url: wrapApiUrl(urls[i]), now, signal, emit, fetchImpl, channels, summary, finish: false });
+          const got = await syncEpg({ db, url: wrapApiUrl(urls[i]), now, signal, emit, fetchImpl, channels, summary, finish: false, gate });
           if (!got.skipped) read += 1;
           else {
             meta = got;

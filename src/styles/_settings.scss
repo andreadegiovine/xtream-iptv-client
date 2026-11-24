@@ -194,10 +194,22 @@
     flex: none;
   }
 
+  // As large as the entries above it, one short line each (never wrapped).
   .settings-version {
     margin-top: auto;
     padding: 24px 16px 8px;
-    font-size: 1.25rem;
-    line-height: 1.4;
+    font-size: 1.625rem;
+    line-height: 1.35;
+    color: $text-muted;
+
+    .settings-version-number {
+      font-weight: 700;
+    }
+
+    .settings-version-line {
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
   }
 }

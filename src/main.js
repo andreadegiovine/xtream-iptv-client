@@ -9,7 +9,7 @@ import { startTooltips } from './ui/tooltip.js';
 import { log } from './core/logger.js';
 import { APP_VERSION } from './core/env.js';
 import { onVersionChange } from './core/idb.js';
-import { providerHiddenSections } from './services/providerTypes.js';
+import { providerHiddenSections, providerNeedsLogin } from './services/providerTypes.js';
 import { visibleFavorites } from './services/favoriteEntries.js';
 import { slotsApi, takeFailedUpdate, skipVersion } from './services/slotUpdates.js';
 import { confirmTrial } from './app/trialStart.js';
@@ -358,6 +358,37 @@ async function boot() {
     hideProgramme: (p) => Boolean(p.rating) && outOfRange(p.rating, rangeOf(ctx.profile)),
   });
   ctx.epg = epg;
+  // A guide download makes way while the user moves around: every key (or pointer move) holds it for a moment and it goes on when the
+  // remote rests. Held for long (minutes of browsing), it gets a few seconds every so often, so that it still ends.
+  {
+    const IDLE_MS = 1500;
+    const MAX_HOLD_MS = 10000;
+    const BREAK_MS = 3000;
+    let release = null;
+    let heldSince = 0;
+    let breakUntil = 0;
+    const activity = () => {
+      const t = Date.now();
+      if (t < breakUntil) return;
+      if (!heldSince) heldSince = t;
+      if (t - heldSince > MAX_HOLD_MS) {
+        heldSince = 0;
+        breakUntil = t + BREAK_MS;
+        clearTimeout(release);
+        epg.setHeld(false);
+        return;
+      }
+      epg.setHeld(true);
+      clearTimeout(release);
+      release = setTimeout(() => {
+        heldSince = 0;
+        epg.setHeld(false);
+      }, IDLE_MS);
+    };
+    document.addEventListener('keydown', activity, true);
+    document.addEventListener('wheel', activity, { capture: true, passive: true });
+    document.addEventListener('pointerdown', activity, true);
+  }
   // The guide is the last start-up task (after the catalog, metadata, Trakt and the search index), at most once a day: `maybeSync`
   // downloads only when the last download is a day old. While the app stays open it is checked again every hour.
   // The task only starts the download (in its worker): tasks added meanwhile (Trakt every 15 minutes, genres) do not wait for it.
@@ -785,8 +816,15 @@ async function boot() {
       else openedAlert(id, action);
     },
   });
-  if (hasProvider) await ctx.refreshAdult();
-  if (hasProvider) {
+  // Providers that came from a sync account without their connection data (never synced): typed on this TV before anything starts.
+  const toComplete = (await providers.list()).filter(providerNeedsLogin).map((p) => p.id);
+  if (toComplete.length) {
+    log.info(`Sync: ${toComplete.length} providers need their server, username and password on this TV`);
+    router.reset('providerSetup', { firstRun: true, complete: toComplete });
+  } else if (hasProvider) await ctx.refreshAdult();
+  if (toComplete.length) {
+    // Nothing else starts until they are there (the page starts the app again once the last one is saved).
+  } else if (hasProvider) {
     router.reset('home', { section: 'home', focusTopbar: true }); // at start the focus is on Home of the bar
     showSubscriptionNotice(notices, hasProvider);
     // Stale-while-revalidate: the cached catalog is usable at once, lists older than 12 h refresh in background.

@@ -364,6 +364,20 @@ export async function hmac(key, data) {
   return hmacSync(key, data);
 }
 
+/** An HMAC-SHA-256 signer for one key: its key imported once (thousands of ids are signed with the same key). */
+export async function hmacSigner(key) {
+  const s = subtle();
+  if (s) {
+    try {
+      const k = await s.importKey('raw', key, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+      return async (data) => new Uint8Array(await s.sign('HMAC', k, data));
+    } catch {
+      /* the plain one */
+    }
+  }
+  return async (data) => hmacSync(key, data);
+}
+
 export async function pbkdf2(password, salt, iterations, length) {
   const s = subtle();
   if (s) {

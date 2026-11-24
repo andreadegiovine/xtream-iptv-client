@@ -49,7 +49,23 @@
     .page {
       height: 100%;
     }
+
+    // Still: while the app gets ready a TV has no time for dozens of moving bands (they slowed the start down).
+    *,
+    *::before,
+    *::after {
+      animation: none !important;
+    }
   }
 }
 
 // Recent searches: right under the search field, text only, aligned to the left.
+
+// The placeholder bar of the start (ui/startSkeleton.js): still too.
+.topbar.start-bar {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+  }
+}

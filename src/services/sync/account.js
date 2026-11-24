@@ -1,4 +1,4 @@
-import { utf8, fromUtf8, toHex, fromHex, toBase64, fromBase64, concat, randomBytes, sha256, hmac, pbkdf2, aesGcmEncrypt, aesGcmDecrypt } from '../../core/crypto.js';
+import { utf8, fromUtf8, toHex, fromHex, toBase64, fromBase64, concat, randomBytes, sha256, hmac, hmacSigner, pbkdf2, aesGcmEncrypt, aesGcmDecrypt } from '../../core/crypto.js';
 import { compressText, decompressText } from '../../core/lzw.js';
 import { canonical } from './items.js';
 
@@ -23,9 +23,15 @@ export async function deriveAccount(username, password) {
   return { account, enc: await sub('enc'), mac: await sub('mac'), auth: await sub('auth') };
 }
 
+const signers = new Map(); // mac key (hex) → its signer, imported once
 /** The id of a kind on the server: HMAC with the account's `mac` key (32 hex characters). */
 export async function itemId(keys, kind) {
-  return toHex(await hmac(fromHex(keys.mac), utf8(kind))).slice(0, 32);
+  let sign = signers.get(keys.mac);
+  if (!sign) {
+    sign = await hmacSigner(fromHex(keys.mac));
+    signers.set(keys.mac, sign);
+  }
+  return toHex(await sign(utf8(kind))).slice(0, 32);
 }
 
 /** A value sealed for the server: base64 of IV + AES-GCM. The text is compressed first when that makes it shorter. */

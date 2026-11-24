@@ -59,6 +59,14 @@ export async function runTitleInfoForProvider({ provider, members = [], search =
       }
     }
     const previous = (await dbGet(db, 'meta', TITLE_INFO_KEY)) || { key: TITLE_INFO_KEY, byType: {} };
+    // `total`: every title asked and found so far (a run asks only the titles still unknown: its own counts are 0 once all are done, and
+    // Settings showed "0"); "forget" starts it again.
+    Object.keys(byType).forEach((type) => {
+      const before = previous.byType[type] || {};
+      const base = mode === 'forget' ? {} : before.total || { asked: before.asked || 0, found: before.found || 0, searched: before.searched || 0, matched: before.matched || 0 };
+      const run = byType[type];
+      byType[type].total = mode === 'forget' ? { asked: 0, found: 0, searched: 0, matched: 0 } : { asked: (base.asked || 0) + run.asked, found: (base.found || 0) + run.found, searched: (base.searched || 0) + run.searched, matched: (base.matched || 0) + run.matched };
+    });
     await dbPut(db, 'meta', { key: TITLE_INFO_KEY, byType: { ...previous.byType, ...byType } });
   } catch (err) {
     const error = toAppError(err);

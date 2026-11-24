@@ -1,7 +1,8 @@
-import { dbGetAll, dbPut, dbDelete, deleteDb } from '../../core/idb.js';
+import { dbGet, dbGetAll, dbPut, dbDelete, deleteDb } from '../../core/idb.js';
 import { kvGet, kvSet, kvDelete } from '../../db/kv.js';
 import { deleteProviderDb } from '../../db/providerDb.js';
 import { PROFILES_KEY, MAIN_ID, profileDbName } from '../profiles.js';
+import { PROVIDER_ACCESS_FIELDS } from '../providerTypes.js';
 
 /**
  * What the device sync carries, as "kinds": one per thing that changes on its own, so two TVs changing different things never overwrite
@@ -9,12 +10,14 @@ import { PROFILES_KEY, MAIN_ID, profileDbName } from '../profiles.js';
  *
  * Shared by the whole app (app database):
  *   g:settings (without the settings of the device: DEVICE_SETTINGS), g:apiKeys, g:profiles (without their PINs), g:adultMarks,
- *   g:activeProviderId, g:alsoActiveProviderIds, prov:<id> (a provider)
+ *   g:activeProviderId, g:alsoActiveProviderIds, prov:<id> (a provider: its name and kind only — never its server, username, password
+ *   or playlist address, typed again on every TV; its categories shown / hidden are in g:settings)
  * Of each profile (<pid> "main": the app database; the others their own database):
  *   <pid>|w:<key> (watch state of a title / episode), <pid>|fav:<id> / pin:<id> / col:<id> (a favourite, a pinned entry, a collection),
  *   <pid>|kv:trakt.token, <pid>|kv:trakt.account, <pid>|kv:subAlign:... (subtitle alignments), <pid>|usage:<device> (minutes a kids
  *   profile watched today on that TV: the TVs add them up)
- * Never: the parental PIN and the profiles' PINs, the settings of the device, scheduled viewing, catalogs, guides, caches, queues.
+ * Never: the providers' connection data, the parental PIN and the profiles' PINs, the settings of the device, scheduled viewing,
+ * catalogs, guides, caches, queues.
  */
 
 export const DEVICE_SETTINGS = ['textSize', 'screensaver', 'bufferSeconds'];
@@ -77,6 +80,11 @@ const stripSettings = (settings) => {
   return out;
 };
 const stripPins = (profiles) => (profiles || []).map((p) => ({ ...p, pin: null }));
+const stripAccess = (provider) => {
+  const out = { ...provider };
+  PROVIDER_ACCESS_FIELDS.forEach((key) => delete out[key]);
+  return out;
+};
 
 /** The profiles of the app: their ids (always "main", with the others when there are profiles). */
 export async function profileIds(db) {
@@ -100,7 +108,7 @@ export async function collectLocal({ db, openProfileDb, device }) {
     const value = await kvGet(db, key, undefined);
     if (value !== undefined && value !== null) out.set(`g:${key}`, value);
   }
-  (await dbGetAll(db, 'providers')).forEach((p) => out.set(`prov:${p.id}`, p));
+  (await dbGetAll(db, 'providers')).forEach((p) => out.set(`prov:${p.id}`, stripAccess(p)));
 
   for (const pid of await profileIds(db)) {
     const pdb = pid === MAIN_ID ? db : await openProfileDb(pid);
@@ -166,7 +174,15 @@ export async function applyChanges({ db, openProfileDb, device, changes, removeP
       else await kvSet(db, key, value);
     } else {
       const id = kind.slice(5);
-      if (value) await dbPut(db, 'providers', { ...value, id });
+      if (value) {
+        // The connection data stays this TV's own (a provider new here has none: it is asked before the app starts, main.js).
+        const local = (await dbGet(db, 'providers', id)) || {};
+        const access = {};
+        PROVIDER_ACCESS_FIELDS.forEach((key) => {
+          if (local[key] !== undefined) access[key] = local[key];
+        });
+        await dbPut(db, 'providers', { ...stripAccess(value), ...access, id });
+      }
       else {
         await dbDelete(db, 'providers', id);
         await removeProviderDb(id).catch(() => undefined);

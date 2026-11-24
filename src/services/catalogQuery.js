@@ -229,6 +229,17 @@ export async function genreCounts(db, type) {
   return new Map(Array.from(sets, ([key, set]) => [key, set.size]));
 }
 
+/** How many movies and series have at least one genre (the provider's or TMDB's): the Genres row of Settings › TMDB. */
+export async function countTitlesWithGenres(db) {
+  const titles = new Set();
+  for (const type of ['movie', 'series']) {
+    const range = IDBKeyRange.bound([type], [type, []]);
+    const lists = await Promise.all(GENRE_STORES.map((name) => requestToPromise(db.transaction(name, 'readonly').objectStore(name).index('byGenreAdded').getAll(range))));
+    lists.forEach((rows) => rows.forEach((row) => row.entryKey && titles.add(row.entryKey)));
+  }
+  return titles.size;
+}
+
 /** How many entries a browse view holds (for "page X of Y"): all of a type, or one category. */
 export function countEntries(db, { type, categoryId = null }) {
   const useCategory = categoryId !== null && categoryId !== undefined;

@@ -108,10 +108,10 @@ tracks (the one in your language picked by itself), resume where you left off an
 
 *Impact 8/10*
 
-Two or more TVs with the same account stay the same: providers, settings, profiles (with the kids limits and their minutes added up),
+Two or more TVs with the same account stay the same: provider names and their categories, settings, profiles (with the kids limits and their minutes added up),
 keys, Trakt account, watch state, favourites, collections, pinned entries and subtitle alignments. Changes are sent a minute after the
 start, every 10 minutes and when the app goes to the background; the other TVs take them at their next start, or at once with *Sync now*.
-Not synced: the parental PINs, scheduled viewing, the settings of each TV (text size, screensaver, buffer). A second TV is ready in a
+Never synced: the providers' server, username and password (a new TV asks for them before it starts), the parental PINs, scheduled viewing, the settings of each TV (text size, screensaver, buffer). A second TV is ready in a
 minute, and the data survives a reset.
 
 - **Encryption:** everything is encrypted on the TV before it leaves; the password never leaves it. PBKDF2-SHA-256 (100,000 iterations)

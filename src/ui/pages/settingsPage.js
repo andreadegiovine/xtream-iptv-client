@@ -514,23 +514,32 @@ export function createSettingsPage(ctx) {
       window.location.reload();
     },
   });
-  // Under the title of the overview, small: the version running; the packages that update themselves add when version.json last answered.
-  const versionText = () => {
+  // At the bottom of the sidebar, one short line each (the sidebar is narrow: a long line wrapped): the version running (with the
+  // package's when it is another: an update downloaded by the app runs in an older package, which the system lists), and for the packages
+  // that update themselves when version.json last answered.
+  const versionLines = () => {
     const versions = runningVersions();
     const checked = lastCheck();
     const version = versions.bundle || APP_VERSION;
     const autoupdate = typeof __AUTOUPDATE__ !== 'undefined' && __AUTOUPDATE__;
-    return !autoupdate ? `v${version}` : checked ? t('settings.versionLine', { version, time: formatDateTime(checked, i18n.getLocale()) }) : t('settings.versionNever', { version });
+    const lines = [`v${version}`];
+    if (versions.shell && versions.bundle && versions.shell !== versions.bundle) lines.push(t('settings.packageVersion', { version: versions.shell }));
+    if (autoupdate) lines.push(t('settings.lastCheck'), checked ? formatDateTime(checked, i18n.getLocale()) : t('common.never'));
+    return lines;
   };
-  // At the bottom of the sidebar: the version running and, for the packages that update themselves, when version.json last answered.
-  const versionHint = createHint({ text: versionText(), className: 'settings-version', muted: false });
+  const versionHint = h('div', { class: 'settings-version' });
+  const renderVersion = () => {
+    while (versionHint.firstChild) versionHint.removeChild(versionHint.firstChild);
+    versionLines().forEach((line, i) => versionHint.appendChild(h('div', { class: i === 0 ? 'settings-version-number' : 'settings-version-line', text: line })));
+  };
+  renderVersion();
   // Advanced › "Check for updates" (only the packages that update themselves): looks now, downloads, asks to restart.
   const checkUpdatesRow = {
     el: createListRow({ label: t('update.check') }).el,
     refresh: async () => undefined,
     async activate() {
       await ctx.updates.check();
-      versionHint.textContent = versionText();
+      renderVersion();
     },
   };
   // Preferences in sections, in the order of the page. `list`: rows of the usual list; `fields`: text fields (with their reset buttons).

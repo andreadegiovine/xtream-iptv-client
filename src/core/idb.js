@@ -70,6 +70,17 @@ export function deleteDb(name) {
   });
 }
 
+/**
+ * How many writes went to the stores the device sync carries (kv, watch, providers) since the start: its background round reads every
+ * synced thing only when this moved (services/sync/engine.js).
+ */
+const SYNCED = { kv: true, watch: true, providers: true };
+let syncedWrites = 0;
+export const syncedWriteCount = () => syncedWrites;
+const noteWrite = (store) => {
+  if (SYNCED[store]) syncedWrites += 1;
+};
+
 export function dbGet(db, store, key) {
   return requestToPromise(db.transaction(store).objectStore(store).get(key));
 }
@@ -79,6 +90,7 @@ export function dbGetAll(db, store) {
 }
 
 export function dbPut(db, store, value) {
+  noteWrite(store);
   const tx = db.transaction(store, 'readwrite');
   tx.objectStore(store).put(value);
   return transactionDone(tx);
@@ -89,6 +101,7 @@ export function dbPut(db, store, value) {
  * `onBatch(done, total)` is awaited after each batch (progress, pausing, cancellation).
  */
 export async function dbPutMany(db, store, values, batchSize = 2000, onBatch) {
+  noteWrite(store);
   for (let i = 0; i < values.length; i += batchSize) {
     const tx = db.transaction(store, 'readwrite');
     const os = tx.objectStore(store);
@@ -109,6 +122,7 @@ export function dbGetAllRange(db, store, range) {
 }
 
 export async function dbDeleteMany(db, store, keys, batchSize = 2000) {
+  noteWrite(store);
   for (let i = 0; i < keys.length; i += batchSize) {
     const tx = db.transaction(store, 'readwrite');
     const os = tx.objectStore(store);
@@ -118,12 +132,14 @@ export async function dbDeleteMany(db, store, keys, batchSize = 2000) {
 }
 
 export function dbDelete(db, store, key) {
+  noteWrite(store);
   const tx = db.transaction(store, 'readwrite');
   tx.objectStore(store).delete(key);
   return transactionDone(tx);
 }
 
 export function dbClear(db, store) {
+  noteWrite(store);
   const tx = db.transaction(store, 'readwrite');
   tx.objectStore(store).clear();
   return transactionDone(tx);
