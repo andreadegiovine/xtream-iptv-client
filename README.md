@@ -57,9 +57,9 @@ Every release on the [Releases](../../releases) page has one package per platfor
 | Amazon Fire TV (Fire OS models) | `_firetv.apk` | [`platforms/android`](platforms/android/README.md) |
 | Windows, macOS, Linux | `_windows-x64.exe`, `_macos-x64.dmg`, `_macos-arm64.dmg`, `_linux-x64.AppImage`, `_linux-x64.deb` | [`platforms/desktop`](platforms/desktop/README.md) |
 
-Every package also comes as **`_trial`** (e.g. `_tizen_trial.wgt`, `_androidtv_trial.apk`): a 30-day free trial, then the device is
-activated with a one-time payment through a QR code (Settings › Activation shows the days left and the device ID; see
-[docs/LICENSING.md](docs/LICENSING.md)).
+The base package of every platform also comes as **`_trial`** (e.g. `_tizen_trial.wgt`, `_androidtv_trial.apk`): the package of the
+official stores, with a 30-day free trial, then the device is activated with a one-time payment through a QR code (Settings › Activation
+shows the days left and the device ID; see [docs/LICENSING.md](docs/LICENSING.md)).
 
 Tizen is developed and tried on a 2021 QLED and the Windows app is tried as well; webOS, Android TV / Fire TV, macOS and Linux are
 still being tested on real devices.

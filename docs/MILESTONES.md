@@ -1298,3 +1298,7 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
 - **Release workflow:** the `_trial` loops, the `LICENSE_URL` repository variable.
 - **Tests:** device key, trial / activation / offline grace / browser id (licensing), the worker (trial started once, PayPal URL, IPN verified / refused / refunded, CORS).
 - **Browser check** (desktop trial build, a fake licence service): Settings › Activation with "12 days and 4 hours left" and the device ID; trial ended → lock screen with the QR code, keys kept on it; paid → unlocked by itself; next start not asked again. Not verified on the TV (nor with PayPal / Cloudflare).
+
+### Patch 220 — `_trial` only on the base packages (the store packages)
+- The `_trial` packages are only the base package of each platform (`_tizen_trial.wgt`, `_webos_trial.ipk`, `_androidtv_trial.apk`, `_firetv_trial.apk`, `_<system>_trial` desktop packages): the ones for the official stores, updated by the stores. No `_youtube_trial`, no `_autoupdate_trial`, so no `*_trial` update channels on GitHub Pages (release workflow, docs/LICENSING.md, README).
+- Not verified on the TV.

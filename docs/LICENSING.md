@@ -1,8 +1,9 @@
 # Trial builds and activation
 
-The `_trial` packages (every existing variant has one: `_tizen_trial.wgt`, `_tizen_youtube_autoupdate_trial.wgt`, `_webos_trial.ipk`,
-`_androidtv_trial.apk`, `_windows-x64_trial.exe`…) work for **30 days**, then stop and show a QR code: the device is activated with a
-**one-time payment** and stays activated for life. The other packages are unchanged.
+The `_trial` packages are the base package of every platform with the trial (`_tizen_trial.wgt`, `_webos_trial.ipk`,
+`_androidtv_trial.apk`, `_firetv_trial.apk`, `_windows-x64_trial.exe`, `_macos-*_trial.dmg`, `_linux-x64_trial.*`): the packages for the
+official stores, which update them (no online updates, no YouTube service). They work for **30 days**, then stop and show a QR code: the
+device is activated with a **one-time payment** and stays activated for life. The other packages are unchanged.
 
 ## How it works
 
@@ -54,7 +55,7 @@ TV (trial build)                 Cloudflare worker                    GitHub (pr
    (`notify_url`); check in the PayPal profile that Instant Payment Notifications are not disabled. Test first with `PAYPAL_SANDBOX =
    "true"` and sandbox accounts, then set it to `"false"` and deploy again.
 4. **Builds.** In the player repository: *Settings › Secrets and variables › Actions › Variables*, add `LICENSE_URL` with the worker's
-   address. The release workflow builds the `_trial` packages with it (and the `*_trial` update channels).
+   address. The release workflow builds the `_trial` packages with it.
 
 ## Notes
 

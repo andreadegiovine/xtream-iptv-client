@@ -12,9 +12,9 @@ name: Release
 #                                       desktop app (Electron), not signed; each also as _autoupdate (e.g. _windows-x64_autoupdate.exe) (+ .sha256)
 #   - xtream-iptv-<version>_androidtv.apk, _firetv.apk; _androidtv_autoupdate.apk, _firetv_autoupdate.apk update themselves
 #                                       Android TV / Fire TV (Capacitor + ExoPlayer)  (+ .sha256)
-#   - every package above also as _trial (e.g. _tizen_trial.wgt, _tizen_youtube_autoupdate_trial.wgt, _webos_trial.ipk,
-#     _androidtv_trial.apk, _windows-x64_trial.exe): the 30-day trial, then the device is activated with a one-time payment
-#     (docs/LICENSING.md); its _autoupdate packages follow the online build of their own trial variant
+#   - the base package of every platform also as _trial (_tizen_trial.wgt, _webos_trial.ipk, _androidtv_trial.apk, _firetv_trial.apk,
+#     _windows-x64_trial.exe…): the packages for the official stores, with the 30-day trial and then a one-time activation of the
+#     device (docs/LICENSING.md); no online updates (the store updates them), no YouTube service
 #
 # Secrets: TIZEN_CERT_PASSWORD (password of platforms/tizen/tizencert.p12); ANDROID_KEYSTORE_PASSWORD (and optionally ANDROID_KEY_ALIAS,
 # ANDROID_KEY_PASSWORD) for platforms/android/release.keystore — without them the APKs are signed with a debug key.
@@ -77,13 +77,13 @@ jobs:
       - name: Stamp version
         run: npm version "$VERSION" --no-git-tag-version --allow-same-version
 
-      # Eight widgets: _tizen (store: no trailer service, no online updates), _tizen_youtube (trailers in the app), the same two
-      # with _autoupdate (they update themselves from the online build of the same variant), and all four again as _trial.
+      # Five widgets: _tizen (store: no trailer service, no online updates), _tizen_youtube (trailers in the app), the same two
+      # with _autoupdate (they update themselves from the online build of the same variant), and _trial (the store package with the trial).
       - name: Build and sign the widgets
         env:
           CERT_PASSWORD: ${{ secrets.TIZEN_CERT_PASSWORD }}
         run: |
-          for variant in "" "_youtube" "_autoupdate" "_youtube_autoupdate" "_trial" "_youtube_trial" "_autoupdate_trial" "_youtube_autoupdate_trial"; do
+          for variant in "" "_youtube" "_autoupdate" "_youtube_autoupdate" "_trial"; do
             flags=""
             case "$variant" in *youtube*) flags="$flags --env youtube" ;; esac
             case "$variant" in *autoupdate*) flags="$flags --env autoupdate" ;; esac
@@ -119,10 +119,10 @@ jobs:
       - name: Stamp version
         run: npm version "$VERSION" --no-git-tag-version --allow-same-version
 
-      # Four packages: _webos (store: no online updates), _webos_autoupdate (updates itself from the online build), and both as _trial.
+      # Three packages: _webos (no online updates), _webos_autoupdate (updates itself from the online build), _webos_trial (the store package with the trial).
       - name: Build and package the apps
         run: |
-          for variant in "" "_autoupdate" "_trial" "_autoupdate_trial"; do
+          for variant in "" "_autoupdate" "_trial"; do
             flags=""
             case "$variant" in *autoupdate*) flags="--env autoupdate" ;; esac
             case "$variant" in *trial*) flags="$flags --env trial" ;; esac
@@ -171,11 +171,11 @@ jobs:
       - name: Stamp version
         run: npm version "$VERSION" --no-git-tag-version --allow-same-version
 
-      # Four packages per system, each from its own production build -> dist/: the plain one, _autoupdate (it updates its web code itself
-      # from the online "desktop" build; a new Electron still needs a new package) and both as _trial.
+      # Three packages per system, each from its own production build -> dist/: the plain one, _autoupdate (it updates its web code itself
+      # from the online "desktop" build; a new Electron still needs a new package) and _trial (the store package with the trial).
       - name: Package the app
         run: |
-          for variant in "" "_autoupdate" "_trial" "_autoupdate_trial"; do
+          for variant in "" "_autoupdate" "_trial"; do
             flags="--env platform=desktop"
             case "$variant" in *autoupdate*) flags="$flags --env autoupdate" ;; esac
             case "$variant" in *trial*) flags="$flags --env trial" ;; esac
@@ -215,16 +215,16 @@ jobs:
       - name: Stamp version
         run: npm version "$VERSION" --no-git-tag-version --allow-same-version
 
-      # Four sets of APKs, each from its own production build -> dist/ (with the launcher icons and the banner in dist/android-res/):
+      # Three sets of APKs, each from its own production build -> dist/ (with the launcher icons and the banner in dist/android-res/):
       # _androidtv / _firetv (no online updates, for the stores), _androidtv_autoupdate / _firetv_autoupdate (they update their web
-      # code themselves from the online "android" build; native changes still need a new APK), and both as _trial.
+      # code themselves from the online "android" build; native changes still need a new APK), and _trial (the store packages with the trial).
       - name: Build the APKs
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          for variant in "" "_autoupdate" "_trial" "_autoupdate_trial"; do
+          for variant in "" "_autoupdate" "_trial"; do
             flags="--env platform=android"
             case "$variant" in *autoupdate*) flags="$flags --env autoupdate" ;; esac
             case "$variant" in *trial*) flags="$flags --env trial" ;; esac
@@ -248,7 +248,6 @@ jobs:
     env:
       VERSION: ${{ needs.verify.outputs.version }}
       SYNC_TOKEN: ${{ secrets.SYNC_TOKEN }} # device sync (src/services/sync/config.js, docs/SYNC_REPO.md); empty: no sync
-      LICENSE_URL: ${{ vars.LICENSE_URL }} # the licence worker of the _trial builds (docs/LICENSING.md)
     steps:
       - uses: actions/checkout@v4
 
@@ -270,13 +269,6 @@ jobs:
           npx webpack --mode production --env platform=webos --env autoupdate --output-path builds/webos
           npx webpack --mode production --env platform=android --env autoupdate --output-path builds/android
           npx webpack --mode production --env platform=desktop --env autoupdate --output-path builds/desktop
-          # The _trial packages follow builds of their own (with the trial): never a build without it.
-          for channel in tizen tizen_youtube webos android desktop; do
-            platform="${channel%%_*}"
-            flags="--env platform=$platform --env autoupdate --env trial"
-            case "$channel" in *youtube*) flags="$flags --env youtube" ;; esac
-            npx webpack --mode production $flags --output-path "builds/${channel}_trial"
-          done
 
       - uses: actions/checkout@v4
         with:
@@ -285,8 +277,7 @@ jobs:
 
       - name: Publish the builds and version.json
         run: |
-          node scripts/publish-updates.js pages "$VERSION" tizen=builds/tizen tizen_youtube=builds/tizen_youtube webos=builds/webos android=builds/android desktop=builds/desktop \
-            tizen_trial=builds/tizen_trial tizen_youtube_trial=builds/tizen_youtube_trial webos_trial=builds/webos_trial android_trial=builds/android_trial desktop_trial=builds/desktop_trial
+          node scripts/publish-updates.js pages "$VERSION" tizen=builds/tizen tizen_youtube=builds/tizen_youtube webos=builds/webos android=builds/android desktop=builds/desktop
           cd pages
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
