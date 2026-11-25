@@ -123,6 +123,37 @@ ipcMain.handle('window:fullscreen', (event, toggle) => {
   return win.isFullScreen();
 });
 
+/**
+ * The computer's id (preload.js; the trial builds' licence): the system's own, which stays the same when the app is reinstalled or its
+ * files are deleted — Windows MachineGuid, macOS IOPlatformUUID, Linux /etc/machine-id. null when it cannot be read.
+ */
+function machineId() {
+  const { execFileSync } = require('child_process');
+  try {
+    if (process.platform === 'win32') {
+      const out = execFileSync('reg', ['query', 'HKLM\\SOFTWARE\\Microsoft\\Cryptography', '/v', 'MachineGuid'], { encoding: 'utf8', windowsHide: true });
+      const match = /MachineGuid\s+REG_SZ\s+([\w-]+)/i.exec(out);
+      return match ? match[1].toLowerCase() : null;
+    }
+    if (process.platform === 'darwin') {
+      const out = execFileSync('ioreg', ['-rd1', '-c', 'IOPlatformExpertDevice'], { encoding: 'utf8' });
+      const match = /"IOPlatformUUID"\s*=\s*"([^"]+)"/.exec(out);
+      return match ? match[1].toLowerCase() : null;
+    }
+    for (const file of ['/etc/machine-id', '/var/lib/dbus/machine-id']) {
+      if (fs.existsSync(file)) return fs.readFileSync(file, 'utf8').trim() || null;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+let machine;
+ipcMain.handle('device:id', () => {
+  if (machine === undefined) machine = machineId();
+  return machine;
+});
+
 // A scheduled viewing notification was clicked (preload.js): the window comes to the front.
 ipcMain.handle('window:show', (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);

@@ -8,7 +8,9 @@ import { pickProfile } from './ui/profilePicker.js';
 import { startTooltips } from './ui/tooltip.js';
 import { log } from './core/logger.js';
 import { APP_VERSION } from './core/env.js';
-import { onVersionChange } from './core/idb.js';
+import { onVersionChange, dbGet, dbPut } from './core/idb.js';
+import { createLicensing, LICENSE_KV } from './services/licensing.js';
+import { createLicenseLock } from './ui/license/licenseLock.js';
 import { providerHiddenSections, providerNeedsLogin } from './services/providerTypes.js';
 import { visibleFavorites } from './services/favoriteEntries.js';
 import { slotsApi, takeFailedUpdate, skipVersion } from './services/slotUpdates.js';
@@ -203,6 +205,15 @@ async function boot() {
     enrich: null,
     meta: null,
     deviceSync,
+    // Trial builds only: the 30-day trial and the activation of this device (null in the other builds).
+    licensing: __TRIAL__
+      ? createLicensing({
+          store: { get: () => dbGet(db, 'kv', LICENSE_KV).then((row) => (row ? row.value : null)), set: (value) => dbPut(db, 'kv', { key: LICENSE_KV, value }) },
+          deviceId: () => platform.deviceId(),
+          fallbackStorage: typeof localStorage !== 'undefined' ? localStorage : null,
+          url: __LICENSE_URL__,
+        })
+      : null,
   };
   ctx.favorites = createFavoritesService({ db: pdb });
   ctx.collections = createCollectionsService({ db: pdb });
@@ -791,7 +802,20 @@ async function boot() {
 
   const input = new InputService(document, { holdsEnter: () => Boolean(focus.active && focus.active.onLongActivate) });
   input.registerPlatformKeys();
+  // Trial builds: the trial checked at every start until the device is activated (then saved, never asked again); once it has ended,
+  // the lock screen with the payment QR code takes the screen and every key.
+  const lock = ctx.licensing
+    ? createLicenseLock({
+        licensing: ctx.licensing,
+        exit: () => platform.exit(),
+        onUnlock: () => notices.success(t('license.activated'), { key: 'license' }),
+      })
+    : null;
   const handleAction = (action) => {
+    if (lock && lock.isShown()) {
+      lock.handle(action);
+      return;
+    }
     if (action === Action.BACK) {
       // An open dialog or search closes first; then the page may use Back for itself (a grid that is not the main one, the player's controls).
       // The search open: from its results (or recent searches) Back goes to the field first; from the field it closes the search.
@@ -816,6 +840,23 @@ async function boot() {
   };
   input.onAction(handleAction);
   input.start();
+  if (lock) {
+    document.body.appendChild(lock.el);
+    ctx.licensing.onChange((status) => {
+      if (status.state !== 'expired') {
+        lock.hide();
+        return;
+      }
+      if (router.current && router.current.name === 'player') router.back(); // nothing plays behind it
+      lock.show(status).catch(() => undefined);
+    });
+    ctx.licensing.check().catch((err) => log.warn('Licence check failed', err && err.message));
+    // The countdown runs out while the app is open; never checked yet (no network at the start): asked again.
+    setInterval(() => {
+      const status = ctx.licensing.status();
+      (status && status.state === 'pending' ? ctx.licensing.check() : ctx.licensing.refresh()).catch(() => undefined);
+    }, 60000);
+  }
   ctx.back = () => handleAction(Action.BACK); // a page's own Back button for the pointer (the player's)
   // Mouse, touch, Magic Remote: the same focus as the keys (the element under the pointer), a click is OK, Back from a mouse button or
   // a click outside a dialog.

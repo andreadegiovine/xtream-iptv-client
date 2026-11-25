@@ -19,6 +19,8 @@
  *   display(env)              Promise of the panel size { width, height } or null
  *   memory(env)               device RAM { used, total } (bytes) or null
  *   networkType(env)          Promise of the connection type ('WIFI', 'ETHERNET', 'NONE'...) or null
+ *   deviceId()                Promise of an id of the device that stays the same across reinstalls (the trial builds' licence), or
+ *                             null where there is none (a browser)
  *   alerts                    the system's alerts of scheduled viewing (an object, or null where there are none: webOS, a browser),
  *                             used by src/services/scheduleAlerts.js:
  *                               whileHidden   true: set only while the app is hidden (the system shows / launches them)
@@ -42,6 +44,7 @@ export const PLATFORM_API = Object.freeze([
   'display',
   'memory',
   'networkType',
+  'deviceId',
   'alerts',
 ]);
 
@@ -82,6 +85,7 @@ export function withDefaults(adapter, { createDefaultEngine } = {}) {
     display: async () => null,
     memory: () => null,
     networkType: async () => null,
+    deviceId: async () => null,
     alerts: null,
   };
   const out = { ...base };

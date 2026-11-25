@@ -46,6 +46,14 @@ public class TvHostPlugin extends Plugin {
         }
     }
 
+    /** ANDROID_ID: the id of the device for this app's signing key, kept across reinstalls (the trial builds' licence). */
+    @PluginMethod
+    public void deviceId(PluginCall call) {
+        JSObject out = new JSObject();
+        out.put("id", Settings.Secure.getString(getContext().getContentResolver(), Settings.Secure.ANDROID_ID));
+        call.resolve(out);
+    }
+
     /** Flavor (androidtv / firetv), model, Android version, screen in pixels and memory of the device. */
     @PluginMethod
     public void info(PluginCall call) {

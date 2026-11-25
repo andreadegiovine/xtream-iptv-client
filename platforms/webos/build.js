@@ -9,7 +9,16 @@ module.exports = {
     { file: 'icon.png', size: 80 },
     { file: 'largeIcon.png', size: 130 },
   ],
-  copy: ({ version }) => [
-    { from: here('appinfo.json'), to: 'appinfo.json', transform: (content) => content.toString().replace(/__VERSION__/g, version) },
+  // The trial builds read the TV's unique id (the licence): their appinfo.json asks for it.
+  copy: ({ version, trial }) => [
+    {
+      from: here('appinfo.json'),
+      to: 'appinfo.json',
+      transform: (content) => {
+        const info = JSON.parse(content.toString().replace(/__VERSION__/g, version));
+        if (trial) info.requiredACG = (info.requiredACG || []).concat(['deviceid.query']);
+        return `${JSON.stringify(info, null, 2)}\n`;
+      },
+    },
   ],
 };

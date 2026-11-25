@@ -1,0 +1,14 @@
+# Cloudflare worker of the trial licences (docs/LICENSING.md). Deploy: npx wrangler deploy (from this folder).
+# The token is a secret: npx wrangler secret put GITHUB_TOKEN
+name = "xtream-iptv-licensing"
+main = "src/index.js"
+compatibility_date = "2026-11-01"
+
+[vars]
+GITHUB_REPO = "OWNER/xtream-iptv-licenses"
+PAYPAL_EMAIL = "payments@example.com"
+PRICE = "9.99"
+CURRENCY = "EUR"
+ITEM_NAME = "Xtream IPTV - lifetime activation"
+TRIAL_DAYS = "30"
+PAYPAL_SANDBOX = "true"

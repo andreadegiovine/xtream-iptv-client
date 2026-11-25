@@ -30,8 +30,10 @@ module.exports = (env = {}, argv = {}) => {
   const flag = (name) => Boolean(env[name] && env[name] !== 'false' && env[name] !== '0');
   const youtube = flag('youtube');
   const autoupdate = flag('autoupdate');
-  const channel = `${target.name}${youtube ? '_youtube' : ''}`; // the online build an "_autoupdate" package follows (same variant)
-  const buildOptions = { isProd, version: pkg.version, youtube, autoupdate };
+  // `--env trial`: the "_trial" packages, with the 30-day trial and the activation (src/services/licensing.js, docs/LICENSING.md).
+  const trial = flag('trial');
+  const channel = `${target.name}${youtube ? '_youtube' : ''}${trial ? '_trial' : ''}`; // the online build an "_autoupdate" package follows (same variant)
+  const buildOptions = { isProd, version: pkg.version, youtube, autoupdate, trial };
 
   return {
     mode: isProd ? 'production' : 'development',
@@ -71,6 +73,9 @@ module.exports = (env = {}, argv = {}) => {
         __YOUTUBE__: JSON.stringify(youtube),
         __AUTOUPDATE__: JSON.stringify(autoupdate),
         __UPDATE_CHANNEL__: JSON.stringify(channel),
+        __TRIAL__: JSON.stringify(trial),
+        // The licence service of the trial builds (the Cloudflare worker): the LICENSE_URL variable of the release workflow.
+        __LICENSE_URL__: JSON.stringify(String(process.env.LICENSE_URL || '').replace(/\/+$/, '')),
         // Device sync: the token of its GitHub repository (src/services/sync/config.js), from the SYNC_TOKEN secret of the release workflow,
         // stored encoded (scripts/sync-token.js); empty without it (no sync).
         __SYNC_TOKEN__: JSON.stringify(encodeSyncToken(process.env.SYNC_TOKEN || '')),

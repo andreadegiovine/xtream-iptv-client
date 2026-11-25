@@ -35,6 +35,7 @@ import { openProfileForm } from '../components/profileForm.js';
 import { MAIN_ID } from '../../services/profiles.js';
 import { sidebarNavigation } from './templates.js';
 import { createSyncSubpage } from './syncSettings.js';
+import { createActivationSubpage } from '../license/activationSettings.js';
 
 const ZONE_ID = 'settings';
 const NAV_ZONE = 'settingsNav';
@@ -687,6 +688,8 @@ export function createSettingsPage(ctx) {
     { id: 'opensubtitles', icon: 'subtitles', label: 'OpenSubtitles', blocks: [h('div', { class: 'fields' }, openSubtitlesRow.root)], rows: [openSubtitlesRow, openSubtitlesRow.clearRow] },
     // Device sync (only in builds that have it): before Advanced.
     ...(ctx.deviceSync ? [createSyncSubpage(ctx)] : []),
+    // Trial builds, while this device is not activated: the countdown, its id and the payment QR code.
+    ...(ctx.licensing && !(ctx.licensing.status() && ctx.licensing.status().state === 'active') ? [createActivationSubpage(ctx)] : []),
     ...advancedPage,
   ];
   // A profile that is not an admin sees only what it can change: its profile, its language (and parental PIN), its Trakt account (only

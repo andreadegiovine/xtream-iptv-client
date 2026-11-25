@@ -1,0 +1,95 @@
+// Trial builds (src/ui/license/): the lock screen once the trial has ended, and Settings › Activation.
+@use 'tokens' as *;
+
+.license-lock {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 900; // over the dialogs, the notices and the tooltips (the screensaver stays above)
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: $bg-gradient;
+
+  .license-lock-box {
+    display: flex;
+    align-items: center;
+    max-width: 1500px;
+    padding: 0 $gutter;
+  }
+
+  .license-lock-qr {
+    flex: none;
+    margin-right: 64px;
+
+    .qr {
+      display: block;
+      width: 420px;
+      height: 420px;
+      border-radius: 12px;
+    }
+  }
+
+  .license-lock-title {
+    margin: 0 0 24px;
+    font-size: 3rem;
+  }
+
+  .license-lock-text {
+    margin: 0 0 28px;
+    font-size: 1.75rem;
+    line-height: 1.4;
+    color: $text-muted;
+  }
+
+  .license-lock-id {
+    margin: 0 0 8px;
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: 2px;
+  }
+
+  .license-lock-url {
+    margin: 0 0 36px;
+    font-size: 1.25rem;
+    color: $text-muted;
+    word-break: break-all;
+  }
+
+  .license-lock-actions .btn {
+    margin-right: 16px;
+  }
+}
+
+.settings-subpage {
+  .activation-pay {
+    display: flex;
+    align-items: center;
+    margin: 24px 0;
+  }
+
+  .activation-qr {
+    flex: none;
+    margin-right: 32px;
+
+    .qr {
+      display: block;
+      width: 260px;
+      height: 260px;
+      border-radius: 8px;
+    }
+  }
+
+  .activation-pay-text p {
+    margin: 0 0 12px;
+    font-size: 1.5rem;
+  }
+
+  .activation-url {
+    font-size: 1.125rem;
+    color: $text-muted;
+    word-break: break-all;
+  }
+}

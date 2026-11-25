@@ -38,4 +38,12 @@ export default {
     lunaCall('luna://com.webos.service.tv.systemproperty/getSystemInfo', { keys: ['UHD'] })
       .then((info) => (info && String(info.UHD) === 'true' ? { width: 3840, height: 2160 } : { width: 1920, height: 1080 }))
       .catch(() => null),
+  // The LG unique id of the TV (ACG deviceid.query, added to appinfo.json in the trial builds).
+  deviceId: () =>
+    lunaCall('luna://com.webos.service.sm/deviceid/getIDs', { idType: ['LGUDID'] })
+      .then((answer) => {
+        const found = ((answer && answer.idList) || []).find((item) => item && item.idType === 'LGUDID');
+        return found && found.idValue ? String(found.idValue) : null;
+      })
+      .catch(() => null),
 };

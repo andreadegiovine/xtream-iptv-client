@@ -42,7 +42,9 @@
       "__DEV__": false,
       "__APP_VERSION__": "test",
       "__PLATFORM__": "tizen",
-      "__JS_DEMUX__": true
+      "__JS_DEMUX__": true,
+      "__TRIAL__": false,
+      "__LICENSE_URL__": ""
     },
     "transform": {
       "\\.js$": "babel-jest",

@@ -11,6 +11,8 @@ const appGlobals = {
   __AUTOUPDATE__: 'readonly',
   __UPDATE_CHANNEL__: 'readonly',
   __SYNC_TOKEN__: 'readonly',
+  __TRIAL__: 'readonly',
+  __LICENSE_URL__: 'readonly',
   __JS_DEMUX__: 'readonly',
 };
 
@@ -47,6 +49,11 @@ export default [
       sourceType: 'module',
       globals: { ...globals.browser, ...globals.jest, ...globals.node, ...appGlobals },
     },
+  },
+  // The Cloudflare worker of the trial licences: an ES module run by Workers (fetch, Response, console…), not by the TV.
+  {
+    files: ['licensing/**/*.js'],
+    languageOptions: { ecmaVersion: 2022, sourceType: 'module', globals: { ...globals.serviceworker, ...globals.node } },
   },
   {
     files: ['test/setup.js', 'test/svgTransform.js', 'platforms/*/build.js', 'platforms/*/electron/**/*.js', 'webpack.config.js', 'babel.config.js', 'postcss.config.js', 'scripts/**/*.js'],

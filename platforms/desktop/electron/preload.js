@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld('xtreamDesktop', {
   isFullscreen: () => ipcRenderer.invoke('window:fullscreen', false),
   /** Restores and focuses the window. */
   show: () => ipcRenderer.invoke('window:show'),
+  /** The computer's id (the trial builds' licence): the same across reinstalls of the app. */
+  deviceId: () => ipcRenderer.invoke('device:id'),
   /** The slots of the updates kept by the app (src/boot/loader.js): write a file of one, empty one. */
   slots: {
     write: (slot, path, bytes) => ipcRenderer.invoke('slots:write', slot, path, bytes),

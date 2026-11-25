@@ -59,4 +59,9 @@ export default {
   display: (env) => tizenDisplay(env),
   memory: (env) => tizenMemory(env),
   networkType: (env) => tizenNetwork(env),
+  // The DUID of the TV (privilege productinfo): the same across reinstalls and resets of the app.
+  deviceId: async () => {
+    const api = typeof webapis !== 'undefined' ? webapis : null;
+    return api && api.productinfo && api.productinfo.getDuid ? String(api.productinfo.getDuid() || '') || null : null;
+  },
 };

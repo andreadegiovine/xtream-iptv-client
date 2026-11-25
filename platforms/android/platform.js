@@ -90,4 +90,6 @@ export default {
   // Scheduled viewing alerts: notifications of the system (only inside the Android app).
   alerts: capacitor() ? createAndroidAlerts(capacitor(), { texts: alertTexts }) : null,
   display: () => readInfo().then((facts) => (facts && facts.width ? { width: facts.width, height: facts.height } : null)),
+  // ANDROID_ID: the same across reinstalls of the app (Android 8+: per signing key), new only after a factory reset.
+  deviceId: () => host('deviceId').then((answer) => (answer && answer.id ? String(answer.id) : null)).catch(() => null),
 };

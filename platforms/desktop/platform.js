@@ -65,6 +65,7 @@ export default {
     return true;
   },
   alerts: desktopAlerts(),
+  deviceId: () => (typeof window !== 'undefined' && window.xtreamDesktop && window.xtreamDesktop.deviceId ? window.xtreamDesktop.deviceId().catch(() => null) : Promise.resolve(null)),
   runtimeChecks() {
     const version = electronVersion();
     return [{ id: 'electron', status: version ? 'ok' : 'warn', detail: version ? `Electron ${version}` : 'not running inside the desktop app' }];
