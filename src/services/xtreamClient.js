@@ -47,6 +47,30 @@ export function pickLiveFormat(allowed) {
   return list[0];
 }
 
+/** An instant as the timeshift addresses want it, "YYYY-MM-DD:HH-MM", in a time zone (an IANA name; UTC when empty or unknown). */
+export function timeshiftStart(ms, timeZone = '') {
+  const date = new Date(ms);
+  let parts = null;
+  if (timeZone) {
+    try {
+      const out = {};
+      new Intl.DateTimeFormat('en-GB', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+        .formatToParts(date)
+        .forEach((p) => {
+          out[p.type] = p.value;
+        });
+      parts = out;
+    } catch {
+      parts = null; // a zone this device does not know
+    }
+  }
+  if (!parts) {
+    const two = (n) => String(n).padStart(2, '0');
+    parts = { year: String(date.getUTCFullYear()), month: two(date.getUTCMonth() + 1), day: two(date.getUTCDate()), hour: two(date.getUTCHours()), minute: two(date.getUTCMinutes()) };
+  }
+  return `${parts.year}-${parts.month}-${parts.day}:${parts.hour === '24' ? '00' : parts.hour}-${parts.minute}`;
+}
+
 export function decodeBase64Utf8(value) {
   const text = String(value ?? '');
   try {
@@ -125,7 +149,22 @@ export class XtreamClient {
   async authenticate() {
     const auth = parseAuthResponse(await this.request(null, {}, { timeoutMs: 15000 }));
     this.allowedFormats = auth.user.allowedFormats;
+    this.timezone = auth.server.timezone || '';
+    this.authenticated = true;
     return auth;
+  }
+
+  /**
+   * The address of a past programme of a live channel (catch-up): `/timeshift/<user>/<pass>/<minutes>/<YYYY-MM-DD:HH-MM>/<id>.<ext>`, the
+   * start written in the provider's time zone (its `server_info.timezone`; UTC when it gives none or one this device does not know).
+   */
+  async catchupUrl(id, start, stop) {
+    if (!this.authenticated) await this.authenticate();
+    const minutes = Math.max(1, Math.ceil((stop - start) / 60000));
+    const extension = pickLiveFormat(this.allowedFormats) === 'm3u8' ? 'm3u8' : 'ts';
+    const user = encodeURIComponent(this.username);
+    const pass = encodeURIComponent(this.password);
+    return `${this.baseUrl}/timeshift/${user}/${pass}/${minutes}/${timeshiftStart(start, this.timezone)}/${id}.${extension}`;
   }
 
   async getCategories(type, { signal } = {}) {

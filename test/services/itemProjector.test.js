@@ -56,3 +56,11 @@ describe('projectItem', () => {
     expect(readYear({ release_date: '1999-03-31' })).toBe(1999);
   });
 });
+
+describe('catch-up archive', () => {
+  test('a live channel keeps the days of its archive (at most 30), none without tv_archive', () => {
+    expect(projectItem('live', { stream_id: 1, name: 'A', tv_archive: 1, tv_archive_duration: '3' }).archive).toBe(3);
+    expect(projectItem('live', { stream_id: 1, name: 'A', tv_archive: 1, tv_archive_duration: 90 }).archive).toBe(30);
+    expect(projectItem('live', { stream_id: 1, name: 'A', tv_archive: 0, tv_archive_duration: 3 }).archive).toBeUndefined();
+  });
+});

@@ -93,9 +93,11 @@ export function scrollFor(segment, start, x, width) {
  * `isScheduled(entry, programme)`: a programme whose viewing is scheduled, drawn like the focused one (`repaintScheduled()` after a change).
  * Every programme has a tooltip: its full title, and its start and end times on the line below.
  */
-export function createEpgGuide({ loadRows, countRows, programmes, onOpen, getTimeFormat = () => 'auto', enrich = null, now = Date.now, emptyText = null, pickSegment = null, programmesOnly = false, rowActions = [], onRowAction = null, defaultRowAction = 0, isScheduled = null }) {
-  let start = floorHalfHour(now()) - PAST_MS; // moves on with the half hours while the guide stays open
-  let end = start + SPAN_MS + PAST_MS;
+export function createEpgGuide({ loadRows, countRows, programmes, onOpen, getTimeFormat = () => 'auto', enrich = null, now = Date.now, emptyText = null, pickSegment = null, programmesOnly = false, rowActions = [], onRowAction = null, defaultRowAction = 0, isScheduled = null, pastMs = PAST_MS }) {
+  // `pastMs`: how far back the axis goes (catch-up: the past programmes of the channels with an archive, reached with Left); the guide
+  // still opens on now.
+  let start = floorHalfHour(now()) - pastMs; // moves on with the half hours while the guide stays open
+  let end = start + SPAN_MS + pastMs;
   const ruler = h('div', { class: 'epg-ruler' });
   const rulerViewport = h('div', { class: 'epg-ruler-viewport' }, ruler);
   const corner = h('div', { class: 'epg-corner' });
@@ -316,7 +318,7 @@ export function createEpgGuide({ loadRows, countRows, programmes, onOpen, getTim
     } else channel.appendChild(createSkeletonBlock({ className: 'epg-channel-skeleton' }));
     const segments = segmentsOf(row);
     const segNodes = segments.map((seg, segIndex) => {
-      const node = h('div', { class: `epg-prog${seg.empty ? ' empty' : ''}${seg.loading ? ' loading' : ''}${seg.programme && seg.start <= now() && seg.stop > now() ? ' live' : ''}` }, h('span', { class: `epg-prog-title${seg.loading ? ' skeleton-line' : ''}`, text: seg.loading ? '' : seg.title || noInfo() }));
+      const node = h('div', { class: `epg-prog${seg.empty ? ' empty' : ''}${seg.loading ? ' loading' : ''}${seg.programme && seg.start <= now() && seg.stop > now() ? ' live' : ''}${seg.stop <= now() ? ' past' : ''}` }, h('span', { class: `epg-prog-title${seg.loading ? ' skeleton-line' : ''}`, text: seg.loading ? '' : seg.title || noInfo() }));
       node.setAttribute('data-seg', segIndex); // the pointer finds the programme under it (pointAt)
       setTip(node, programmeTip(seg));
       if (scheduled(entry, seg)) node.classList.add('scheduled');
@@ -405,11 +407,11 @@ export function createEpgGuide({ loadRows, countRows, programmes, onOpen, getTim
    */
   /** A new half hour began: the axis starts from it (the half hour gone by leaves), the programmes are read again for the new hours. */
   function shiftAxis() {
-    const next = floorHalfHour(now()) - PAST_MS;
+    const next = floorHalfHour(now()) - pastMs;
     x = Math.max(0, x - xOf(next, start));
     focusTime = Math.max(focusTime, next);
     start = next;
-    end = start + SPAN_MS + PAST_MS;
+    end = start + SPAN_MS + pastMs;
     ruler.style.width = `${xOf(end, start)}px`;
     drawRuler();
     guide.clear();
@@ -475,11 +477,12 @@ export function createEpgGuide({ loadRows, countRows, programmes, onOpen, getTim
       focusAt(0);
       applyScroll();
       clock = setInterval(() => {
-        if (floorHalfHour(now()) - PAST_MS !== start) shiftAxis();
+        if (floorHalfHour(now()) - pastMs !== start) shiftAxis();
         drawNow();
         rowNodes.forEach((node) => node.segNodes.forEach((seg, i) => {
           const s = node.segments[i];
           seg.classList.toggle('live', Boolean(s && s.programme && s.start <= now() && s.stop > now()));
+          seg.classList.toggle('past', Boolean(s && s.stop <= now()));
         }));
       }, 30000);
     },

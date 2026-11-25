@@ -20,17 +20,29 @@ export const xmltvUrl = (provider) =>
     ? provider.epgUrl || ''
     : `${provider.baseUrl}/xmltv.php?username=${encodeURIComponent(provider.username)}&password=${encodeURIComponent(provider.password)}`;
 
-/** Channel ids used by the live entries: only their programmes are worth storing. */
+/** The most days of past programmes kept for catch-up (a provider may keep more; the guide does not go further back). */
+export const MAX_ARCHIVE_DAYS = 7;
+const DAY_MS = 24 * 3600 * 1000;
+
+/**
+ * Channel ids used by the live entries: only their programmes are worth storing. The Set also carries `archive`: Map(channel id → days
+ * of catch-up of its channel), the channels whose past programmes are kept.
+ */
 export function liveChannelIds(db) {
   // A cursor reads one channel at a time: the whole list of live entries is never held in memory just to pick one field.
   return new Promise((resolve, reject) => {
     const ids = new Set();
+    ids.archive = new Map();
     const tx = db.transaction('entries', 'readonly');
     const request = tx.objectStore('entries').index('byTypeAdded').openCursor(IDBKeyRange.bound(['live', 0], ['live', Number.MAX_SAFE_INTEGER]));
     request.onsuccess = () => {
       const cursor = request.result;
       if (!cursor) return;
-      if (cursor.value.epgChannelId) ids.add(cursor.value.epgChannelId);
+      const { epgChannelId, archive } = cursor.value;
+      if (epgChannelId) {
+        ids.add(epgChannelId);
+        if (archive > 0) ids.archive.set(epgChannelId, Math.max(ids.archive.get(epgChannelId) || 0, Math.min(MAX_ARCHIVE_DAYS, archive)));
+      }
       cursor.continue();
     };
     tx.oncomplete = () => resolve(ids);
@@ -98,9 +110,12 @@ export async function syncEpg({ db, url, now = Date.now(), signal, emit = () => 
     writes.catch(() => undefined); // a failed write is thrown where `writes` is awaited, not as an unhandled rejection meanwhile
   };
   const summary = shared || createChannelSummary(); // span and genres of every channel, for the guide page and the Live TV sidebar
+  // Catch-up: the past programmes of the channels with an archive are kept (as far back as their archive goes).
+  const archive = (wanted && wanted.archive) || new Map();
   const parser = createXmltvParser({
     now,
     channels: wanted,
+    pastMs: (channelId) => (archive.get(channelId) || 0) * DAY_MS,
     onProgramme: (p) => {
       summary.add(p);
       buffer.push(p);
@@ -121,7 +136,9 @@ export async function syncEpg({ db, url, now = Date.now(), signal, emit = () => 
   await writes;
   const total = written;
   if (!finish) return { programmes: total, totalInFile: parser.stats().total, durationMs: Date.now() - t0 };
-  const stale = await dbGetAllKeys(db, 'epg', { index: 'byStop', range: IDBKeyRange.upperBound(now) });
+  // Past programmes go, except the catch-up window of the channels with an archive (the guide and the channel page list them).
+  const keepPast = Math.max(0, ...Array.from(archive.values())) * DAY_MS;
+  const stale = await dbGetAllKeys(db, 'epg', { index: 'byStop', range: IDBKeyRange.upperBound(now - keepPast) });
   await dbDeleteMany(db, 'epg', stale);
   const perChannel = summary.result();
   await dbPut(db, 'meta', perChannel);
@@ -130,6 +147,7 @@ export async function syncEpg({ db, url, now = Date.now(), signal, emit = () => 
     lastSync: now,
     programmes: total,
     channels: wanted.size,
+    archiveDays: Math.max(0, ...Array.from(archive.values())),
     guided: Object.keys(perChannel.channels).length,
     genres: Object.keys(perChannel.genres).length,
     until: perChannel.until,
@@ -166,7 +184,10 @@ export async function probeGuide(url, { fetchImpl = fetch, signal } = {}) {
 
 /** After the guides were read: old programmes out, the channel summary and the record of the download written. */
 async function finishEpg({ db, now, summary, channels }) {
-  const stale = await dbGetAllKeys(db, 'epg', { index: 'byStop', range: IDBKeyRange.upperBound(now) });
+  // Past programmes go, except the catch-up window of the channels with an archive (the guide and the channel page list them).
+  const archiveDays = Math.max(0, ...Array.from(((channels && channels.archive) || new Map()).values()));
+  const keepPast = archiveDays * DAY_MS;
+  const stale = await dbGetAllKeys(db, 'epg', { index: 'byStop', range: IDBKeyRange.upperBound(now - keepPast) });
   await dbDeleteMany(db, 'epg', stale);
   const perChannel = summary.result();
   await dbPut(db, 'meta', perChannel);
@@ -175,7 +196,8 @@ async function finishEpg({ db, now, summary, channels }) {
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => resolve(0);
   });
-  const meta = { key: META_KEY, lastSync: now, programmes: total, channels: channels.size, guided: Object.keys(perChannel.channels).length, genres: Object.keys(perChannel.genres).length, until: perChannel.until };
+  // `archiveDays`: how far back the guide goes (its past for catch-up), the most of the channels with an archive.
+  const meta = { key: META_KEY, lastSync: now, programmes: total, channels: channels.size, guided: Object.keys(perChannel.channels).length, genres: Object.keys(perChannel.genres).length, until: perChannel.until, archiveDays };
   await dbPut(db, 'meta', meta);
   return meta;
 }

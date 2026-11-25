@@ -4,6 +4,7 @@ import {
   pickLiveFormat,
   parseAuthResponse,
   decodeBase64Utf8,
+  timeshiftStart,
 } from '../../src/services/xtreamClient.js';
 import { ErrorCode } from '../../src/core/errors.js';
 
@@ -90,5 +91,14 @@ describe('helpers', () => {
   test('decodeBase64Utf8 handles accents and bad input', () => {
     expect(decodeBase64Utf8('Q2l0dMOg')).toBe('Città');
     expect(decodeBase64Utf8('not base64 !!')).toBe('not base64 !!');
+  });
+});
+
+describe('catch-up', () => {
+  test('timeshiftStart writes the start in the server time zone (UTC without one)', () => {
+    const at = Date.UTC(2026, 10, 2, 20, 5);
+    expect(timeshiftStart(at, 'Europe/Rome')).toBe('2026-11-02:21-05');
+    expect(timeshiftStart(at, '')).toBe('2026-11-02:20-05');
+    expect(timeshiftStart(at, 'Not/AZone')).toBe('2026-11-02:20-05');
   });
 });

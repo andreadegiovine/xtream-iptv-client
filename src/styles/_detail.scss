@@ -203,9 +203,14 @@
     border-radius: 6px;
     font-size: 1.5rem;
 
+    // A past programme (catch-up): a little transparent while not focused.
+    &.past:not(.focused) {
+      opacity: 0.55;
+    }
+
     .epg-time {
       flex: none;
-      width: 130px;
+      width: 180px;
       color: $text-muted;
     }
 

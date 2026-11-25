@@ -170,6 +170,11 @@ $epg-ruler: 44px;
     color: $text-muted;
   }
 
+  // Already over (catch-up: reached with Left on the channels with an archive): a little transparent, fully opaque when focused.
+  &.past:not(.focused) {
+    opacity: 0.55;
+  }
+
   // Focused, and a programme whose viewing is scheduled (it stays marked); the focused one of those has the accent border.
   &.focused,
   &.scheduled {

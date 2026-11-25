@@ -68,10 +68,10 @@ export function isPlaceholderTitle(title) {
 
 /**
  * Incremental XMLTV reader: feed text chunks, get the programmes inside the window
- * (ends after `now`, starts before `now + horizonMs`) of the wanted channels. Never holds more than one
+ * (ends after `now` — or after `now - pastMs(channel)` for a channel with catch-up —, starts before `now + horizonMs`) of the wanted channels. Never holds more than one
  * partial programme in memory, so a very large guide is fine.
  */
-export function createXmltvParser({ now, horizonMs = 48 * 3600 * 1000, channels = null, onProgramme }) {
+export function createXmltvParser({ now, horizonMs = 48 * 3600 * 1000, channels = null, pastMs = null, onProgramme }) {
   let buffer = '';
   let total = 0;
   let kept = 0;
@@ -86,7 +86,9 @@ export function createXmltvParser({ now, horizonMs = 48 * 3600 * 1000, channels 
       const attrs = attributes(match[1]);
       const start = parseXmltvTime(attrs.start);
       const stop = parseXmltvTime(attrs.stop);
-      if (attrs.channel && Number.isFinite(start) && Number.isFinite(stop) && stop > now && start < now + horizonMs && (!channels || channels.has(attrs.channel))) {
+      // `pastMs(channel)`: how far back a channel's programmes are kept (catch-up); otherwise only the ones not over yet.
+      const from = pastMs && attrs.channel ? now - pastMs(attrs.channel) : now;
+      if (attrs.channel && Number.isFinite(start) && Number.isFinite(stop) && stop > from && start < now + horizonMs && (!channels || channels.has(attrs.channel))) {
         const body = match[2] || '';
         const title = firstTag(body, 'title');
         if (!isPlaceholderTitle(title)) {

@@ -62,6 +62,8 @@ export function projectItem(type, raw) {
     ext: String(raw.container_extension || ''),
     genre: type === MediaType.LIVE ? '' : String(raw.genre || ''),
     epgChannelId: raw.epg_channel_id ? String(raw.epg_channel_id) : null,
+    // Catch-up: the days of past programmes the provider keeps for a live channel (0: none).
+    ...(type === MediaType.LIVE && Number(raw.tv_archive) === 1 && Number(raw.tv_archive_duration) > 0 ? { archive: Math.min(30, Math.round(Number(raw.tv_archive_duration))) } : {}),
     ...(readAdult(raw) ? { adult: true } : {}),
   };
 }

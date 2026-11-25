@@ -302,12 +302,13 @@ export function buildChannelGroups(items, { excludedCategories = new Set(), term
       added: Math.max(...members.map((m) => m.item.added)),
       defaultId: best.item.id,
       memberIds: members.map((m) => m.item.id),
-      members: members.map((m) => ({ id: m.item.id, ext: '', categoryId: m.item.categoryId, name: m.item.name, icon: m.item.icon, entryKey: `live:i${m.item.id}` })),
+      members: members.map((m) => ({ id: m.item.id, ext: '', categoryId: m.item.categoryId, name: m.item.name, icon: m.item.icon, entryKey: `live:i${m.item.id}`, ...(m.item.archive ? { archive: m.item.archive } : {}) })),
       categoryIds,
       searchKeys,
       genres: [],
       icon: (members.find((m) => m.item.icon) || best).item.icon,
       epgChannelId: (members.find((m) => m.item.epgChannelId) || best).item.epgChannelId || null,
+      ...(members.some((m) => m.item.archive) ? { archive: Math.max(...members.map((m) => m.item.archive || 0)) } : {}), // catch-up days
       ...(members.some((m) => m.item.adult) ? { adult: true } : {}),
     };
   });

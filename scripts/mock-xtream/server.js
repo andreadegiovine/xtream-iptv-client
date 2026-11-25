@@ -270,7 +270,7 @@ const server = http.createServer(async (req, res) => {
       if (value === undefined || value === null) return send(req, res, 404, json({ status_code: 34 }), 'application/json');
       return send(req, res, 200, json(value), 'application/json', { latency: 60 });
     }
-    if (/^\/(movie|series|live)\//.test(url.pathname)) return send(req, res, 404, Buffer.from('no media in the mock'), 'text/plain', { latency: 0 });
+    if (/^\/(movie|series|live|timeshift)\//.test(url.pathname)) return send(req, res, 404, Buffer.from('no media in the mock'), 'text/plain', { latency: 0 });
     // the app build
     const file = path.join(DIST, url.pathname === '/' ? 'index.html' : decodeURIComponent(url.pathname));
     if (file.startsWith(DIST) && fs.existsSync(file) && fs.statSync(file).isFile()) {

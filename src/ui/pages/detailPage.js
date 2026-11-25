@@ -802,7 +802,8 @@ export function createDetailPage(ctx, params) {
 
   async function loadEpg() {
     try {
-      epgList = await ctx.epg.upcoming(entry.epgChannelId);
+      // Catch-up: with the provider keeping the channel's past, its past programmes are listed above the one on (as far back as kept).
+      epgList = ctx.epg.around ? await ctx.epg.around(entry.epgChannelId, entry.archive || 0) : await ctx.epg.upcoming(entry.epgChannelId);
       await refreshScheduled();
       if (destroyed || !epgList.length) return;
       build();
@@ -820,8 +821,8 @@ export function createDetailPage(ctx, params) {
     const nodes = epgList.map((p) =>
       h(
         'div',
-        { class: `epg-row${p.start <= at && p.stop > at ? ' now' : ''}` },
-        h('span', { class: 'epg-time', text: formatClockTime(new Date(p.start), 'auto', i18n.getLocale()) }),
+        { class: `epg-row${p.start <= at && p.stop > at ? ' now' : ''}${p.stop <= at ? ' past' : ''}` },
+        h('span', { class: 'epg-time', text: programmeTime(p.start, at) }),
         h('span', { class: 'epg-title', text: p.title }),
         scheduledIds.has(scheduleId(programmeItem(p))) ? icon('scheduled', 'epg-scheduled') : null,
       ),
@@ -838,8 +839,26 @@ export function createDetailPage(ctx, params) {
       onBlur: (i) => nodes[i] && nodes[i].classList.remove('focused'),
       onActivate: (i) => programmeActions(epgList[i]).catch((err) => log.warn('Programme action failed', err && err.message)),
     });
-    if (landOn !== null) zone.index = landingIndex(epgList, landOn);
+    // The focus enters the list on the programme opened from the guide (past or future), otherwise on the one on now.
+    zone.index = landingIndex(epgList, landOn !== null ? landOn : at);
     next.push({ id: 'detailEpg', zone });
+  }
+
+  /** "21:00", or "Mon 21:00" for a programme of another day (the list goes back days with catch-up). */
+  function programmeTime(start, at) {
+    const time = formatClockTime(new Date(start), 'auto', i18n.getLocale());
+    if (new Date(start).toDateString() === new Date(at).toDateString()) return time;
+    return `${new Date(start).toLocaleDateString(i18n.getLocale(), { weekday: 'short' })} ${time}`;
+  }
+
+  /** The stream whose provider keeps a programme started at `start` (the version chosen first), or null. */
+  function archiveStreamId(start, at) {
+    const keeps = (days) => days > 0 && at - start < days * 24 * 3600 * 1000;
+    const members = entry.members || [];
+    if (selectedMember && keeps(selectedMember.archive)) return selectedMember.id;
+    const member = members.find((m) => keeps(m.archive));
+    if (member) return member.id;
+    return !members.length && keeps(entry.archive) ? entry.defaultId : null;
   }
 
   async function programmeActions(p) {
@@ -847,6 +866,26 @@ export function createDetailPage(ctx, params) {
     const at = Date.now();
     if (p.start <= at && p.stop > at) {
       play({ restart: true });
+      return;
+    }
+    // A past programme: from the provider's archive (catch-up), when it keeps it.
+    if (p.stop <= at) {
+      const id = archiveStreamId(p.start, at);
+      if (!id) {
+        ctx.notices.info(t('detail.catchupMissing'), { key: 'catchup' });
+        return;
+      }
+      ctx.router.push('player', {
+        type: 'live',
+        catchup: { start: p.start, stop: p.stop, channel: data().title },
+        entryKey: entry.key,
+        title: p.title,
+        icon: entry.icon,
+        playlist: [{ id, ext: '', title: '' }],
+        index: 0,
+        epgChannelId: entry.epgChannelId,
+        section: params.section,
+      });
       return;
     }
     if (!ctx.schedules) return;

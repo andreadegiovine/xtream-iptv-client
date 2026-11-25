@@ -44,6 +44,13 @@ describe('buildChannelGroups', () => {
     expect(group.members[0]).toMatchObject({ id: 25311, categoryId: '81', name: 'Rai Yoyo Full HD', entryKey: 'live:i25311' });
   });
 
+  test('catch-up: a group keeps the archive of each version and the longest one', () => {
+    const [group] = buildChannelGroups([ch(1, 'Canale A HD', { archive: 3 }), ch(2, 'Canale A SD')]);
+    expect(group.archive).toBe(3);
+    expect(group.members.find((m) => m.id === 1).archive).toBe(3);
+    expect(group.members.find((m) => m.id === 2).archive).toBeUndefined();
+  });
+
   test('same name without EPG needs the same category or logo', () => {
     const items = [ch(1, 'Canale A HD'), ch(2, 'Canale A SD'), ch(3, 'Canale B HD', { categoryId: '5', icon: 'b.png' }), ch(4, 'Canale B SD', { categoryId: '6', icon: 'c.png' })];
     const groups = buildChannelGroups(items);

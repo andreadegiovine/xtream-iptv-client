@@ -656,6 +656,7 @@ export function createBrowsePage(ctx, params = {}) {
     return promise;
   }
 
+  let guidePastMs = 0;
   function makeGuide(kind) {
     const common = {
       // The channel page opens with the focus on the programme the guide was on.
@@ -697,6 +698,7 @@ export function createBrowsePage(ctx, params = {}) {
     }
     return createEpgGuide({
       ...common,
+      pastMs: guidePastMs, // catch-up: the past programmes of the channels with an archive, with Left
       loadRows: async (offset, limit) => ({ entries: await byKeys((await guideList()).slice(offset, offset + limit).map((row) => row.key)) }),
       countRows: async () => (await guideList()).length,
       programmes: (ids, from, to) => (ctx.epg && ctx.epg.programmesBetween ? ctx.epg.programmesBetween(ids, from, to) : Promise.resolve(new Map())),
@@ -733,6 +735,10 @@ export function createBrowsePage(ctx, params = {}) {
     }
     if (!guide) {
       guideKind = kind;
+      // How far back the guide goes: the catch-up days of the last download (0: no channel keeps its past).
+      const meta = ctx.epg && ctx.epg.status ? await ctx.epg.status().catch(() => null) : null;
+      if (destroyed) return;
+      guidePastMs = meta && meta.archiveDays > 0 ? meta.archiveDays * 24 * 3600 * 1000 : 0;
       guide = makeGuide(kind);
       guideHost.appendChild(guide.el);
       await guide.start();

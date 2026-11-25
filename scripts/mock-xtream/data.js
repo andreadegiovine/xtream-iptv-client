@@ -100,7 +100,7 @@ function buildCatalog({ movies = 20000, series = 8000, live = 3000, seed = 42, b
       liveList.push({
         num: id, name: `${demo ? '' : `${country}: `}${base}${QUALITIES[(v + Math.floor(r() * QUALITIES.length)) % QUALITIES.length]}`, stream_type: 'live', stream_id: id,
         stream_icon: r() < 0.9 ? img('l', id) : '', epg_channel_id: r() < 0.8 ? `${base.toLowerCase().replace(/\s+/g, '')}.${country.toLowerCase()}` : '',
-        added: String(now - Math.floor(r() * 365 * 86400)), is_adult: '0', category_id: cat, custom_sid: '', tv_archive: 0, direct_source: '', tv_archive_duration: 0,
+        added: String(now - Math.floor(r() * 365 * 86400)), is_adult: '0', category_id: cat, custom_sid: '', tv_archive: id % 2 === 0 ? 1 : 0, direct_source: '', tv_archive_duration: id % 2 === 0 ? 3 : 0, // catch-up: one channel in two keeps 3 days
       });
       id += 1;
     }

@@ -43,7 +43,10 @@ export function createPlayerPage(ctx, params) {
   const engine = isTrailer ? ctx.createTrailerEngine() : ctx.createEngine();
   const controller = createPlayerController({ engine });
   log.info('Player engine', engine.kind || 'unknown'); // which one plays (AVPlay on the TV): says why aspect / subtitles behave as they do
-  const isLive = params.type === 'live';
+  // Catch-up: a past programme of a live channel (`catchup: { start, stop, channel }`), played like a film (seek bar, back / forward),
+  // without saving the point reached nor telling Trakt.
+  const isCatchup = Boolean(params.catchup);
+  const isLive = params.type === 'live' && !isCatchup;
   let playlist = params.playlist;
   let index = params.index || 0;
   let live = params.live ? { ...params.live } : null;
@@ -102,6 +105,8 @@ export function createPlayerPage(ctx, params) {
   // Control buttons: transport at the bottom left (live: play / pause only), aspect ratio + subtitles at the bottom right. Every button
   // has its name as tooltip, above it (previous / next channel: the name of the channel it goes to).
   const buttonDefs = [
+    // Live, when the provider keeps the channel's past and the guide knows the programme on: it plays from its start (catch-up).
+    { id: 'fromStart', icon: 'rewind', label: () => t('player.fromStart'), liveOnly: true, hidden: true, run: () => watchFromStart() },
     // Series: previous / next episode on both sides of play / pause, shown only when there is one (the position is moved with the progress pointer).
     { id: 'prevEpisode', icon: 'previous', label: () => t('player.prevEpisode'), seriesOnly: true, hidden: true, run: () => stepEpisode(-1) },
     { id: 'back30', icon: 'backward', label: () => t('player.back30', { seconds: SEEK_LONG }), vodOnly: true, run: () => controller.seekBy(-SEEK_LONG) },
@@ -132,7 +137,7 @@ export function createPlayerPage(ctx, params) {
   });
   const buttonEl = (id) => (buttonDefs.find((d) => d.id === id) || {}).el;
   // Full-width progress bar, then one row: previous episode, back 30 s, play/pause, forward 30 s, next episode and the time on the left, aspect ratio and subtitles on the right.
-  const row = h('div', { class: 'player-row' }, h('div', { class: 'player-group' }, buttonEl('prevEpisode'), buttonEl('back30'), buttonEl('toggle'), buttonEl('goLive'), buttonEl('forward30'), buttonEl('nextEpisode'), buttonEl('versions'), buttonEl('network'), buttonEl('prevChannel'), buttonEl('nextChannel'), timeEl), h('div', { class: 'player-group' }, buttonEl('aspect'), buttonEl('subtitles'), buttonEl('audio'), buttonEl('fullscreen'), buttonEl('credits')));
+  const row = h('div', { class: 'player-row' }, h('div', { class: 'player-group' }, buttonEl('fromStart'), buttonEl('prevEpisode'), buttonEl('back30'), buttonEl('toggle'), buttonEl('goLive'), buttonEl('forward30'), buttonEl('nextEpisode'), buttonEl('versions'), buttonEl('network'), buttonEl('prevChannel'), buttonEl('nextChannel'), timeEl), h('div', { class: 'player-group' }, buttonEl('aspect'), buttonEl('subtitles'), buttonEl('audio'), buttonEl('fullscreen'), buttonEl('credits')));
   // Back for the pointer (a finger, a mouse): before the title, shown only in pointer mode (the remote has its own Back key).
   const backEl = setTip(h('button', { class: 'player-back', type: 'button', 'aria-label': t('common.back') }, iconNode('back')), t('common.back'), 'down');
   const top = h('div', { class: 'player-top' }, h('div', { class: 'player-heading' }, backEl, h('div', { class: 'player-heading-text' }, titleEl, nowEl)));
@@ -238,6 +243,7 @@ export function createPlayerPage(ctx, params) {
         if (destroyed || token !== loadToken) return;
         liveProgramme = n && n.now ? n.now : null;
         nowEl.textContent = liveProgramme ? liveProgramme.title : '';
+        updateFromStart();
         if (liveProgramme && outOfRange(liveProgramme.rating, rangeOf(ctx.profile))) leaveForKids('rating'); // the guide rates it outside the profile's range
         drawProgress(lastState.position, lastState.duration);
         const next = liveProgramme ? liveProgramme.stop : n && n.next ? n.next.start : null;
@@ -640,7 +646,7 @@ export function createPlayerPage(ctx, params) {
   }
 
   async function saveProgress(force = false) {
-    if (isLive) return;
+    if (isLive || isCatchup) return; // a past programme of a channel is not a title with a point reached
     const state = controller.getState();
     if (!providerId || !(state.duration > 0) || (!force && state.status !== 'playing')) return;
     try {
@@ -707,10 +713,10 @@ export function createPlayerPage(ctx, params) {
       return;
     }
     try {
-      const client = isLive ? await ctx.active.authenticatedClient() : (await ctx.active.get()).client;
+      const client = isLive || isCatchup ? await ctx.active.authenticatedClient() : (await ctx.active.get()).client;
       let startAt = 0;
       providerId = (await ctx.active.get()).provider.id;
-      if (!isLive) {
+      if (!isLive && !isCatchup) {
         const record = await ctx.watch.get(watchKey(providerId, params.entryKey, episodeKey()));
         if (record && !params.restart && shouldResume(record.position, record.duration)) startAt = record.position;
       }
@@ -718,7 +724,13 @@ export function createPlayerPage(ctx, params) {
       const { bufferSeconds, timeFormat: clockFormat, autoplayNext } = await ctx.settings.get();
       timeFormat = clockFormat || 'auto';
       updateSeriesButtons(autoplayNext).catch(() => undefined);
-      streamUrl = client.streamUrl(params.type, current().id, current().ext);
+      if (isCatchup) {
+        const { start, stop } = params.catchup;
+        streamUrl = client.catchupUrl ? (await client.catchupUrl(current().id, start, stop)) || '' : '';
+        if (destroyed || token !== loadToken) return;
+        if (!streamUrl) throw new Error('no catch-up address for this provider');
+        nowEl.textContent = [params.catchup.channel, `${formatClockTime(new Date(start), timeFormat, i18n.getLocale())} – ${formatClockTime(new Date(stop), timeFormat, i18n.getLocale())}`].filter(Boolean).join(' · ');
+      } else streamUrl = client.streamUrl(params.type, current().id, current().ext);
       controller.load(streamUrl, { startAt, bufferSeconds, onSubtitle: subtitles.show });
       if (isLive) loadProgramme(token);
     } catch (err) {
@@ -808,12 +820,43 @@ export function createPlayerPage(ctx, params) {
 
   /** Versions and network buttons for the channel playing; the tooltips are worked out again. */
   function updateLiveButtons() {
+    updateFromStart();
     setVisible('versions', Boolean(liveEntry && liveEntry.isGroup && (liveEntry.members || []).length > 1));
     setVisible('network', Boolean(liveEntry && liveEntry.networkKey));
     buttonDefs.forEach((def) => {
       if (def.tip) setPlayerButtonLabel(def.el, def.label());
     });
     paintFocus();
+  }
+
+  /** The days of past programmes the provider keeps for the stream playing (its version of the group, else the channel's). */
+  function archiveDays() {
+    if (!liveEntry) return 0;
+    const member = (liveEntry.members || []).find((m) => String(m.id) === String(current().id));
+    return (member && member.archive) || liveEntry.archive || 0;
+  }
+
+  /** "Watch from the start": shown on a live channel whose provider keeps its past, while the guide knows the programme on. */
+  function updateFromStart() {
+    const p = liveProgramme;
+    setVisible('fromStart', Boolean(isLive && p && p.start < Date.now() && archiveDays() > 0 && Date.now() - p.start < archiveDays() * 24 * 3600 * 1000));
+  }
+
+  /** The programme on, from its start (a catch-up player over this one: Back comes back to the channel live). */
+  function watchFromStart() {
+    const p = liveProgramme;
+    if (!p) return;
+    ctx.router.push('player', {
+      type: 'live',
+      catchup: { start: p.start, stop: p.stop, channel: title },
+      entryKey: params.entryKey,
+      title: p.title,
+      icon: params.icon,
+      playlist: [{ id: current().id, ext: '', title: '' }],
+      index: 0,
+      epgChannelId: params.epgChannelId,
+      section: params.section,
+    });
   }
 
   /** The key `delta` channels away in "show all" (the list is read once per player). */

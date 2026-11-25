@@ -39,6 +39,13 @@ describe('xmltv', () => {
     parser.push(`<tv>${prog('a', 11, 13, 'EPG non disponibile')}${prog('a', 13, 14, 'Next')}</tv>`);
     expect(got.map((p) => p.title)).toEqual(['Next']);
   });
+
+  test('catch-up: the past programmes of a channel with an archive are kept, as far back as it goes', () => {
+    const got = [];
+    const parser = createXmltvParser({ now: NOW, pastMs: (id) => (id === 'a' ? 3 * 3600 * 1000 : 0), onProgramme: (p) => got.push(p) });
+    parser.push(`<tv>${prog('a', 7, 8, 'TooOld')}${prog('a', 9, 10, 'Kept')}${prog('a', 11, 13, 'Now')}${prog('b', 9, 10, 'Gone')}${prog('b', 11, 13, 'OnB')}</tv>`);
+    expect(got.map((p) => p.title)).toEqual(['Kept', 'Now', 'OnB']);
+  });
 });
 
 let n = 0;

@@ -144,6 +144,11 @@ The programme on air on every channel card and the next 24 hours on its page. Ch
 the channels of a broadcaster (Rai, Sky, Dazn…) collected in a network. Live TV can be paused (**Back to live** jumps to now); channel up
 / down switch channel in the player.
 
+**Catch-up:** on the channels whose provider keeps an archive, the guide goes left into the past programmes (shown a little
+transparent), the channel page lists them above the one on air (the focus starts on the programme on, or on the one chosen in the guide),
+and OK plays them from the provider's archive. In the live player, **Watch from the start** (the first button) plays the programme on
+from its start. The past is kept for at most 7 days (as far as the provider's archive goes).
+
 **Settings:** *Settings → Live TV* (group identical channels, words to ignore); *Settings → Live TV networks*; on a channel page, merge it
 by hand or add it to a network.
 
@@ -320,7 +325,7 @@ store listings). ✅ yes · ❌ no · ⚠️ partly · ❓ not advertised (we fo
 | Platforms | Tizen, webOS, Android TV / Fire TV, Windows, macOS, Linux | Android TV / Fire TV | Android, Fire TV, Samsung, LG, iOS and others | Android TV / Fire TV, Samsung, LG |
 | Xtream Codes login, several providers | ✅ also active together as one catalog | ✅ | ✅ | ✅ |
 | Programme guide (EPG grid) | ✅ with a custom XMLTV guide | ✅ (its strong point) | ✅ | ✅ |
-| Catch-up / recording | ❌ (catch-up planned) | ✅ catch-up; recording with premium | ✅ catch-up | ❓ |
+| Catch-up / recording | ✅ catch-up (guide, channel page, from the start); no recording | ✅ catch-up; recording with premium | ✅ catch-up | ❓ |
 | Programmes in the search | ✅ | ✅ | ❓ | ❓ |
 | Scheduled viewing (opens the channel when it starts) | ✅ | ❓ | ❓ | ❓ |
 | Genres from the guide's categories | ✅ | ❓ | ❓ | ❓ |

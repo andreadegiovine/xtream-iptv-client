@@ -54,13 +54,14 @@ export function buildEntries(type, items, { excludedCategories = new Set(), clea
       // `tags`: what each version is, from its own name (HD, FHD, ITA, CAM...): the label of the version (streamLabel).
       members: members.map((m) => {
         const tags = type === MediaType.LIVE ? [] : versionTags(m.item.name);
-        return { id: m.item.id, ext: m.item.ext, categoryId: m.item.categoryId, ...(tags.length ? { tags } : {}), ...(m.item.slot ? { slot: m.item.slot } : {}) };
+        return { id: m.item.id, ext: m.item.ext, categoryId: m.item.categoryId, ...(tags.length ? { tags } : {}), ...(m.item.slot ? { slot: m.item.slot } : {}), ...(m.item.archive ? { archive: m.item.archive } : {}) };
       }),
       categoryIds: Array.from(new Set(members.map((m) => m.item.categoryId))),
       searchKeys: Array.from(new Set(members.map((m) => m.norm.searchKey))),
       genres: type === MediaType.LIVE ? [] : mergeGenres(members.map((m) => m.item.genre)),
       icon: base.item.icon || first('icon'),
       epgChannelId: base.item.epgChannelId || first('epgChannelId'),
+      ...(members.some((m) => m.item.archive) ? { archive: Math.max(...members.map((m) => m.item.archive || 0)) } : {}), // catch-up days
       ...(members.some((m) => m.item.adult) ? { adult: true } : {}), // the provider's own flag
     });
   }

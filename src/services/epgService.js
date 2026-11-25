@@ -76,6 +76,19 @@ export function createEpgService({ active, providers, createWorker, runLocal = r
   }
 
   /**
+   * The channel page's list: the past programmes of the last `pastDays` (catch-up: the provider keeps them; 0 for none) and the next
+   * `hours`, sorted by start.
+   */
+  async function around(channelId, pastDays = 0, hours = 24) {
+    if (!channelId) return [];
+    const current = await active.get();
+    if (!current) return [];
+    const t = now();
+    const from = pastDays > 0 ? t - pastDays * DAY : t;
+    return (await programmesFor(current.db, channelId, from)).filter((p) => p.start < t + hours * 3600 * 1000 && !hideProgramme(p));
+  }
+
+  /**
    * The programmes of several channels between two instants (the guide grid): Map channelId → list sorted by start. One read
    * transaction; programmes that started up to 12 hours before `from` are included when they are still on at `from`.
    */
@@ -267,6 +280,7 @@ export function createEpgService({ active, providers, createWorker, runLocal = r
     },
     channelsWithGuide,
     upcoming,
+    around,
     /** Fills channel cards with "now playing" as the answers arrive. */
     decorate(entries, cards) {
       entries.forEach((entry, i) => {
