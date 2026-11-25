@@ -105,6 +105,13 @@
     align-items: center;
   }
 
+  // Live: the space of one button between the transport buttons and previous / next channel.
+  .player-spacer {
+    flex: none;
+    width: 96px; // a button (80px) and its margins (8px each side)
+    height: 64px;
+  }
+
   // Full-width progress bar: tall hit area (pointer), no frame; the D-pad focus sits on the knob.
   .player-seek {
     padding: 22px 0;

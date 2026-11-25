@@ -146,8 +146,9 @@ the channels of a broadcaster (Rai, Sky, Dazn…) collected in a network. Live T
 
 **Catch-up:** on the channels whose provider keeps an archive, the guide goes left into the past programmes (shown a little
 transparent), the channel page lists them above the one on air (the focus starts on the programme on, or on the one chosen in the guide),
-and OK plays them from the provider's archive. In the live player, **Watch from the start** (the first button) plays the programme on
-from its start. The past is kept for at most 7 days (as far as the provider's archive goes).
+and OK plays them from the provider's archive. In the live player the programme on has its **progress bar**: back / forward, pause
+and the pointer move over it (the part not yet broadcast is darker and cannot be reached), **Watch from the start** (the first button)
+goes back to its start, and forward past now or **Back to live** return to live. The past is kept for at most 7 days (as far as the provider's archive goes).
 
 **Settings:** *Settings → Live TV* (group identical channels, words to ignore); *Settings → Live TV networks*; on a channel page, merge it
 by hand or add it to a network.
@@ -177,7 +178,9 @@ companies, episodes, cast and related titles. Trailers play in the app on Samsun
 *Impact 7/10*
 
 The magnifier in the top bar searches as you type: movies, series, channels, collections and the programmes of the next 24 hours, in
-rows by type; the last searches are offered when the field is empty.
+rows by type; the last searches are offered when the field is empty. After the films and the series come the **people** and the
+**production companies** whose name matches (TMDB's, with their photo; without TMDB the cast and directors the provider names): a card
+opens their page.
 
 **Settings:** none.
 
@@ -262,7 +265,8 @@ ages, 6+, 14+…) and the rating on a title page opens it. The same ratings driv
 *Impact 5/10*
 
 Cast, director and companies on a title page open their own page: photo or logo, roles, biography, and their films and series in
-your catalog; the heart adds them to the favourites. "What else is there with this actor?", answered from your own catalog.
+your catalog; the heart adds them to the favourites. They are found in the search too. "What else is there with this actor?", answered
+from your own catalog.
 
 **Settings:** *Settings → TMDB → People* (without TMDB, cast and directors found by name).
 

@@ -3,7 +3,10 @@ import { createHint } from '../atoms/hint.js';
 import { createSkeletonLine } from '../atoms/skeleton.js';
 import { createListRow } from '../atoms/listRow.js';
 import { t, i18n } from '../../i18n/index.js';
-import { createTypedRows } from '../components/typedRows.js';
+import { createTypedRows, SEARCH_ORDER } from '../components/typedRows.js';
+import { peopleMatching } from '../../services/peopleIndex.js';
+import { departmentLabel } from './personPage.js';
+import { makeSearchKey } from '../../services/titleNormalizer.js';
 import { SEARCH_BAR_ZONE } from '../components/topbar.js';
 import { createSkeletonCard } from '../components/card.js';
 import { collectionEntry } from '../../services/collections.js';
@@ -23,11 +26,12 @@ const RECENT_ZONE = 'searchRecent';
  */
 export function createSearchPage(ctx, params = {}) {
   const status = createHint({ className: 'search-status' });
-  const rows = createTypedRows(ctx, { prefix: 'search', limit: PER_TYPE, linkFromField: true, upZone: SEARCH_BAR_ZONE, onOpen: (entry) => remember() || open(entry) });
+  const rows = createTypedRows(ctx, { prefix: 'search', limit: PER_TYPE, linkFromField: true, upZone: SEARCH_BAR_ZONE, order: SEARCH_ORDER, onOpen: (entry) => remember() || open(entry) });
 
   /** A collection opens its page; a programme opens its channel / group with the focus on it; the rest opens its detail page. */
   function open(entry) {
     if (entry.collectionId) return ctx.router.push('collection', { id: entry.collectionId, section: 'search' });
+    if (entry.person) return ctx.router.push('person', { kind: entry.person.kind, id: entry.person.id, name: entry.person.name, section: 'search' });
     if (entry.isProgramme) return ctx.openEntry(entry.row, { section: 'search', programme: entry.start });
     return ctx.openEntry(entry, { section: 'search' });
   }
@@ -53,6 +57,32 @@ export function createSearchPage(ctx, params = {}) {
         subtitle: `${format(p.start)} – ${format(p.stop)}`,
         start: p.start,
         row,
+      });
+    }
+    return out;
+  }
+  /**
+   * People and production companies whose name matches: TMDB's (with their photo / logo) when TMDB is on, and the people the provider's
+   * details name (cast, directors) that TMDB did not give; a card opens the person page.
+   */
+  async function matchingPeople(text) {
+    const out = [];
+    const seen = new Set();
+    const tmdb = ctx.tmdb && ctx.tmdb.enabled && ctx.tmdb.searchPeople ? ctx.tmdb : null;
+    if (tmdb) {
+      const [people, companies] = await Promise.all([tmdb.searchPeople('person', text).catch(() => []), tmdb.searchPeople('company', text).catch(() => [])]);
+      people.concat(companies).slice(0, PER_TYPE * 2).forEach((p) => {
+        if (p.kind === 'person') seen.add(makeSearchKey(p.name));
+        out.push({ key: `${p.kind}:t${p.id}`, type: p.kind, name: p.name, icon: p.photo, subtitle: p.kind === 'company' ? p.department : departmentLabel(p.department), person: { kind: p.kind, id: p.id, name: p.name } });
+      });
+    }
+    const current = await ctx.active.get();
+    if (current) {
+      const names = await peopleMatching(current.db, text).catch(() => []);
+      names.forEach((p) => {
+        if (seen.has(makeSearchKey(p.name))) return;
+        const roles = p.roles.map((role) => t(role === 'director' ? 'person.director' : 'person.cast')).join(', ');
+        out.push({ key: `person:n${makeSearchKey(p.name)}`, type: 'person', name: p.name, icon: '', subtitle: roles, person: { kind: 'person', id: null, name: p.name } });
       });
     }
     return out;
@@ -146,9 +176,14 @@ export function createSearchPage(ctx, params = {}) {
     running = true;
     try {
       // A kids profile: adult titles are never among the results.
-      const found = query.length < 2 ? [] : (await ctx.search.search(query, { limit: PER_TYPE * 6 })).filter((row) => !isHidden(row.key));
-      if (query.length >= 2 && ctx.collections) found.push(...(await matchingCollections(query)));
-      if (query.length >= 2) found.push(...(await matchingProgrammes(query).catch(() => [])));
+      // The titles, the collections, the guide's programmes and the people are asked together.
+      const [titles, collections, programmes, people] = await Promise.all([
+        ctx.search.search(query, { limit: PER_TYPE * 6 }),
+        ctx.collections ? matchingCollections(query) : [],
+        matchingProgrammes(query).catch(() => []),
+        matchingPeople(query).catch(() => []),
+      ]);
+      const found = titles.filter((row) => !isHidden(row.key)).concat(collections, programmes, people);
       if (destroyed || mine !== token) return;
       rows.set(found);
       skeleton.style.display = 'none';

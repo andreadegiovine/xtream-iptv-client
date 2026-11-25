@@ -8,11 +8,11 @@ import { LIVE_ALL } from '../../src/services/catalogQuery.js';
 const wait = (ms = 30) => new Promise((resolve) => setTimeout(resolve, ms));
 let counter = 0;
 
-async function setup() {
+async function setup({ archive = 0, since = 60000 } = {}) {
   const db = await openProviderDb(`player-live-${(counter += 1)}`);
   const row = (entryKey, added) => ({ key: `${entryKey}|${LIVE_ALL}`, entryKey, type: 'live', categoryId: LIVE_ALL, added });
   await dbPutMany(db, 'entries', [
-    { key: 'live:i1', type: 'live', name: 'Sky Uno', defaultId: 1, networkKey: 'live:nSky', epgChannelId: 'c1' },
+    { key: 'live:i1', type: 'live', name: 'Sky Uno', defaultId: 1, networkKey: 'live:nSky', epgChannelId: 'c1', ...(archive ? { archive } : {}) },
     { key: 'live:i3', type: 'live', name: 'Sky Due', defaultId: 3, networkKey: 'live:nSky' },
     { key: 'live:i2', type: 'live', name: 'Cielo', defaultId: 2 },
   ]);
@@ -23,14 +23,14 @@ async function setup() {
   await dbPutMany(db, 'entry_cat', [row('live:nSky', 30), row('live:gRai', 20), row('live:i2', 10)]);
   const engine = { available: () => true, start: jest.fn((url, opts) => (engine.handlers = opts.handlers)), play: jest.fn(), pause: jest.fn(), seekTo: jest.fn(), stop: jest.fn(), getTime: () => 0, getDuration: () => 0 };
   const now = Date.now();
-  const client = { streamUrl: (type, id) => `http://h/${type}/${id}` };
+  const client = { streamUrl: (type, id) => `http://h/${type}/${id}`, catchupUrl: jest.fn(async (id, start) => `http://h/timeshift/${id}/${start}`) };
   const ctx = {
     createEngine: () => engine,
     notices: createNoticeService({ root: document.body }),
     catalog: { pause() {}, resume() {} },
     settings: { get: async () => ({ bufferSeconds: 5, timeFormat: '24h' }) },
     active: { get: async () => ({ provider: { id: 'p' }, client, db }), authenticatedClient: async () => client },
-    epg: { maybeSync: async () => null, nowNext: async (id) => (id === 'c1' ? { now: { title: 'News', start: now - 60000, stop: now + 3600000 }, next: null } : { now: null, next: null }) },
+    epg: { maybeSync: async () => null, nowNext: async (id) => (id === 'c1' ? { now: { title: 'News', start: now - since, stop: now + 3600000 }, next: null } : { now: null, next: null }) },
     dialogs: { isOpen: () => false, choose: jest.fn() },
     router: { back: jest.fn() },
   };
@@ -38,7 +38,7 @@ async function setup() {
   document.body.appendChild(page.el);
   page.mount();
   await wait();
-  return { page, ctx, engine };
+  return { page, ctx, engine, client };
 }
 
 const visible = (page) => Array.from(page.el.querySelectorAll('.player-btn')).filter((b) => b.style.display !== 'none').map((b) => b.getAttribute('aria-label'));
@@ -52,11 +52,10 @@ test('live: end of the programme after LIVE; network, previous and next before i
   const { page, ctx, engine } = await setup();
   expect(page.el.querySelector('.player-time').textContent).toMatch(/^LIVE · ends at \d\d:\d\d$/);
   expect(page.el.querySelector('.player-now').textContent).toBe('News');
-  expect(visible(page).slice(0, 4)).toEqual(['Pause', 'Open the network', 'Previous channel', 'Next channel']); // Versions hidden: not a group
+  expect(visible(page).slice(0, 4)).toEqual(['Pause', 'Previous channel', 'Next channel', 'Open the network']); // Versions hidden: not a group
   expect(visible(page)).not.toContain('Subtitles'); // the stream has no subtitle tracks
   page.onAction(Action.ENTER); // focus on the controls: play / pause
   expect(focusedTip(page)).toBe('Pause');
-  page.onAction(Action.RIGHT); // the network
   page.onAction(Action.RIGHT); // previous channel: the last of "show all" (wraps)
   await wait();
   expect(focusedTip(page)).toBe('Cielo');
@@ -70,8 +69,7 @@ test('live: end of the programme after LIVE; network, previous and next before i
   expect(page.el.querySelector('.player-time').textContent).toMatch(/^LIVE$/); // no guide for this one
   // The network button lists its channels, titled with its name.
   ctx.dialogs.choose.mockResolvedValueOnce('live:i1');
-  page.onAction(Action.LEFT);
-  page.onAction(Action.LEFT);
+  page.onAction(Action.RIGHT); // after next channel
   page.onAction(Action.ENTER);
   await wait();
   expect(ctx.dialogs.choose.mock.calls[0][0]).toMatchObject({ title: 'Sky', options: [{ label: 'Sky Uno', value: 'live:i1' }, { label: 'Sky Due', value: 'live:i3' }], selected: 'live:i3' });
@@ -88,7 +86,9 @@ test('live group: "Versions" lists its streams and plays the chosen one', async 
   expect(page.el.querySelector('.player-title').textContent).toBe('Rai 1');
   expect(engine.start.mock.calls[engine.start.mock.calls.length - 1][0]).toBe('http://h/live/11');
   ctx.dialogs.choose.mockResolvedValueOnce(12);
-  page.onAction(Action.ENTER); // focus on play / pause, then Versions (the group is in no network)
+  page.onAction(Action.ENTER); // focus on play / pause, then previous, next channel, Versions (the group is in no network)
+  page.onAction(Action.RIGHT);
+  page.onAction(Action.RIGHT);
   page.onAction(Action.RIGHT);
   page.onAction(Action.ENTER);
   await wait();
@@ -169,5 +169,52 @@ test('audio listed late: looked at again after the start; the language of the ap
   expect(engine.setAudioTrack).toHaveBeenCalledTimes(2);
   expect(tracks.find((track) => track.current).language).toBe('ita');
   Date.now = realNow;
+  page.destroy();
+});
+
+test('live with catch-up: the programme\'s bar (live edge on), from the start, back / forward, and back to live', async () => {
+  const { page, engine, client } = await setup({ archive: 3, since: 10 * 60000 });
+  await wait();
+  const shown = visible(page);
+  expect(shown[0]).toBe('Watch from the start');
+  expect(shown.slice(2, 4)).toEqual(['Pause', expect.stringMatching(/30/)]);
+  expect(shown.indexOf('Previous channel')).toBe(4); // after the space of a button
+  expect(page.el.querySelector('.player-spacer')).not.toBeNull();
+  expect(page.el.querySelector('.player-seek').style.display).toBe('');
+  const zone = page.el.querySelector('.player-credits');
+  expect(zone.style.display).toBe(''); // the part still to come, as the end credits
+  expect(parseFloat(zone.style.left)).toBeGreaterThan(10);
+  expect(parseFloat(zone.style.left)).toBeLessThan(20);
+  // "Watch from the start": a timeshift stream from the programme's start (to the minute).
+  page.onAction(Action.ENTER);
+  page.onAction(Action.LEFT);
+  page.onAction(Action.LEFT);
+  page.onAction(Action.ENTER);
+  await wait();
+  expect(client.catchupUrl).toHaveBeenCalled();
+  const [, from] = client.catchupUrl.mock.calls[0];
+  expect(from % 60000).toBe(0);
+  expect(engine.start.mock.calls[engine.start.mock.calls.length - 1][0]).toBe(`http://h/timeshift/1/${from}`);
+  expect(page.el.querySelector('.player-time').textContent).not.toMatch(/LIVE/);
+  // Forward past live: the live stream again.
+  page.onAction(Action.FAST_FORWARD);
+  await wait();
+  expect(engine.start.mock.calls[engine.start.mock.calls.length - 1][0]).not.toBe('http://h/live/1');
+  page.onAction(Action.FAST_FORWARD); // 30 s at a time: still behind
+  await wait();
+  expect(visible(page)).toContain('Back to live');
+  const before = engine.start.mock.calls.length;
+  page.el.querySelectorAll('.player-btn').forEach((b) => b.getAttribute('aria-label') === 'Back to live' && b.click());
+  await wait();
+  expect(engine.start.mock.calls.length).toBe(before + 1);
+  expect(engine.start.mock.calls[engine.start.mock.calls.length - 1][0]).toBe('http://h/live/1');
+  page.destroy();
+});
+
+test('live without catch-up: no bar, no back / forward', async () => {
+  const { page } = await setup();
+  expect(page.el.querySelector('.player-seek').style.display).toBe('none');
+  expect(visible(page)).not.toContain('Watch from the start');
+  expect(visible(page)[0]).toBe('Pause');
   page.destroy();
 });

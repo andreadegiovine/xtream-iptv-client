@@ -82,6 +82,10 @@ export function createTmdbClient({ getApiKey = () => '', fetcher = fetchJson } =
     trending: (type, language, page = 1) => get(`/trending/${kind(type)}/week`, { language, page }),
     /** A person (the person page): details and every film / series they are in or made. */
     person: (id, language) => get(`/person/${id}`, { language, append_to_response: 'combined_credits' }),
+    /** People whose name matches (the search page). */
+    searchPerson: (query, language) => get('/search/person', { query, language }),
+    /** Production companies whose name matches (the search page). */
+    searchCompany: (query) => get('/search/company', { query }),
     /** A production company: its details. */
     company: (id) => get(`/company/${id}`),
     /** One page of the films (or series) of a production company, most popular first. */

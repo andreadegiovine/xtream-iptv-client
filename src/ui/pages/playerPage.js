@@ -17,6 +17,7 @@ import { streamLabel, sourceNames } from '../streamLabel.js';
 import { portableKeyFor } from '../../services/shareKeys.js';
 import { createPlayerSubtitles } from './player/subtitles.js';
 import { createSubtitleAligner } from './player/subtitleAlign.js';
+import { canTimeshift, wallPosition, timelineBar, seekPlan, LIVE_SNAP_MS } from '../../services/liveTimeline.js';
 
 const CONTROLS_MS = 4000;
 const SAVE_EVERY_MS = 10000;
@@ -84,6 +85,12 @@ export function createPlayerPage(ctx, params) {
   let liveEntry = null; // the channel / group playing (live)
   let liveProgramme = null; // the programme on, from the guide (live)
   let programmeTimer = null;
+  // Live with catch-up (liveTimeline.js): the bar is `barProgramme`; a timeshift stream from `tsBase` plays when behind live (null: the
+  // live stream, behind by `liveDelay` ms paused, `pausedSince` while paused).
+  let barProgramme = null;
+  let tsBase = null;
+  let liveDelay = 0;
+  let pausedSince = null;
   let sequence = null; // Promise of the keys previous / next channel walk
   const neighborNames = new Map(); // key → name, for the tooltip of previous / next
   let creditsOffset = null; // series: the end credits start this many seconds before the end (set by the user), otherwise null
@@ -105,20 +112,21 @@ export function createPlayerPage(ctx, params) {
   // Control buttons: transport at the bottom left (live: play / pause only), aspect ratio + subtitles at the bottom right. Every button
   // has its name as tooltip, above it (previous / next channel: the name of the channel it goes to).
   const buttonDefs = [
-    // Live, when the provider keeps the channel's past and the guide knows the programme on: it plays from its start (catch-up).
+    // Live, when the provider keeps the channel's past and the guide knows the programme on: back to its start (catch-up).
     { id: 'fromStart', icon: 'rewind', label: () => t('player.fromStart'), liveOnly: true, hidden: true, run: () => watchFromStart() },
     // Series: previous / next episode on both sides of play / pause, shown only when there is one (the position is moved with the progress pointer).
     { id: 'prevEpisode', icon: 'previous', label: () => t('player.prevEpisode'), seriesOnly: true, hidden: true, run: () => stepEpisode(-1) },
-    { id: 'back30', icon: 'backward', label: () => t('player.back30', { seconds: SEEK_LONG }), vodOnly: true, run: () => controller.seekBy(-SEEK_LONG) },
+    // Back / forward: on demand always; live only with catch-up (over the programme's bar, never past live).
+    { id: 'back30', icon: 'backward', label: () => t('player.back30', { seconds: SEEK_LONG }), hidden: isLive, run: () => seekBy(-SEEK_LONG) },
     { id: 'toggle', icon: 'pause', label: () => t('player.pause'), group: 'start', run: () => togglePause() },
-    // Live: after a pause the channel goes on from where it stopped; this one, next to play / pause, goes back to now.
+    { id: 'forward30', icon: 'forward', label: () => t('player.forward30', { seconds: SEEK_LONG }), hidden: isLive, run: () => seekBy(SEEK_LONG) },
+    // Live: after a pause (or behind live with catch-up) the channel goes on from where it was; this one goes back to now.
     { id: 'goLive', icon: 'goLive', label: () => t('player.goLive'), liveOnly: true, hidden: true, run: () => goLive() },
-    { id: 'forward30', icon: 'forward', label: () => t('player.forward30', { seconds: SEEK_LONG }), vodOnly: true, run: () => controller.seekBy(SEEK_LONG) },
     { id: 'nextEpisode', icon: 'next', label: () => t('player.nextEpisode'), seriesOnly: true, hidden: true, run: () => stepEpisode(1) },
-    { id: 'versions', icon: 'group', label: () => t('player.versions'), liveOnly: true, hidden: true, run: () => openVersions() }, // a group with several versions
-    { id: 'network', icon: 'network', label: () => t('networks.open'), liveOnly: true, hidden: true, run: () => openNetwork() }, // a channel of a network
     { id: 'prevChannel', icon: 'previous', label: () => t('player.prevChannel'), liveOnly: true, tip: true, run: () => stepChannel(-1) },
     { id: 'nextChannel', icon: 'next', label: () => t('player.nextChannel'), liveOnly: true, tip: true, run: () => stepChannel(1) },
+    { id: 'versions', icon: 'group', label: () => t('player.versions'), liveOnly: true, hidden: true, run: () => openVersions() }, // a group with several versions
+    { id: 'network', icon: 'network', label: () => t('networks.open'), liveOnly: true, hidden: true, run: () => openNetwork() }, // a channel of a network
     { id: 'aspect', icon: 'aspect', label: () => t('player.aspect'), group: 'end', run: () => cycleAspect() },
     // Live channels: only when the stream carries subtitle tracks (DVB, teletext, WebVTT of an HLS stream), the provider gives no others.
     { id: 'subtitles', icon: 'subtitles', label: () => t('player.subtitles'), group: 'end', hidden: isLive, run: () => subtitles.open() },
@@ -136,12 +144,18 @@ export function createPlayerPage(ctx, params) {
     if (def.hidden) def.el.style.display = 'none';
   });
   const buttonEl = (id) => (buttonDefs.find((d) => d.id === id) || {}).el;
-  // Full-width progress bar, then one row: previous episode, back 30 s, play/pause, forward 30 s, next episode and the time on the left, aspect ratio and subtitles on the right.
-  const row = h('div', { class: 'player-row' }, h('div', { class: 'player-group' }, buttonEl('fromStart'), buttonEl('prevEpisode'), buttonEl('back30'), buttonEl('toggle'), buttonEl('goLive'), buttonEl('forward30'), buttonEl('nextEpisode'), buttonEl('versions'), buttonEl('network'), buttonEl('prevChannel'), buttonEl('nextChannel'), timeEl), h('div', { class: 'player-group' }, buttonEl('aspect'), buttonEl('subtitles'), buttonEl('audio'), buttonEl('fullscreen'), buttonEl('credits')));
+  // Full-width progress bar, then one row: previous episode, back 30 s, play/pause, forward 30 s, next episode and the time on the left,
+  // aspect ratio and subtitles on the right. Live: from the start, back, play/pause, forward, back to live, the space of a button, previous /
+  // next channel, versions, network. The DOM order is the order of `buttonDefs` (the focus walks them in that order).
+  const spacer = isLive ? h('span', { class: 'player-spacer' }) : null;
+  const startButtons = ['fromStart', 'prevEpisode', 'back30', 'toggle', 'forward30', 'goLive', 'nextEpisode'].map(buttonEl);
+  const liveButtons = ['prevChannel', 'nextChannel', 'versions', 'network'].map(buttonEl);
+  const row = h('div', { class: 'player-row' }, h('div', { class: 'player-group' }, ...startButtons, spacer, ...liveButtons, timeEl), h('div', { class: 'player-group' }, buttonEl('aspect'), buttonEl('subtitles'), buttonEl('audio'), buttonEl('fullscreen'), buttonEl('credits')));
   // Back for the pointer (a finger, a mouse): before the title, shown only in pointer mode (the remote has its own Back key).
   const backEl = setTip(h('button', { class: 'player-back', type: 'button', 'aria-label': t('common.back') }, iconNode('back')), t('common.back'), 'down');
   const top = h('div', { class: 'player-top' }, h('div', { class: 'player-heading' }, backEl, h('div', { class: 'player-heading-text' }, titleEl, nowEl)));
-  const controls = h('div', { class: 'player-controls' }, ...(isLive ? [] : [seek]), row);
+  const controls = h('div', { class: 'player-controls' }, seek, row);
+  if (isLive) seek.style.display = 'none'; // live: only with catch-up (updateTimeline)
   const el = h('section', { class: 'player' }, top, controls, statusEl, subtitleEl);
 
   const current = () => playlist[index];
@@ -243,16 +257,31 @@ export function createPlayerPage(ctx, params) {
         if (destroyed || token !== loadToken) return;
         liveProgramme = n && n.now ? n.now : null;
         nowEl.textContent = liveProgramme ? liveProgramme.title : '';
-        updateFromStart();
+        updateTimeline();
         if (liveProgramme && outOfRange(liveProgramme.rating, rangeOf(ctx.profile))) leaveForKids('rating'); // the guide rates it outside the profile's range
-        drawProgress(lastState.position, lastState.duration);
+        drawState();
         const next = liveProgramme ? liveProgramme.stop : n && n.next ? n.next.start : null;
         if (next) programmeTimer = setTimeout(() => loadProgramme(token), Math.max(1000, next - Date.now() + 1000));
       })
       .catch(() => {});
   }
 
+  /** Live with catch-up: the bar in seconds of the programme (null otherwise). */
+  const timeline = () => (isLive && barProgramme ? timelineBar(barProgramme, { tsBase, position: lastState.position, liveDelay, pausedSince }) : null);
+  /** The bar as the scrub and the pointer see it: the programme's with catch-up, otherwise the stream's. */
+  function barState() {
+    const tl = timeline();
+    return tl ? { position: tl.position, duration: tl.duration, bufferedEnd: null, edge: tl.edge } : { position: lastState.position, duration: lastState.duration, bufferedEnd: lastState.bufferedEnd, edge: lastState.duration };
+  }
+
+  /** The bar drawn from the player's state (the programme's with catch-up). */
+  function drawState() {
+    const b = barState();
+    drawProgress(b.position, b.duration, b.bufferedEnd);
+  }
+
   function drawProgress(position, duration, bufferedEnd = null) {
+    const tl = timeline();
     const pct = duration > 0 ? Math.min(100, (position / duration) * 100) : 0;
     const bufferPct = duration > 0 && bufferedEnd !== null ? Math.min(100, Math.max(pct, (bufferedEnd / duration) * 100)) : 0;
     buffer.style.width = `${bufferPct}%`;
@@ -260,10 +289,13 @@ export function createPlayerPage(ctx, params) {
     knob.style.left = `${pct}%`;
     tip.style.left = `${pct}%`;
     tip.textContent = formatClock(position);
-    const creditsAt = creditsStart(duration);
+    // The end credits (series), or with catch-up the part of the programme still to come: the same darker colour.
+    const creditsAt = tl ? (tl.edge < duration ? tl.edge : null) : creditsStart(duration);
     creditsZone.style.display = creditsAt === null ? 'none' : '';
     if (creditsAt !== null) creditsZone.style.left = `${(creditsAt / duration) * 100}%`;
-    timeEl.textContent = isLive ? `${t('player.live')}${liveEndText()}` : `${formatClock(position)} / ${formatClock(duration)}${endsAtText(position, duration)}`;
+    const atLive = !tl || (tl.behind < LIVE_SNAP_MS && pausedSince === null);
+    if (isLive) timeEl.textContent = atLive ? `${t('player.live')}${liveEndText()}` : `${formatClock(position)} / ${formatClock(duration)}`;
+    else timeEl.textContent = `${formatClock(position)} / ${formatClock(duration)}${endsAtText(position, duration)}`;
   }
 
   /** The minute the picture now starts from, shown above the knob for a moment after a jump. */
@@ -274,10 +306,11 @@ export function createPlayerPage(ctx, params) {
   }
 
   function setScrub(seconds) {
-    scrub = scrubTarget(seconds, 0, lastState.duration);
+    const b = barState();
+    scrub = scrubTarget(seconds, 0, b.edge); // with catch-up, never past live
     seek.classList.add('scrubbing');
     tip.classList.add('visible');
-    drawProgress(scrub, lastState.duration, lastState.bufferedEnd);
+    drawProgress(scrub, b.duration, b.bufferedEnd);
   }
 
   function endScrub(commit) {
@@ -286,14 +319,44 @@ export function createPlayerPage(ctx, params) {
     scrub = null;
     seek.classList.remove('scrubbing');
     tip.classList.remove('visible');
-    if (commit && target !== null) controller.seekTo(target);
-    drawProgress(commit && target !== null ? target : lastState.position, lastState.duration);
+    if (commit && target !== null) seekBarTo(target);
+    const b = barState();
+    drawProgress(commit && target !== null ? target : b.position, b.duration);
+  }
+
+  /** A position of the bar (seconds): the stream's, or with catch-up the programme's (a timeshift stream, or live again). */
+  function seekBarTo(seconds) {
+    if (timeline()) seekWall(barProgramme.start + seconds * 1000);
+    else controller.seekTo(seconds);
+  }
+
+  /** Back / forward by `seconds`. */
+  function seekBy(seconds) {
+    if (!isLive) {
+      controller.seekBy(seconds);
+      return;
+    }
+    if (!timeline()) return;
+    seekWall(wallPosition({ tsBase, position: lastState.position, liveDelay, pausedSince }) + seconds * 1000);
+    showControls();
+    flashTip();
+  }
+
+  /** Catch-up: shows the instant `target` of the programme (seek in the timeshift stream, load another one, or live again). */
+  function seekWall(target) {
+    if (!barProgramme) return;
+    const plan = seekPlan({ target, programme: barProgramme, tsBase, loaded: lastState.duration });
+    if (plan.action === 'live') {
+      if (tsBase !== null || liveDelay > 0 || pausedSince !== null) goLive();
+    } else if (plan.action === 'seek') controller.seekTo(plan.seconds);
+    else play(index, { from: plan.from, startAt: plan.startAt });
   }
 
   /** Left / right on the progress pointer: move the target position (applied with OK). */
   function stepScrub(delta) {
-    if (!(lastState.duration > 0)) return;
-    setScrub(scrubTarget(scrub === null ? lastState.position : scrub, delta, lastState.duration));
+    const b = barState();
+    if (!(b.duration > 0)) return;
+    setScrub(scrubTarget(scrub === null ? b.position : scrub, delta, b.edge));
     // OK applies at once; otherwise the position is applied by itself when the pointer stops moving.
     clearTimeout(scrubTimer);
     scrubTimer = setTimeout(() => {
@@ -310,11 +373,11 @@ export function createPlayerPage(ctx, params) {
   // Pointer (Smart Remote / mouse): click or drag on the bar.
   const pointerPosition = (event) => {
     const rect = bar.getBoundingClientRect();
-    return positionFromPointer(event.clientX, rect.left, rect.width, lastState.duration);
+    return positionFromPointer(event.clientX, rect.left, rect.width, barState().duration);
   };
   // Pointer events: the mouse, a finger and the Magic Remote alike.
   seek.addEventListener('pointerdown', (event) => {
-    if (!(lastState.duration > 0)) return;
+    if (!(barState().duration > 0)) return;
     event.preventDefault();
     // The moves of this pointer stay with the bar (a finger that leaves it keeps dragging); `touch-action: none` in the stylesheet keeps
     // the browser from taking a drag for a scroll and cancelling it.
@@ -434,10 +497,33 @@ export function createPlayerPage(ctx, params) {
     controller.togglePause();
   }
 
-  /** A live channel behind live (it was paused) back to now: the stream is opened again. */
+  /** A live channel behind live (it was paused, or catch-up) back to now: the live stream is opened again. */
   function goLive() {
     focusIndex = startIndex();
     play(index);
+  }
+
+  /** Catch-up: the live stream's pause counted (how far behind live it is); the timeshift stream at its end, or caught up with live, goes live. */
+  function followTimeline(state) {
+    if (!isLive || !barProgramme) return;
+    if (tsBase === null) {
+      if (state.status === 'paused' && pausedSince === null) pausedSince = Date.now();
+      else if (state.status === 'playing' && pausedSince !== null) {
+        liveDelay += Date.now() - pausedSince;
+        pausedSince = null;
+      }
+    } else if (state.status === 'ended' || (state.status === 'playing' && Date.now() - wallPosition({ tsBase, position: state.position }) < LIVE_SNAP_MS / 2)) {
+      goLive();
+      return;
+    }
+    // The programme after the one of the bar: the bar moves on to it once what plays gets there.
+    const p = liveProgramme;
+    if (p && p !== barProgramme && p.start >= barProgramme.stop && wallPosition({ tsBase, position: state.position, liveDelay, pausedSince }) >= barProgramme.stop) {
+      barProgramme = p;
+      updateTimeline();
+    }
+    const tl = timeline();
+    if (tl) setVisible('goLive', tl.behind >= LIVE_SNAP_MS || pausedSince !== null);
   }
 
   /** Position of play / pause among the buttons (the first button for live channels). */
@@ -454,7 +540,7 @@ export function createPlayerPage(ctx, params) {
 
   /** Up from the player (or from the buttons): the focus goes to the progress pointer. */
   function focusBar() {
-    if (isLive) return;
+    if (isLive && !timeline()) return;
     if (!focusMode) focusIndex = startIndex();
     focusMode = true;
     barFocus = true;
@@ -598,9 +684,11 @@ export function createPlayerPage(ctx, params) {
   function render(state) {
     if (destroyed) return;
     lastState = state;
+    followTimeline(state);
+    if (destroyed) return;
     if (aligner && aligner.mainCursor() !== null) drawProgress(aligner.mainCursor() / 1000, state.duration, state.bufferedEnd); // its cursor
     else if (scrub === null) {
-      drawProgress(state.position, state.duration, state.bufferedEnd);
+      drawState();
       if (!isLive && lastPosition !== null && Math.abs(state.position - lastPosition) > 3) {
         showControls();
         flashTip();
@@ -692,9 +780,13 @@ export function createPlayerPage(ctx, params) {
     play(index);
   }
 
-  async function play(nextIndex = index) {
+  /** `from` (live with catch-up): a timeshift stream from that instant, started `startAt` seconds in; without it the live stream. */
+  async function play(nextIndex = index, { from = null, startAt: seekAt = 0 } = {}) {
     index = nextIndex;
     const token = (loadToken += 1);
+    tsBase = null;
+    liveDelay = 0;
+    pausedSince = null;
     closeNextNotice();
     nextOffered = false;
     subtitles.reset();
@@ -730,6 +822,13 @@ export function createPlayerPage(ctx, params) {
         if (destroyed || token !== loadToken) return;
         if (!streamUrl) throw new Error('no catch-up address for this provider');
         nowEl.textContent = [params.catchup.channel, `${formatClockTime(new Date(start), timeFormat, i18n.getLocale())} – ${formatClockTime(new Date(stop), timeFormat, i18n.getLocale())}`].filter(Boolean).join(' · ');
+      } else if (isLive && from !== null && barProgramme) {
+        // Catch-up on the live player: the programme from `from` (the address runs to the end of the programme).
+        streamUrl = client.catchupUrl ? (await client.catchupUrl(current().id, from, Math.max(barProgramme.stop, from + 60000))) || '' : '';
+        if (destroyed || token !== loadToken) return;
+        if (!streamUrl) throw new Error('no catch-up address for this provider');
+        tsBase = from;
+        startAt = seekAt;
       } else streamUrl = client.streamUrl(params.type, current().id, current().ext);
       controller.load(streamUrl, { startAt, bufferSeconds, onSubtitle: subtitles.show });
       if (isLive) loadProgramme(token);
@@ -814,13 +913,14 @@ export function createPlayerPage(ctx, params) {
     params.epgChannelId = entry.epgChannelId;
     playlist = [{ id: memberId || entry.defaultId, ext: '', title: '' }];
     index = 0;
+    barProgramme = null; // the bar of the new channel, once its programme is known
     updateLiveButtons();
     play(0);
   }
 
   /** Versions and network buttons for the channel playing; the tooltips are worked out again. */
   function updateLiveButtons() {
-    updateFromStart();
+    updateTimeline();
     setVisible('versions', Boolean(liveEntry && liveEntry.isGroup && (liveEntry.members || []).length > 1));
     setVisible('network', Boolean(liveEntry && liveEntry.networkKey));
     buttonDefs.forEach((def) => {
@@ -836,27 +936,32 @@ export function createPlayerPage(ctx, params) {
     return (member && member.archive) || liveEntry.archive || 0;
   }
 
-  /** "Watch from the start": shown on a live channel whose provider keeps its past, while the guide knows the programme on. */
-  function updateFromStart() {
-    const p = liveProgramme;
-    setVisible('fromStart', Boolean(isLive && p && p.start < Date.now() && archiveDays() > 0 && Date.now() - p.start < archiveDays() * 24 * 3600 * 1000));
+  /**
+   * Catch-up on a live channel whose provider keeps its past, while the guide knows the programme on: the progress bar of the programme,
+   * "Watch from the start", back / forward. The bar stays on its programme while a timeshift stream plays.
+   */
+  function updateTimeline() {
+    if (!isLive) return;
+    const days = archiveDays();
+    if (barProgramme && !canTimeshift(barProgramme, days) && tsBase === null) barProgramme = null;
+    if (!barProgramme && canTimeshift(liveProgramme, days)) barProgramme = liveProgramme;
+    const on = Boolean(barProgramme);
+    setVisible('fromStart', on);
+    setVisible('back30', on);
+    setVisible('forward30', on);
+    seek.style.display = on ? '' : 'none';
+    if (!on && barFocus) {
+      barFocus = false;
+      paintFocus();
+    }
+    drawState();
   }
 
-  /** The programme on, from its start (a catch-up player over this one: Back comes back to the channel live). */
+  /** The programme on, from its start (a timeshift stream in this player; forward or "Back to live" return to live). */
   function watchFromStart() {
-    const p = liveProgramme;
-    if (!p) return;
-    ctx.router.push('player', {
-      type: 'live',
-      catchup: { start: p.start, stop: p.stop, channel: title },
-      entryKey: params.entryKey,
-      title: p.title,
-      icon: params.icon,
-      playlist: [{ id: current().id, ext: '', title: '' }],
-      index: 0,
-      epgChannelId: params.epgChannelId,
-      section: params.section,
-    });
+    if (!barProgramme) return;
+    seekWall(barProgramme.start);
+    showControls();
   }
 
   /** The key `delta` channels away in "show all" (the list is read once per player). */
@@ -998,11 +1103,12 @@ export function createPlayerPage(ctx, params) {
     [Action.PLAY_PAUSE]: () => togglePause(),
     // Live: the arrows bring the controls with the focus on the first button on the left; only CH+ / CH- change channel.
     // On demand: the arrows bring the progress pointer and move it, applied once it stops (as on the pointer): never a jump at once.
-    [Action.LEFT]: () => (isLive ? enterFocus() : scrubFromHidden(-SCRUB_STEP)),
-    [Action.RIGHT]: () => (isLive ? enterFocus() : scrubFromHidden(SCRUB_STEP)),
-    [Action.REWIND]: () => controller.seekBy(-SEEK_LONG),
-    [Action.FAST_FORWARD]: () => controller.seekBy(SEEK_LONG),
-    [Action.UP]: () => (isLive ? enterFocus() : focusBar()),
+    // Live with catch-up: as on demand, over the programme's bar.
+    [Action.LEFT]: () => (isLive && !timeline() ? enterFocus() : scrubFromHidden(-SCRUB_STEP)),
+    [Action.RIGHT]: () => (isLive && !timeline() ? enterFocus() : scrubFromHidden(SCRUB_STEP)),
+    [Action.REWIND]: () => seekBy(-SEEK_LONG),
+    [Action.FAST_FORWARD]: () => seekBy(SEEK_LONG),
+    [Action.UP]: () => (isLive && !timeline() ? enterFocus() : focusBar()),
     [Action.DOWN]: () => enterFocus(),
     [Action.CHANNEL_UP]: () => (isLive ? changeChannel(1) : stepEpisode(1)),
     [Action.CHANNEL_DOWN]: () => (isLive ? changeChannel(-1) : stepEpisode(-1)),
@@ -1035,7 +1141,7 @@ export function createPlayerPage(ctx, params) {
     },
     [Action.UP]: () => {
       if (barFocus) return;
-      if (isLive) exitFocus();
+      if (isLive && !timeline()) exitFocus();
       else focusBar();
     },
     [Action.DOWN]: () => {

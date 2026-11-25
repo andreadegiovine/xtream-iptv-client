@@ -285,6 +285,27 @@ export function createTmdbService({ db, client, getLanguage, now = Date.now, onA
   }
 
   /**
+   * People or production companies whose name matches `query` (the search page; kept a day): [{ kind, id, name, photo, department }]
+   * (a company: its logo as `photo`, its country as `department`), as TMDB orders them (most popular first), adult performers left out.
+   */
+  async function searchPeople(kind, query) {
+    const text = String(query || '').trim();
+    if (!client.enabled || text.length < 2) return [];
+    const language = getLanguage();
+    const record = await cached('tmdb', `search:${kind}:${makeSearchKey(text)}:${language}`, () => RECOMMENDATIONS_TTL_MS, async () => {
+      const data = kind === 'company' ? await client.searchCompany(text) : await client.searchPerson(text, language);
+      return ((data && data.results) || [])
+        .filter((r) => r && r.id && r.name && !r.adult)
+        .map((r) =>
+          kind === 'company'
+            ? { kind, id: r.id, name: r.name, photo: posterUrl(r.logo_path, 'w300'), department: r.origin_country || '' }
+            : { kind, id: r.id, name: r.name, photo: posterUrl(r.profile_path, 'w342'), department: r.known_for_department || '' },
+        );
+    });
+    return record.value || [];
+  }
+
+  /**
    * A person for the person page (kept a day): { kind: 'person', id, name, photo, biography, birthday, deathday, placeOfBirth,
    * department, credits: [{ type, tmdbId, role, backdrop? }] } (role: the character, or the job; backdrop: the title's picture). Null when TMDB does not know them.
    */
@@ -379,6 +400,7 @@ export function createTmdbService({ db, client, getLanguage, now = Date.now, onA
     recommendations,
     person,
     company,
+    searchPeople,
     matchTmdbId,
     /** Metadata for a detail page: provider tmdb id first, otherwise a conservative title match. */
     forEntry(entry) {

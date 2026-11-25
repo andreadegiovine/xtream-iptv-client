@@ -10,7 +10,7 @@ Legend: `[x]` done · `[~]` partial · `[ ]` to do
 
 ## Open points (to discuss)
 
-- **Catch-up (TV archive).** Done in patch 217 (guide, channel page, "Watch from the start"); its check is under [Test](#test). Optional: "back N minutes" in the live player.
+- **Catch-up (TV archive).** Done in patches 217–218 (guide, channel page, "Watch from the start", the programme's bar in the live player); its check is under [Test](#test).
 - **System notifications for scheduled viewing.** Done in patch 160 (local alerts; push ruled out: it needs a server). See MULTIPLATFORM.md, "Scheduled viewing alerts".
 - **Profiles (Netflix style).** Done in patch 179 (see there and DESIGN.md, "Profiles").
 - **Recording to local or network storage.** Analysed, no code (15-25+ days). Pros: much asked for, watch later. Cons: many Xtream subscriptions allow one connection (recording one channel while watching another fails, may get the account blocked); TVs suspend apps in the background (records only while open; Android needs a foreground service); storage: Android and desktop local files feasible, Tizen USB maybe, webOS practically no; network shares (SMB / NAS) only Android and desktop with native libraries; HLS needs the segments joined; recording protected content raises store and legal concerns. Catch-up (patch 217) covers part of it (provider-side recordings, every platform, no extra connection).
@@ -20,7 +20,7 @@ Legend: `[x]` done · `[~]` partial · `[ ]` to do
 - **Backup and restore.** Export / import providers, favourites, collections and settings (a file, or a QR code): moving to another TV without Trakt. The file carries credentials: needs a password.
 - **Several providers active at the same time.** Done in patch 181 (see there and DESIGN.md, "Unified catalog").
 - **Self-hosted server (Docker / LXC, e.g. on Proxmox), with a "Xtream IPTV server" provider type.** Analysed, no code. What it gives: browsers (PC, phone, tablet) use the same app from `http://server:port` (the web build exists), no CORS / http problems (the server forwards provider requests), one sync of providers, TMDB and guide for every device (fast start on slow TVs), profiles, progress, favourites and collections shared between devices without Trakt; the apps add the server as a provider and get catalog and data ready. Concerns: browsers do not play raw `.ts` live streams and many MKV files (mpegts.js / hls.js as on desktop, or ffmpeg remux / transcode on the server: CPU); TV browsers are poor for video (not a replacement for the app on an old TV); streams relayed by the server put several devices on one account (many subscriptions allow 1-2 connections: devices should take streams from the provider directly when they can); the server holds the credentials and everyone's data (login, local network or VPN only, never open to the internet); one more piece to update. Phases: 1) minimal Node server in Docker serving the web app and forwarding provider requests, browsers play live with mpegts.js / hls.js (3-5 days; `scripts/mock-xtream` already serves the build); 2) login, profiles, progress and favourites kept on the server (4-6 days); 3) the server syncs and unifies the providers, the apps read catalog and guide from it through the new provider type (6-10 days, the biggest change, the most useful for slow TVs); 4) optional ffmpeg remux / transcode for what browsers cannot play (3-5 days).
-- **People in the search page.** Asked with patch 190, no code yet. A "People" row in the search results (TMDB's person search, and without TMDB the names the provider gives, `people` store) opening the person page; possibly a `cast:` / `director:` / `company:` prefix in the search field (`Cast: Will Smith`) leading to the same page after choosing among people of the same name.
+- **People in the search page.** Done in patch 218 (people and production companies, rows after films and series).
 - **iOS / iPadOS version.** Analysed, no code. Capacitor 8 (`@capacitor/ios`) in `platforms/ios` like Android: native HTTP requests (providers without CORS, plain http, plus the ATS exception in Info.plist), `@capacitor/local-notifications` for scheduled viewing, landscape only, safe areas. The player is the hard part: AVPlayer plays only HLS and MP4 / MOV, so live channels would ask the `.m3u8` output of Xtream, while MKV and raw TS films need a native player (MobileVLCKit plugin, like the ExoPlayer one: audio / subtitle tracks). Phase 1 (installable app: HTTP, notifications, HLS / MP4) then phase 2 (VLCKit). Needs a Mac with Xcode; a free Apple ID signs for 7 days, the Apple Developer Program (99 €/year) for a year and TestFlight. Apple TV (tvOS) is out: no WebView, Capacitor does not support it.
 
 ## Test
@@ -35,7 +35,7 @@ Checks on the devices and in CI still to do; `[x]` when confirmed.
 - [ ] **"0 genres / 0 fetched" in Settings:** fixed in the TMDB page (patch 215); to confirm that it was the page the user saw (and not Trakt's).
 - [ ] **Picture format on Tizen:** cause not found yet; waiting for the TV's logs (patches 106–107).
 - [ ] **Dialogs taller than the screen on Fire TV:** they scroll now (profile creation); to confirm on the device.
-- [ ] **Catch-up with a real provider (patch 217):** the timeshift address and the provider's time zone, with an account that has an archive; "Watch from the start" and the past programmes on the TV.
+- [ ] **Catch-up with a real provider (patches 217–218):** the timeshift address and the provider's time zone, with an account that has an archive; the past programmes, the live bar (seek, pause, back to live) on the TV.
 - [ ] **End-to-end checks in the repository and in CI.** The Playwright scripts used to check the changes against the mock (mouse, touch, notifications, title details, settings, sidebar focus) live outside the repository; CI runs lint, unit tests and the build. Moving them in as smoke tests (Playwright + `scripts/mock-xtream`) would catch navigation, pointer and sync regressions. Cons: CI from about 45 s to 3-4 min; end-to-end checks are more fragile (the mock's guide depends on the time of the run: use `--epg-days 3`).
 
 ## 0. TV spike
@@ -1263,3 +1263,20 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
 - **Mock server:** one channel in two keeps 3 days; `/timeshift/` answers as the other media addresses.
 - **Tests:** time-zone start of the address, archive days of a channel and of a group, past programmes kept by the parser.
 - **Browser check (mock):** guide Left into the past, a past programme opens the channel page focused on it, OK requests the timeshift address (02:00 UTC → 03:00 Europe/Rome); live player with "Watch from the start" first, which requests the programme's address. Not verified on the TV (nor with a real provider's archive).
+
+### Patch 218 — People in the search; the live programme's bar (catch-up)
+- **Search:**
+  - two rows after films and series: **People** and **Production companies** whose name matches;
+  - with TMDB: its search of people and companies (photo or logo, what they are known for / country; adult performers left out; kept a day);
+  - without TMDB, or the names TMDB did not give: the cast and directors the provider's details name (`people` store), found by the start of any word of the name ("smi", "will sm"), cast and director together;
+  - a card opens the person page (by TMDB id, or by name); the titles, collections, programmes and people are now asked together.
+- **Live player with catch-up** (the channel keeps the programme on in its archive; `liveTimeline.js`):
+  - the **progress bar of the programme on** (start to end); the part after now is not navigable and has the colour of the end credits part;
+  - back / forward 30 s, the arrows, the pointer and the remote's ⏪ / ⏩ move over it; pause / play as before (the time paused counts: the bar shows how far behind live);
+  - behind live a timeshift stream plays from the minute chosen (the address has no seconds: it starts that many seconds in); moving inside it seeks, elsewhere another one is opened; forward to within 20 s of now, the end of the timeshift stream, or **Back to live** play the live stream again;
+  - **Watch from the start** goes back to the programme's start in the same player (no player over it any more);
+  - when what plays reaches the next programme, the bar moves on to it.
+- **Live buttons, in order:** from the start, back, play / pause, forward, (back to live), the space of a button, previous / next channel, then versions and network. Without catch-up: no bar, no back / forward.
+- **Mock server:** TMDB's search of people and companies.
+- **Tests:** the live timeline (reachable programme, position, bar, seek plan), the live player with and without catch-up, the provider's people by name, TMDB's search of people and companies.
+- **Browser check (mock):** "Midnight": Movies, TV Series, People, Production companies; a person card opens the person page; a channel with archive: buttons in order, the bar with the live edge, "Watch from the start" asks the timeshift address in the same player. Not verified on the TV.

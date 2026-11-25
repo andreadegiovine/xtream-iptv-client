@@ -191,6 +191,12 @@ function tmdb(pathname, query) {
   if (m) return Number(m[2]) % 50 === 0 ? null : item(m[1], m[2]); // some ids are not found: 404
   const s = pathname.match(/^\/3\/search\/(movie|tv)$/);
   if (s) return { results: [item(s[1], 900000 + (String(query.get('query')).length % 1000))] };
+  // People and production companies: three made-up names around the query (the search page's rows).
+  const who = pathname.match(/^\/3\/search\/(person|company)$/);
+  if (who) {
+    const q = String(query.get('query') || '').replace(/\b\w/g, (c) => c.toUpperCase());
+    return { results: ['', ' Jr.', ' Studio'].map((tail, i) => (who[1] === 'person' ? { id: 7000 + i, name: `${q}${tail}`, known_for_department: i === 1 ? 'Directing' : 'Acting', profile_path: null, adult: false } : { id: 8000 + i, name: `${q} Pictures${tail}`, logo_path: null, origin_country: 'IT' })) };
+  }
   const tr = pathname.match(/^\/3\/trending\/(movie|tv)\/week$/);
   if (tr) return { results: Array.from({ length: 20 }, (_, i) => item(tr[1], 1001 + i * 7)) };
   return undefined;

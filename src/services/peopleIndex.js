@@ -50,6 +50,61 @@ export async function titlesByName(db, role, name) {
   return rows.map((row) => ({ key: row.key, type: row.type, added: row.added }));
 }
 
+const NAMES_TTL_MS = 10 * 60 * 1000;
+const namesCache = new WeakMap(); // db → { readAt, promise: ['cast:will smith', …] }: the distinct names, read once in a while
+
+/** Every distinct name of the store ('cast:will smith', 'director:…'), one pass over the index keys. */
+function allNames(db, now = Date.now()) {
+  const hit = namesCache.get(db);
+  if (hit && now - hit.readAt < NAMES_TTL_MS) return hit.promise;
+  const promise = new Promise((resolve, reject) => {
+    const out = [];
+    const tx = db.transaction(PEOPLE_STORE, 'readonly');
+    const request = tx.objectStore(PEOPLE_STORE).index('byName').openKeyCursor(null, 'nextunique');
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) return;
+      out.push(String(cursor.key));
+      cursor.continue();
+    };
+    tx.oncomplete = () => resolve(out);
+    tx.onerror = () => reject(tx.error);
+  });
+  namesCache.set(db, { readAt: now, promise });
+  promise.catch(() => namesCache.delete(db));
+  return promise;
+}
+
+/** "will smith" → "Will Smith" (the store keeps the folded spelling only). */
+export const displayName = (folded) => String(folded || '').replace(/(^|\s)(\S)/g, (m, space, letter) => space + letter.toUpperCase());
+
+/** True when every word of the query starts a word of the name ("smi" and "will sm" find "will smith"). */
+export function nameMatches(folded, query) {
+  const words = ` ${folded}`;
+  return makeSearchKey(query).split(' ').filter(Boolean).every((w) => words.indexOf(` ${w}`) >= 0);
+}
+
+/**
+ * The people the provider names whose name matches `query` (the search page without TMDB): [{ name, roles: ['cast', 'director'] }],
+ * shorter names first (the closest match), at most `limit`.
+ */
+export async function peopleMatching(db, query, limit = 30) {
+  if (!db.objectStoreNames.contains(PEOPLE_STORE) || makeSearchKey(query).length < 2) return [];
+  const found = new Map(); // folded name → roles
+  (await allNames(db)).forEach((key) => {
+    const cut = key.indexOf(':');
+    const role = key.slice(0, cut);
+    const folded = key.slice(cut + 1);
+    if (!folded || !nameMatches(folded, query)) return;
+    if (!found.has(folded)) found.set(folded, []);
+    found.get(folded).push(role);
+  });
+  return Array.from(found.keys())
+    .sort((a, b) => a.length - b.length || (a < b ? -1 : 1))
+    .slice(0, limit)
+    .map((folded) => ({ name: displayName(folded), roles: found.get(folded) }));
+}
+
 /** How many titles were asked (the Settings row). */
 export const countPeople = (db) => dbGetAllKeys(db, PEOPLE_STORE).then((keys) => keys.length);
 export const removePeople = (db) => dbClear(db, PEOPLE_STORE);

@@ -4,6 +4,8 @@ import { focusRowAt, savedRowFocus } from '../rowFocus.js';
 import { createCarousel } from './carousel.js';
 
 const ORDER = ['collection', 'movie', 'series', 'live', 'programme', 'person', 'company'];
+/** The search page: the people and the production companies right after the films and the series. */
+export const SEARCH_ORDER = ['collection', 'movie', 'series', 'person', 'company', 'live', 'programme'];
 const LABEL = { collection: 'nav.collections', movie: 'nav.movies', series: 'nav.series', live: 'nav.live', programme: 'search.programmes', person: 'favorites.people', company: 'favorites.companies' };
 // Cards that are not titles: no watch state, no TMDB metadata of a title.
 const NOT_TITLES = ['collection', 'programme', 'person', 'company'];
@@ -17,9 +19,9 @@ const isGenreFilter = (entry) => entry.filterKind === 'genre' || entry.filterKin
 export const filterCardMeta = (entry) => ({ placeholder: isGenreFilter(entry) ? 'genres' : 'categories', subtitle: t(isGenreFilter(entry) ? 'favorites.genre' : 'favorites.category') });
 
 /** Splits entries by type (collections first), keeping the order and at most `limit` per type. */
-export function groupByType(entries, limit = 500) {
+export function groupByType(entries, limit = 500, order = ORDER) {
   const first = (entry) => (entry.isNetwork ? 0 : 1); // networks come ahead of the channels and groups
-  return ORDER.map((type) => ({ type, entries: entries.filter((entry) => entry.type === type).sort((a, b) => first(a) - first(b)).slice(0, limit) })).filter((group) => group.entries.length);
+  return order.map((type) => ({ type, entries: entries.filter((entry) => entry.type === type).sort((a, b) => first(a) - first(b)).slice(0, limit) })).filter((group) => group.entries.length);
 }
 
 /**
@@ -27,7 +29,7 @@ export function groupByType(entries, limit = 500) {
  * Used by Favorites, Suggestions and the search results. `linkFromField`: Down from the search field reaches the first row (the
  * results); Up never leaves the rows (Back goes to the field, or to the top bar). A `collection` entry carries `collectionId` and a `subtitle` (its item count).
  */
-export function createTypedRows(ctx, { prefix, onOpen, limit = 500, hideFavorite = false, linkFromField = false, upZone = null }) { // upZone: where Up from the first row goes (the top bar); onOpen(entry): titles and favourite filters (see isFilterEntry)
+export function createTypedRows(ctx, { prefix, onOpen, limit = 500, hideFavorite = false, linkFromField = false, upZone = null, order = ORDER }) { // upZone: where Up from the first row goes (the top bar); onOpen(entry): titles and favourite filters (see isFilterEntry)
   const el = h('div', { class: 'typed-rows' });
   let carousels = [];
 
@@ -41,14 +43,14 @@ export function createTypedRows(ctx, { prefix, onOpen, limit = 500, hideFavorite
     el,
     set(entries) {
       clear();
-      carousels = groupByType(entries, limit).map((group, index) => {
+      carousels = groupByType(entries, limit, order).map((group, index) => {
         const carousel = createCarousel({
           id: `${prefix}-${group.type}`,
           title: t(LABEL[group.type]),
           items: group.entries.map((entry) => {
             if (entry.type === 'collection') return { entry, type: 'movie', meta: { placeholder: 'folder', subtitle: entry.subtitle } }; // cards of a collection look like titles
             if (entry.type === 'programme') return { entry, type: 'live', meta: { subtitle: entry.subtitle } }; // a guide programme: the channel's picture, its hours
-            if (entry.type === 'person' || entry.type === 'company') return { entry, type: 'cast', meta: { placeholder: entry.type === 'company' ? 'provider' : 'user', subtitle: entry.subtitle || '' } }; // a favourite person / company: as the cast cards, its roles or counts under it
+            if (entry.type === 'person' || entry.type === 'company') return { entry, type: 'cast', meta: { placeholder: entry.type === 'company' ? 'provider' : 'user', subtitle: entry.subtitle || '' } }; // a person / company (favourites, search): as the cast cards, its roles or counts under it
             if (isFilterEntry(entry)) return { entry, type: group.type, meta: filterCardMeta(entry) };
             return entry.roleText ? { entry, type: group.type, meta: { subtitle: entry.roleText } } : { entry, type: group.type }; // the person page: the role(s) under the card
           }),

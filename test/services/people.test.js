@@ -120,3 +120,32 @@ test('the roles of a person in the info line: known for first, then the most fre
   expect(personRoles(info)).toEqual(['Directing', 'Acting', 'Production']);
   expect(personRoles(null, [{ roleText: 'Cast' }, { roleText: 'Director' }, { roleText: 'Cast' }])).toEqual(['Cast', 'Director']);
 });
+
+test('search page: the people the provider names, by the start of any word, cast and director together', async () => {
+  const { peopleMatching, nameMatches, displayName } = await import('../../src/services/peopleIndex.js');
+  const db = await openProviderDb(`people-search-${Math.random()}`);
+  await writePeople(db, { key: 'movie:i1', type: 'movie' }, { cast: 'Will Smith, Martin Lawrence', director: 'Michael Bay' });
+  await writePeople(db, { key: 'movie:i2', type: 'movie' }, { cast: 'Jaden Smith', director: 'Will Smith' });
+  expect(nameMatches('will smith', 'smi')).toBe(true);
+  expect(nameMatches('will smith', 'will sm')).toBe(true);
+  expect(nameMatches('will smith', 'mith')).toBe(false);
+  expect(displayName('will smith')).toBe('Will Smith');
+  const found = await peopleMatching(db, 'smith');
+  expect(found).toEqual([{ name: 'Will Smith', roles: ['cast', 'director'] }, { name: 'Jaden Smith', roles: ['cast'] }]);
+  expect(await peopleMatching(db, 'b')).toEqual([]); // one letter: nothing
+});
+
+test('TMDB search of people and companies: photos, departments, adult performers left out, kept a day', async () => {
+  const appDb = await openAppDb(`tmdb-search-${Math.random()}`);
+  const client = {
+    enabled: true,
+    searchPerson: jest.fn(async () => ({ results: [{ id: 31, name: 'Will Smith', profile_path: '/w.jpg', known_for_department: 'Acting' }, { id: 9, name: 'X', adult: true }] })),
+    searchCompany: jest.fn(async () => ({ results: [{ id: 5, name: 'Overbrook', logo_path: null, origin_country: 'US' }] })),
+  };
+  const tmdb = createTmdbService({ db: appDb, client, getLanguage: () => 'it-IT' });
+  const people = await tmdb.searchPeople('person', 'will');
+  expect(people).toEqual([{ kind: 'person', id: 31, name: 'Will Smith', photo: expect.stringContaining('/w.jpg'), department: 'Acting' }]);
+  expect(await tmdb.searchPeople('company', 'over')).toEqual([{ kind: 'company', id: 5, name: 'Overbrook', photo: '', department: 'US' }]);
+  await tmdb.searchPeople('person', 'Will');
+  expect(client.searchPerson).toHaveBeenCalledTimes(1);
+});

@@ -61,7 +61,7 @@ export function personFacts(info, locale = 'en-US') {
 
 /** "Acting" → the label of the department ("Recitazione"); unknown ones as TMDB writes them. */
 const DEPARTMENTS = { Acting: 'person.acting', Directing: 'person.directing', Writing: 'person.writing', Production: 'person.production', Sound: 'person.sound', Camera: 'person.camera', Editing: 'person.editing', Creator: 'person.creator' };
-const departmentLabel = (department) => (DEPARTMENTS[department] ? t(DEPARTMENTS[department]) : department || '');
+export const departmentLabel = (department) => (DEPARTMENTS[department] ? t(DEPARTMENTS[department]) : department || '');
 
 /**
  * The roles of a person for the info line: what TMDB says they are known for first, then the other departments of their credits, the
