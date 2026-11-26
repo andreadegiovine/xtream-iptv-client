@@ -1326,3 +1326,6 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
 - A row shows past programmes only when its channel / group keeps them (`archive` days), as far back as it keeps them; the past of the others is a blank cell (no "no information"), and opening it opens the channel.
 - Test: the past of a channel with and without archive. Not verified on the TV.
 
+### Patch 225 — Channel page: "Schedule" heading
+- The programme list of a channel / group page is titled "Programmazione" / "Schedule" (it was "Prossime 24 ore" / "Next 24 hours": with catch-up it holds past programmes too). Not verified on the TV.
+

@@ -100,7 +100,7 @@
   "detail.episode": "Episode",
   "detail.noEpisodes": "No episodes available.",
   "detail.actions": "Actions",
-  "detail.epg": "Next 24 hours",
+  "detail.epg": "Schedule",
   "detail.catchupMissing": "This programme is not in the provider's archive",
   "player.endsAt": "ends at {time}",
   "player.live": "LIVE",
