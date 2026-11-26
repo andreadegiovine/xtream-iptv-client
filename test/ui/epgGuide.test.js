@@ -246,3 +246,36 @@ test('every programme has a tooltip (full title, then its times); the scheduled 
   expect(g.el.querySelectorAll('.epg-prog.scheduled')).toHaveLength(0);
   g.destroy();
 });
+
+test('catch-up: past programmes only on the channels whose provider keeps them; the others show a blank past', async () => {
+  const now = 1000 * 30 * M;
+  const rows = [
+    { key: 'live:1', type: 'live', name: 'Archive', epgChannelId: 'a', archive: 1 },
+    { key: 'live:2', type: 'live', name: 'Plain', epgChannelId: 'b' },
+  ];
+  const past = (t) => ({ start: now - 120 * M, stop: now - 60 * M, title: t });
+  const onNow = (t) => ({ start: now - 60 * M, stop: now + 60 * M, title: t });
+  const guide = { a: [past('Old A'), onNow('Now A')], b: [past('Old B'), onNow('Now B')] };
+  const g = createEpgGuide({
+    loadRows: async (offset, limit) => ({ entries: rows.slice(offset, offset + limit) }),
+    countRows: async () => rows.length,
+    programmes: async (ids) => new Map(ids.map((id) => [id, guide[id] || []])),
+    onOpen: () => undefined,
+    now: () => now,
+    pastMs: 3 * 60 * M,
+    emptyText: 'No information',
+  });
+  document.body.appendChild(g.el);
+  await g.start();
+  await tick();
+  await tick();
+  const titles = (row) => Array.from(g.el.querySelectorAll(`.guide-row[data-row="${row}"] .epg-prog-title`)).map((n) => n.textContent);
+  expect(titles(0)).toContain('Old A');
+  expect(titles(1)).not.toContain('Old B');
+  expect(titles(1)).toContain('Now B');
+  const first = g.el.querySelector('.guide-row[data-row="1"] .epg-prog');
+  expect(first.classList.contains('past')).toBe(true);
+  expect(first.textContent).toBe(''); // the past of a channel without archive: blank, not "No information"
+  g.destroy();
+  g.el.remove();
+});

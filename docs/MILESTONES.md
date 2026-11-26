@@ -1321,3 +1321,8 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
 - A title that does not fill the screen showed grey bands above and below: ExoPlayer's view had no background of its own (only its shutter was black), so the window's background showed around the picture. The view is now black.
 - Native change: it needs a new APK. The other platforms already had black bands (the `<video>` element of webOS and desktop is black; on Tizen AVPlay draws them). Not verified on the TV.
 
+### Patch 224 — Guide: past programmes only on the channels with catch-up
+- The guide showed past programmes on every channel: those stored while they were still to come stay in the guide (the clean-up keeps the past of the channels with an archive), so a channel without catch-up had past programmes too. Opening one led to a channel page without past programmes, the focus on the first one to come.
+- A row shows past programmes only when its channel / group keeps them (`archive` days), as far back as it keeps them; the past of the others is a blank cell (no "no information"), and opening it opens the channel.
+- Test: the past of a channel with and without archive. Not verified on the TV.
+

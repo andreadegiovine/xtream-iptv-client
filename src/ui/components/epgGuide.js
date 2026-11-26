@@ -16,6 +16,7 @@ export const CHANNEL_WIDTH = 132;
 export const RULER_HEIGHT = 44;
 const HALF_HOUR = 30 * 60 * 1000;
 const HOUR = 2 * HALF_HOUR;
+const DAY_MS = 24 * HOUR;
 /**
  * The axis starts at the current half hour (never more than 30 minutes ago: what began earlier shows from there) and goes 24 hours
  * forward. PAST_MS: how far before the current half hour it starts.
@@ -298,7 +299,12 @@ export function createEpgGuide({ loadRows, countRows, programmes, onOpen, getTim
     if (!entry) return [];
     const list = entry.epgChannelId ? guide.get(entry.epgChannelId) : [];
     if (list === null || list === undefined) return [{ start, stop: end, title: '', loading: true }];
-    return rowSegments(list, start, end);
+    // Catch-up: only the channels whose provider keeps their past show past programmes (as far back as it keeps them). The others show
+    // none: programmes stored while they were still to come stay in the guide (kept for the channels with an archive) but cannot be
+    // watched any more; their past is a blank, not "no information".
+    const keepFrom = now() - (entry.archive > 0 ? entry.archive * DAY_MS : 0);
+    const segments = rowSegments(list.filter((p) => p.stop > keepFrom), start, end);
+    return segments.map((seg) => (seg.empty && seg.stop <= now() ? { ...seg, gone: true } : seg));
   }
 
   const clockText = (ms) => formatClockTime(new Date(ms), getTimeFormat(), i18n.getLocale());
@@ -318,7 +324,7 @@ export function createEpgGuide({ loadRows, countRows, programmes, onOpen, getTim
     } else channel.appendChild(createSkeletonBlock({ className: 'epg-channel-skeleton' }));
     const segments = segmentsOf(row);
     const segNodes = segments.map((seg, segIndex) => {
-      const node = h('div', { class: `epg-prog${seg.empty ? ' empty' : ''}${seg.loading ? ' loading' : ''}${seg.programme && seg.start <= now() && seg.stop > now() ? ' live' : ''}${seg.stop <= now() ? ' past' : ''}` }, h('span', { class: `epg-prog-title${seg.loading ? ' skeleton-line' : ''}`, text: seg.loading ? '' : seg.title || noInfo() }));
+      const node = h('div', { class: `epg-prog${seg.empty ? ' empty' : ''}${seg.loading ? ' loading' : ''}${seg.programme && seg.start <= now() && seg.stop > now() ? ' live' : ''}${seg.stop <= now() ? ' past' : ''}` }, h('span', { class: `epg-prog-title${seg.loading ? ' skeleton-line' : ''}`, text: seg.loading || seg.gone ? '' : seg.title || noInfo() }));
       node.setAttribute('data-seg', segIndex); // the pointer finds the programme under it (pointAt)
       setTip(node, programmeTip(seg));
       if (scheduled(entry, seg)) node.classList.add('scheduled');
