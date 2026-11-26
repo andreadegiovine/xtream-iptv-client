@@ -7,6 +7,7 @@
  *   POST /ipn           PayPal's Instant Payment Notification: checked with PayPal, then the device is written as paid (a refund
  *                       removes it).
  *   GET  /thanks        the page PayPal comes back to.
+ *   GET  /health        the settings in use (never the token) and whether the GitHub repository can be read: for the setup.
  *
  * The repository holds one file per device: trials/<KEY>.json (when its trial started) and licenses/<KEY>.json (its payment). The key is
  * a hash of the device's id: no id, no name, no email is stored. The GitHub token lives only here (a secret of the worker).
@@ -57,7 +58,14 @@ export function createRepo(env, fetchImpl = fetch) {
     const res = await fetchImpl(base + path, { method: 'DELETE', headers, body: JSON.stringify({ message, sha }) });
     if (!res.ok && res.status !== 404) throw new Error(`GitHub ${res.status} deleting ${path}`);
   }
-  return { read, create, remove };
+  /** The repository itself (GET /health): its name and whether the token may write to it. */
+  async function info() {
+    const res = await fetchImpl(`https://api.github.com/repos/${env.GITHUB_REPO}`, { headers });
+    if (!res.ok) return { ok: false, status: res.status };
+    const body = await res.json();
+    return { ok: true, private: Boolean(body.private), push: Boolean(body.permissions && body.permissions.push), branch: body.default_branch };
+  }
+  return { read, create, remove, info };
 }
 
 /** /check: paid, or the trial's end (started now the first time). */
@@ -105,11 +113,11 @@ export async function handleIpn(raw, env, repo, fetchImpl = fetch, now = Date.no
   const p = new URLSearchParams(raw);
   const key = String(p.get('custom') || '').toUpperCase();
   const receiver = String(p.get('receiver_email') || p.get('business') || '').toLowerCase();
-  if (!KEY_PATTERN.test(key)) return 'no device key';
-  if (receiver !== String(env.PAYPAL_EMAIL || '').toLowerCase()) return 'another receiver';
+  if (!KEY_PATTERN.test(key)) return `no device key (custom "${p.get('custom') || ''}")`;
+  if (receiver !== String(env.PAYPAL_EMAIL || '').toLowerCase()) return `another receiver (${receiver}, expected ${String(env.PAYPAL_EMAIL || '').toLowerCase()})`;
   const status = p.get('payment_status');
   if (status === 'Completed') {
-    if (p.get('mc_currency') !== (env.CURRENCY || 'EUR') || !(Number(p.get('mc_gross')) >= Number(env.PRICE))) return 'wrong amount';
+    if (p.get('mc_currency') !== (env.CURRENCY || 'EUR') || !(Number(p.get('mc_gross')) >= Number(env.PRICE))) return `wrong amount (${p.get('mc_gross')} ${p.get('mc_currency')}, expected ${env.PRICE} ${env.CURRENCY || 'EUR'})`;
     const created = await repo.create(`licenses/${key}.json`, { key, txn: p.get('txn_id'), amount: p.get('mc_gross'), currency: p.get('mc_currency'), paidAt: new Date(now).toISOString() }, `Licence ${key}`);
     return created ? 'activated' : 'already active';
   }
@@ -121,7 +129,7 @@ export async function handleIpn(raw, env, repo, fetchImpl = fetch, now = Date.no
     }
     return 'nothing to remove';
   }
-  return `ignored ${status}`;
+  return `ignored ${status}${p.get('pending_reason') ? ` (pending: ${p.get('pending_reason')})` : ''}`;
 }
 
 const page = (title, body) =>
@@ -147,8 +155,12 @@ export default {
       }
       if (url.pathname === '/ipn' && request.method === 'POST') {
         const outcome = await handleIpn(await request.text(), env, repo);
-        console.log('IPN', outcome);
+        console.log('IPN:', outcome);
         return text('OK');
+      }
+      if (url.pathname === '/health') {
+        const github = await repo.info().catch((err) => ({ ok: false, error: err && err.message }));
+        return json({ repo: env.GITHUB_REPO || null, token: Boolean(env.GITHUB_TOKEN), github, paypal: env.PAYPAL_EMAIL || null, price: env.PRICE || null, currency: env.CURRENCY || 'EUR', trialDays: Number(env.TRIAL_DAYS || 30), sandbox: env.PAYPAL_SANDBOX === 'true' });
       }
       if (url.pathname === '/thanks') {
         if (url.searchParams.get('cancelled')) return text(page('Pagamento annullato / Payment cancelled', 'Nessun addebito. / Nothing was charged.'), 200, 'text/html; charset=utf-8');
@@ -156,8 +168,9 @@ export default {
       }
       return text('Not found', 404);
     } catch (err) {
-      console.log('Error', err && err.message);
-      return text('Temporary error', 500); // PayPal sends the notification again later
+      // Logged as an error (the response is still a plain 500: PayPal sends the notification again later).
+      console.error(`Error on ${url.pathname}:`, err && err.message);
+      return text('Temporary error', 500);
     }
   },
 };

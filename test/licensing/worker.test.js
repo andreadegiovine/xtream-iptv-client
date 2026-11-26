@@ -62,10 +62,11 @@ describe('IPN', () => {
   test('not verified, another receiver, a lower amount or another currency: nothing written', async () => {
     const gh = fakeGitHub();
     expect(await handleIpn(ipn({}), env, gh.repo, payPal('INVALID'))).toBe('not verified');
-    expect(await handleIpn(ipn({ receiver_email: 'x@y.z' }), env, gh.repo, payPal('VERIFIED'))).toBe('another receiver');
-    expect(await handleIpn(ipn({ mc_gross: '1.00' }), env, gh.repo, payPal('VERIFIED'))).toBe('wrong amount');
-    expect(await handleIpn(ipn({ mc_currency: 'USD' }), env, gh.repo, payPal('VERIFIED'))).toBe('wrong amount');
-    expect(await handleIpn(ipn({ custom: 'nope' }), env, gh.repo, payPal('VERIFIED'))).toBe('no device key');
+    expect(await handleIpn(ipn({ receiver_email: 'x@y.z' }), env, gh.repo, payPal('VERIFIED'))).toMatch(/^another receiver \(x@y.z, expected pay@example.com\)/);
+    expect(await handleIpn(ipn({ mc_gross: '1.00' }), env, gh.repo, payPal('VERIFIED'))).toMatch(/^wrong amount/);
+    expect(await handleIpn(ipn({ mc_currency: 'USD' }), env, gh.repo, payPal('VERIFIED'))).toMatch(/^wrong amount/);
+    expect(await handleIpn(ipn({ payment_status: 'Pending', pending_reason: 'multi_currency' }), env, gh.repo, payPal('VERIFIED'))).toBe('ignored Pending (pending: multi_currency)');
+    expect(await handleIpn(ipn({ custom: 'nope' }), env, gh.repo, payPal('VERIFIED'))).toMatch(/^no device key/);
     expect(gh.files.size).toBe(0);
   });
 

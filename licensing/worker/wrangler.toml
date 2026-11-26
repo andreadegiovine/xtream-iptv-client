@@ -12,3 +12,7 @@ CURRENCY = "EUR"
 ITEM_NAME = "Xtream IPTV - lifetime activation"
 TRIAL_DAYS = "30"
 PAYPAL_SANDBOX = "true"
+
+# Workers Logs: the requests and their console lines kept (searchable in the dashboard), not only while `wrangler tail` runs.
+[observability]
+enabled = true

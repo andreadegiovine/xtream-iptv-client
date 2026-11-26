@@ -1302,3 +1302,11 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
 ### Patch 220 — `_trial` only on the base packages (the store packages)
 - The `_trial` packages are only the base package of each platform (`_tizen_trial.wgt`, `_webos_trial.ipk`, `_androidtv_trial.apk`, `_firetv_trial.apk`, `_<system>_trial` desktop packages): the ones for the official stores, updated by the stores. No `_youtube_trial`, no `_autoupdate_trial`, so no `*_trial` update channels on GitHub Pages (release workflow, docs/LICENSING.md, README).
 - Not verified on the TV.
+
+### Patch 221 — Licence worker: /health and clearer logs
+- PayPal's sandbox got a 500 from `/ipn` (the worker could not finish: most likely the write to GitHub) while the worker's log showed no error: the error was a plain `console.log` behind a normal 500 response.
+- `GET /health`: the settings in use (repository, PayPal email, price, currency, trial days, sandbox; never the token) and whether the token can read the repository and push to it.
+- Errors are logged with `console.error` and the path (`Error on /ipn: GitHub 404 writing licenses/…`); the IPN outcomes say why nothing was written (receiver found / expected, amount and currency found / expected, pending reason, the custom field).
+- `wrangler.toml`: Workers Logs on (`[observability]`): the requests are kept, not only seen while `wrangler tail` runs (PayPal's attempt was not in the log).
+- Tests updated. Not verified with PayPal / Cloudflare.
+

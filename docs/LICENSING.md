@@ -51,6 +51,9 @@ TV (trial build)                 Cloudflare worker                    GitHub (pr
    npx wrangler deploy
    ```
    The address it prints (e.g. `https://xtream-iptv-licensing.<account>.workers.dev`) is the licence URL.
+   Open `<address>/health`: it shows the settings in use (never the token) and whether the token can read and write the repository
+   (`"github": { "ok": true, "push": true }`). Logs while testing: `npx wrangler tail` (an `Error on /ipn: GitHub 404 …` line means the
+   repository name or the token's access is wrong; PayPal then gets a 500 and sends the notification again later).
 3. **PayPal.** A business account receiving the payments (`PAYPAL_EMAIL`). The notification address is sent with every payment
    (`notify_url`); check in the PayPal profile that Instant Payment Notifications are not disabled. Test first with `PAYPAL_SANDBOX =
    "true"` and sandbox accounts, then set it to `"false"` and deploy again.
