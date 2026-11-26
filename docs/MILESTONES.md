@@ -37,7 +37,7 @@ Checks on the devices and in CI still to do; `[x]` when confirmed.
 - [ ] **Picture format on Tizen:** cause not found yet; waiting for the TV's logs (patches 106–107).
 - [ ] **Dialogs taller than the screen on Fire TV:** they scroll now (profile creation); to confirm on the device.
 - [ ] **Catch-up with a real provider (patches 217–218):** the timeshift address and the provider's time zone, with an account that has an archive; the past programmes, the live bar (seek, pause, back to live) on the TV.
-- [ ] **Trial builds (patch 219):** the licence worker deployed (sandbox, then live), `LICENSE_URL` set; on each platform the device id stays the same after a reinstall (Tizen DUID, webOS LGUDID with `deviceid.query`, Android `ANDROID_ID`, desktop machine id); a PayPal sandbox payment unlocks the TV by itself; a refund removes the licence.
+- [ ] **Trial builds (patch 219):** the licence worker deployed (sandbox, then live), `LICENSE_URL` set; on each platform the device id stays the same after a reinstall (Tizen DUID, webOS LGUDID with `deviceid.query`, Android `ANDROID_ID`, desktop machine id); a PayPal sandbox payment (Orders API, /return) unlocks the TV by itself.
 - [ ] **End-to-end checks in the repository and in CI.** The Playwright scripts used to check the changes against the mock (mouse, touch, notifications, title details, settings, sidebar focus) live outside the repository; CI runs lint, unit tests and the build. Moving them in as smoke tests (Playwright + `scripts/mock-xtream`) would catch navigation, pointer and sync regressions. Cons: CI from about 45 s to 3-4 min; end-to-end checks are more fragile (the mock's guide depends on the time of the run: use `--epg-days 3`).
 
 ## 0. TV spike
@@ -1310,3 +1310,9 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
 - `wrangler.toml`: Workers Logs on (`[observability]`): the requests are kept, not only seen while `wrangler tail` runs (PayPal's attempt was not in the log).
 - Tests updated. Not verified with PayPal / Cloudflare.
 
+### Patch 222 — Licence worker: PayPal's Orders API instead of IPN
+- PayPal's sandbox never delivered its IPN to the worker (`500` in its IPN history, no request in the worker's log, while the same notification sent by hand worked): the delivery between PayPal and `workers.dev` failed before the worker. The PayPal account is shared with other projects, so its settings (IPN, auto return, PDT) are not to be changed.
+- `/ipn` removed. `/pay` creates an order with PayPal's Orders API (an app of its own: `PAYPAL_CLIENT_ID`, secret `PAYPAL_CLIENT_SECRET`; `PAYPAL_EMAIL` no longer used): the price, the device key as `custom_id`, the return address of that order only; the phone goes to PayPal's page.
+- `/return`: the worker captures the order itself and, a `COMPLETED` capture of the price in the currency for a device key, writes `licenses/<KEY>.json` at once (an order captured already is read again: a reloaded page; pending, wrong amount or another project's payment: nothing). Pages for activated, under review, not completed, cancelled; an already activated device does not pay again.
+- `/health` also says whether PayPal accepts the app's credentials. A payment closed before coming back is not captured (paid again from the QR code); refunds by hand.
+- Tests: the order (price, key, return address, token asked once), the capture (activated once, reloaded, pending, wrong amount, other currency, other project). Not verified with PayPal / Cloudflare.

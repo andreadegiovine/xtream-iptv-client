@@ -1,10 +1,10 @@
 /**
  * @jest-environment node
  */
-import worker, { check, handleIpn, payPalUrl, createRepo } from '../../licensing/worker/src/index.js';
+import worker, { check, createRepo, createPayPal, finishPayment } from '../../licensing/worker/src/index.js';
 
 const KEY = 'ABCD-EFGH-JKMN';
-const env = { GITHUB_REPO: 'me/licences', GITHUB_TOKEN: 't', PAYPAL_EMAIL: 'Pay@Example.com', PRICE: '9.99', CURRENCY: 'EUR', TRIAL_DAYS: '30', PAYPAL_SANDBOX: 'true' };
+const env = { GITHUB_REPO: 'me/licences', GITHUB_TOKEN: 't', PAYPAL_CLIENT_ID: 'id', PAYPAL_CLIENT_SECRET: 'secret', PRICE: '9.99', CURRENCY: 'EUR', TRIAL_DAYS: '30', PAYPAL_SANDBOX: 'true' };
 
 /** A fake repository: the files in a Map, with the contents API's answers. */
 function fakeGitHub() {
@@ -37,45 +37,51 @@ test('check: the first request starts the trial, the next ones read it; a paid k
   expect(await check(KEY, env, gh.repo)).toEqual({ active: true });
 });
 
-test('pay: PayPal with the key as custom and the notification address', () => {
-  const url = new URL(payPalUrl(KEY, env, 'https://lic.example'));
-  expect(url.origin).toBe('https://www.sandbox.paypal.com');
-  expect(url.searchParams.get('custom')).toBe(KEY);
-  expect(url.searchParams.get('amount')).toBe('9.99');
-  expect(url.searchParams.get('notify_url')).toBe('https://lic.example/ipn');
+/** A fake PayPal REST API: the token, the orders created, their captures. */
+function fakePayPal({ captureStatus = 'COMPLETED', value = '9.99', currency = 'EUR', customId = KEY, already = false } = {}) {
+  const orders = [];
+  const fetchImpl = jest.fn(async (url, options = {}) => {
+    const path = String(url).replace('https://api-m.sandbox.paypal.com', '');
+    if (path === '/v1/oauth2/token') return new Response(JSON.stringify({ access_token: 'A1', expires_in: 3600 }));
+    if (path === '/v2/checkout/orders' && options.method === 'POST') {
+      orders.push(JSON.parse(options.body));
+      return new Response(JSON.stringify({ id: 'ORDER1', links: [{ rel: 'payer-action', href: 'https://www.sandbox.paypal.com/checkoutnow?token=ORDER1' }] }), { status: 200 });
+    }
+    const order = { id: 'ORDER1', status: 'COMPLETED', purchase_units: [{ custom_id: customId, payments: { captures: [{ id: 'CAP1', status: captureStatus, custom_id: customId, amount: { value, currency_code: currency } }] } }] };
+    if (/\/capture$/.test(path)) return already ? new Response(JSON.stringify({ details: [{ issue: 'ORDER_ALREADY_CAPTURED' }] }), { status: 422 }) : new Response(JSON.stringify(order), { status: 201 });
+    return new Response(JSON.stringify(order));
+  });
+  return { orders, fetchImpl, paypal: createPayPal(env, fetchImpl) };
+}
+
+test('pay: an order of the price with the key as custom_id, back to /return; the token asked once', async () => {
+  const pp = fakePayPal();
+  const href = await pp.paypal.createOrder(KEY, 'https://lic.example');
+  expect(href).toBe('https://www.sandbox.paypal.com/checkoutnow?token=ORDER1');
+  const unit = pp.orders[0].purchase_units[0];
+  expect(unit).toMatchObject({ custom_id: KEY, amount: { currency_code: 'EUR', value: '9.99' } });
+  expect(pp.orders[0].payment_source.paypal.experience_context.return_url).toBe('https://lic.example/return');
+  await pp.paypal.createOrder(KEY, 'https://lic.example');
+  expect(pp.fetchImpl.mock.calls.filter(([u]) => /oauth2/.test(u))).toHaveLength(1);
+  expect(pp.fetchImpl.mock.calls[0][1].headers.authorization).toBe(`Basic ${btoa('id:secret')}`);
 });
 
-describe('IPN', () => {
-  const ipn = (fields) => new URLSearchParams({ receiver_email: 'pay@example.com', custom: KEY, payment_status: 'Completed', mc_gross: '9.99', mc_currency: 'EUR', txn_id: 'TX1', ...fields }).toString();
-  const payPal = (verdict) => jest.fn(async () => new Response(verdict));
-
-  test('a verified payment of the right amount activates the device, once', async () => {
+describe('return from PayPal', () => {
+  test('a completed capture of the price activates the device, once', async () => {
     const gh = fakeGitHub();
-    const verify = payPal('VERIFIED');
-    expect(await handleIpn(ipn({}), env, gh.repo, verify)).toBe('activated');
-    expect(verify.mock.calls[0][0]).toBe('https://ipnpb.sandbox.paypal.com/cgi-bin/webscr');
-    expect(verify.mock.calls[0][1].body.startsWith('cmd=_notify-validate&')).toBe(true);
-    expect(JSON.parse(gh.files.get(`licenses/${KEY}.json`)).txn).toBe('TX1');
-    expect(await handleIpn(ipn({}), env, gh.repo, verify)).toBe('already active');
+    const pp = fakePayPal();
+    expect(await finishPayment('ORDER1', env, gh.repo, pp.paypal)).toEqual({ outcome: 'activated', key: KEY });
+    expect(JSON.parse(gh.files.get(`licenses/${KEY}.json`))).toMatchObject({ txn: 'CAP1', order: 'ORDER1', amount: '9.99', currency: 'EUR' });
+    expect((await finishPayment('ORDER1', env, gh.repo, fakePayPal({ already: true }).paypal)).outcome).toBe('already active'); // reloaded page
   });
 
-  test('not verified, another receiver, a lower amount or another currency: nothing written', async () => {
+  test('pending, a lower amount, another currency, no device key: nothing written', async () => {
     const gh = fakeGitHub();
-    expect(await handleIpn(ipn({}), env, gh.repo, payPal('INVALID'))).toBe('not verified');
-    expect(await handleIpn(ipn({ receiver_email: 'x@y.z' }), env, gh.repo, payPal('VERIFIED'))).toMatch(/^another receiver \(x@y.z, expected pay@example.com\)/);
-    expect(await handleIpn(ipn({ mc_gross: '1.00' }), env, gh.repo, payPal('VERIFIED'))).toMatch(/^wrong amount/);
-    expect(await handleIpn(ipn({ mc_currency: 'USD' }), env, gh.repo, payPal('VERIFIED'))).toMatch(/^wrong amount/);
-    expect(await handleIpn(ipn({ payment_status: 'Pending', pending_reason: 'multi_currency' }), env, gh.repo, payPal('VERIFIED'))).toBe('ignored Pending (pending: multi_currency)');
-    expect(await handleIpn(ipn({ custom: 'nope' }), env, gh.repo, payPal('VERIFIED'))).toMatch(/^no device key/);
+    expect((await finishPayment('ORDER1', env, gh.repo, fakePayPal({ captureStatus: 'PENDING' }).paypal)).outcome).toMatch(/^pending/);
+    expect((await finishPayment('ORDER1', env, gh.repo, fakePayPal({ value: '1.00' }).paypal)).outcome).toMatch(/^wrong amount/);
+    expect((await finishPayment('ORDER1', env, gh.repo, fakePayPal({ currency: 'USD' }).paypal)).outcome).toMatch(/^wrong amount/);
+    expect((await finishPayment('ORDER1', env, gh.repo, fakePayPal({ customId: 'other-project' }).paypal)).outcome).toMatch(/^no device key/);
     expect(gh.files.size).toBe(0);
-  });
-
-  test('a refund of that payment removes the activation', async () => {
-    const gh = fakeGitHub();
-    await handleIpn(ipn({}), env, gh.repo, payPal('VERIFIED'));
-    expect(await handleIpn(ipn({ payment_status: 'Refunded', parent_txn_id: 'OTHER' }), env, gh.repo, payPal('VERIFIED'))).toBe('nothing to remove');
-    expect(await handleIpn(ipn({ payment_status: 'Refunded', parent_txn_id: 'TX1' }), env, gh.repo, payPal('VERIFIED'))).toBe('removed');
-    expect(gh.files.has(`licenses/${KEY}.json`)).toBe(false);
   });
 });
 

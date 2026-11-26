@@ -1,19 +1,21 @@
 /*
- * Licence service of the "_trial" builds (docs/LICENSING.md): a Cloudflare worker over a private GitHub repository.
+ * Licence service of the "_trial" builds (docs/LICENSING.md): a Cloudflare worker over a private GitHub repository and PayPal's Orders
+ * API (an app of its own: the PayPal account and its other projects are not touched).
  *
  *   POST /check {key}   the state of a device: { active: true } once paid; otherwise its trial's end { active: false, endsAt, now },
  *                       the trial starting (written to the repository) the first time the key is seen.
- *   GET  /pay?key=      sends the phone to PayPal for this device (one-time payment; the key travels as `custom`).
- *   POST /ipn           PayPal's Instant Payment Notification: checked with PayPal, then the device is written as paid (a refund
- *                       removes it).
- *   GET  /thanks        the page PayPal comes back to.
- *   GET  /health        the settings in use (never the token) and whether the GitHub repository can be read: for the setup.
+ *   GET  /pay?key=      creates a PayPal order for this device (one-time payment; the key travels as the order's custom_id) and sends
+ *                       the phone to PayPal.
+ *   GET  /return        PayPal sends the phone back here (?token=<order>): the worker captures the payment itself, checks it and writes
+ *                       the device as paid. No notification from PayPal is needed.
+ *   GET  /thanks        the page of a cancelled payment.
+ *   GET  /health        the settings in use (never a secret), whether the GitHub repository and PayPal can be reached: for the setup.
  *
  * The repository holds one file per device: trials/<KEY>.json (when its trial started) and licenses/<KEY>.json (its payment). The key is
- * a hash of the device's id: no id, no name, no email is stored. The GitHub token lives only here (a secret of the worker).
+ * a hash of the device's id: no id, no name, no email is stored. The GitHub token and the PayPal secret live only here.
  *
- * Settings (wrangler.toml / secrets): GITHUB_REPO "owner/name", GITHUB_TOKEN (secret), PAYPAL_EMAIL, PRICE ("9.99"), CURRENCY ("EUR"),
- * ITEM_NAME, TRIAL_DAYS ("30"), PAYPAL_SANDBOX ("true" while testing).
+ * Settings (wrangler.toml / the dashboard): GITHUB_REPO "owner/name", GITHUB_TOKEN (secret), PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET
+ * (secret), PRICE ("11.50"), CURRENCY ("EUR"), ITEM_NAME, TRIAL_DAYS ("30"), PAYPAL_SANDBOX ("true" while testing).
  */
 export const KEY_PATTERN = /^[0-9A-HJKMNP-TV-Z]{4}-[0-9A-HJKMNP-TV-Z]{4}-[0-9A-HJKMNP-TV-Z]{4}$/;
 const DAY_MS = 24 * 3600 * 1000;
@@ -21,6 +23,7 @@ const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-methods
 
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...CORS } });
 const text = (body, status = 200, type = 'text/plain; charset=utf-8') => new Response(body, { status, headers: { 'content-type': type, ...CORS } });
+const html = (body, status = 200) => text(body, status, 'text/html; charset=utf-8');
 
 function toBase64(value) {
   const bytes = new TextEncoder().encode(value);
@@ -81,55 +84,73 @@ export async function check(key, env, repo, now = Date.now()) {
   return { active: false, endsAt: started + days * DAY_MS, now };
 }
 
-/** The PayPal page of a one-time payment for `key` (back to /thanks, notification to /ipn). */
-export function payPalUrl(key, env, origin) {
-  const host = env.PAYPAL_SANDBOX === 'true' ? 'https://www.sandbox.paypal.com' : 'https://www.paypal.com';
-  const params = new URLSearchParams({
-    cmd: '_xclick',
-    business: env.PAYPAL_EMAIL,
-    item_name: env.ITEM_NAME || 'Xtream IPTV - lifetime activation',
-    item_number: key,
-    custom: key,
-    amount: String(env.PRICE),
-    currency_code: env.CURRENCY || 'EUR',
-    no_shipping: '1',
-    charset: 'utf-8',
-    notify_url: `${origin}/ipn`,
-    return: `${origin}/thanks?key=${key}`,
-    cancel_return: `${origin}/thanks?cancelled=1`,
-  });
-  return `${host}/cgi-bin/webscr?${params.toString()}`;
+/** PayPal's REST API with the app's credentials: an access token (kept until it expires), create an order, capture it, read it. */
+export function createPayPal(env, fetchImpl = fetch, now = () => Date.now()) {
+  const base = env.PAYPAL_SANDBOX === 'true' ? 'https://api-m.sandbox.paypal.com' : 'https://api-m.paypal.com';
+  let cached = null; // { token, until }
+  async function token() {
+    if (cached && cached.until > now()) return cached.token;
+    const res = await fetchImpl(`${base}/v1/oauth2/token`, {
+      method: 'POST',
+      headers: { authorization: `Basic ${btoa(`${env.PAYPAL_CLIENT_ID}:${env.PAYPAL_CLIENT_SECRET}`)}`, 'content-type': 'application/x-www-form-urlencoded' },
+      body: 'grant_type=client_credentials',
+    });
+    if (!res.ok) throw new Error(`PayPal ${res.status} on the access token`);
+    const body = await res.json();
+    cached = { token: body.access_token, until: now() + Math.max(0, (Number(body.expires_in) || 0) - 60) * 1000 };
+    return cached.token;
+  }
+  async function call(method, path, body) {
+    const res = await fetchImpl(base + path, { method, headers: { authorization: `Bearer ${await token()}`, 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
+    const answer = await res.json().catch(() => ({}));
+    return { status: res.status, ok: res.ok, body: answer };
+  }
+  return {
+    token,
+    /** A one-time payment of PRICE for `key`; resolves with the address of PayPal's page. */
+    async createOrder(key, origin) {
+      const res = await call('POST', '/v2/checkout/orders', {
+        intent: 'CAPTURE',
+        purchase_units: [{ reference_id: key, custom_id: key, description: env.ITEM_NAME || 'Xtream IPTV - lifetime activation', amount: { currency_code: env.CURRENCY || 'EUR', value: String(env.PRICE) } }],
+        payment_source: { paypal: { experience_context: { brand_name: 'Xtream IPTV', shipping_preference: 'NO_SHIPPING', user_action: 'PAY_NOW', return_url: `${origin}/return`, cancel_url: `${origin}/thanks?cancelled=1` } } },
+      });
+      if (!res.ok) throw new Error(`PayPal ${res.status} creating the order`);
+      const link = (res.body.links || []).find((l) => l.rel === 'payer-action' || l.rel === 'approve');
+      if (!link) throw new Error('PayPal gave no payment page');
+      return link.href;
+    },
+    /** Captures an approved order (an order captured already is read instead): the order as PayPal describes it. */
+    async capture(orderId) {
+      const res = await call('POST', `/v2/checkout/orders/${encodeURIComponent(orderId)}/capture`, {});
+      if (res.ok) return res.body;
+      const issue = ((res.body && res.body.details) || []).map((d) => d.issue).join(',');
+      if (res.status === 422 && /ORDER_ALREADY_CAPTURED/.test(issue)) {
+        const again = await call('GET', `/v2/checkout/orders/${encodeURIComponent(orderId)}`);
+        if (again.ok) return again.body;
+      }
+      throw new Error(`PayPal ${res.status} capturing ${orderId}${issue ? ` (${issue})` : ''}`);
+    },
+  };
 }
 
 /**
- * /ipn: PayPal's notification, sent back to PayPal to be confirmed ("VERIFIED"); then a completed payment of the right amount to this
- * account writes the device as paid, a refund or reversal removes it. Resolves with what was done (for the log and the tests).
+ * /return: the order is captured; a completed capture of PRICE in CURRENCY for a device key writes its licence (once). Resolves with
+ * { outcome, key } (outcome: 'activated', 'already active', 'pending', or why nothing was written).
  */
-export async function handleIpn(raw, env, repo, fetchImpl = fetch, now = Date.now()) {
-  const verifyHost = env.PAYPAL_SANDBOX === 'true' ? 'https://ipnpb.sandbox.paypal.com' : 'https://ipnpb.paypal.com';
-  const res = await fetchImpl(`${verifyHost}/cgi-bin/webscr`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', 'user-agent': 'xtream-iptv-licensing' }, body: `cmd=_notify-validate&${raw}` });
-  const answer = (await res.text()).trim();
-  if (answer !== 'VERIFIED') return 'not verified';
-  const p = new URLSearchParams(raw);
-  const key = String(p.get('custom') || '').toUpperCase();
-  const receiver = String(p.get('receiver_email') || p.get('business') || '').toLowerCase();
-  if (!KEY_PATTERN.test(key)) return `no device key (custom "${p.get('custom') || ''}")`;
-  if (receiver !== String(env.PAYPAL_EMAIL || '').toLowerCase()) return `another receiver (${receiver}, expected ${String(env.PAYPAL_EMAIL || '').toLowerCase()})`;
-  const status = p.get('payment_status');
-  if (status === 'Completed') {
-    if (p.get('mc_currency') !== (env.CURRENCY || 'EUR') || !(Number(p.get('mc_gross')) >= Number(env.PRICE))) return `wrong amount (${p.get('mc_gross')} ${p.get('mc_currency')}, expected ${env.PRICE} ${env.CURRENCY || 'EUR'})`;
-    const created = await repo.create(`licenses/${key}.json`, { key, txn: p.get('txn_id'), amount: p.get('mc_gross'), currency: p.get('mc_currency'), paidAt: new Date(now).toISOString() }, `Licence ${key}`);
-    return created ? 'activated' : 'already active';
+export async function finishPayment(orderId, env, repo, paypal, now = Date.now()) {
+  const order = await paypal.capture(orderId);
+  const unit = (order.purchase_units || [])[0] || {};
+  const capture = ((unit.payments && unit.payments.captures) || [])[0] || {};
+  const key = String(capture.custom_id || unit.custom_id || '').toUpperCase();
+  if (!KEY_PATTERN.test(key)) return { outcome: `no device key (custom_id "${capture.custom_id || unit.custom_id || ''}")`, key: null };
+  if (capture.status === 'PENDING') return { outcome: `pending (${(capture.status_details && capture.status_details.reason) || 'no reason'})`, key };
+  if (capture.status !== 'COMPLETED') return { outcome: `not completed (${capture.status || order.status})`, key };
+  const amount = capture.amount || {};
+  if (amount.currency_code !== (env.CURRENCY || 'EUR') || !(Number(amount.value) >= Number(env.PRICE))) {
+    return { outcome: `wrong amount (${amount.value} ${amount.currency_code}, expected ${env.PRICE} ${env.CURRENCY || 'EUR'})`, key };
   }
-  if (status === 'Refunded' || status === 'Reversed') {
-    const licence = await repo.read(`licenses/${key}.json`);
-    if (licence && licence.value.txn === p.get('parent_txn_id')) {
-      await repo.remove(`licenses/${key}.json`, licence.sha, `Refund ${key}`);
-      return 'removed';
-    }
-    return 'nothing to remove';
-  }
-  return `ignored ${status}${p.get('pending_reason') ? ` (pending: ${p.get('pending_reason')})` : ''}`;
+  const created = await repo.create(`licenses/${key}.json`, { key, txn: capture.id, order: order.id || orderId, amount: amount.value, currency: amount.currency_code, paidAt: new Date(now).toISOString() }, `Licence ${key}`);
+  return { outcome: created ? 'activated' : 'already active', key };
 }
 
 const page = (title, body) =>
@@ -150,25 +171,29 @@ export default {
       if (url.pathname === '/pay' && request.method === 'GET') {
         const key = String(url.searchParams.get('key') || '').toUpperCase();
         if (!KEY_PATTERN.test(key)) return text('Bad device key', 400);
-        if (await repo.read(`licenses/${key}.json`)) return Response.redirect(`${url.origin}/thanks?key=${key}`, 302);
-        return Response.redirect(payPalUrl(key, env, url.origin), 302);
+        if (await repo.read(`licenses/${key}.json`)) return html(page('Già attivato / Already activated', 'Questo dispositivo è già attivo. / This device is already activated.'));
+        return Response.redirect(await createPayPal(env).createOrder(key, url.origin), 302);
       }
-      if (url.pathname === '/ipn' && request.method === 'POST') {
-        const outcome = await handleIpn(await request.text(), env, repo);
-        console.log('IPN:', outcome);
-        return text('OK');
+      if (url.pathname === '/return' && request.method === 'GET') {
+        const orderId = String(url.searchParams.get('token') || '');
+        if (!/^[A-Z0-9]{5,40}$/.test(orderId)) return text('Bad order', 400);
+        const { outcome } = await finishPayment(orderId, env, repo, createPayPal(env));
+        console.log(`Payment ${orderId}:`, outcome);
+        if (outcome === 'activated' || outcome === 'already active') return html(page('Grazie! / Thank you!', 'Il dispositivo è attivato: la TV si sblocca da sola in pochi istanti. / The device is activated: the TV unlocks by itself in a few moments.'));
+        if (/^pending/.test(outcome)) return html(page('Pagamento in verifica / Payment under review', 'PayPal sta ancora verificando il pagamento: riapri il codice QR più tardi. / PayPal is still reviewing the payment: open the QR code again later.'));
+        return html(page('Pagamento non completato / Payment not completed', 'Nessuna attivazione: riprova dal codice QR. / Nothing was activated: try again from the QR code.'), 400);
       }
       if (url.pathname === '/health') {
         const github = await repo.info().catch((err) => ({ ok: false, error: err && err.message }));
-        return json({ repo: env.GITHUB_REPO || null, token: Boolean(env.GITHUB_TOKEN), github, paypal: env.PAYPAL_EMAIL || null, price: env.PRICE || null, currency: env.CURRENCY || 'EUR', trialDays: Number(env.TRIAL_DAYS || 30), sandbox: env.PAYPAL_SANDBOX === 'true' });
+        const paypal = await createPayPal(env)
+          .token()
+          .then(() => ({ ok: true }))
+          .catch((err) => ({ ok: false, error: err && err.message }));
+        return json({ repo: env.GITHUB_REPO || null, token: Boolean(env.GITHUB_TOKEN), github, paypal: { ...paypal, clientId: Boolean(env.PAYPAL_CLIENT_ID), secret: Boolean(env.PAYPAL_CLIENT_SECRET) }, price: env.PRICE || null, currency: env.CURRENCY || 'EUR', trialDays: Number(env.TRIAL_DAYS || 30), sandbox: env.PAYPAL_SANDBOX === 'true' });
       }
-      if (url.pathname === '/thanks') {
-        if (url.searchParams.get('cancelled')) return text(page('Pagamento annullato / Payment cancelled', 'Nessun addebito. / Nothing was charged.'), 200, 'text/html; charset=utf-8');
-        return text(page('Grazie! / Thank you!', 'La TV si sblocca da sola in pochi istanti. / The TV unlocks by itself in a few moments.'), 200, 'text/html; charset=utf-8');
-      }
+      if (url.pathname === '/thanks') return html(page('Pagamento annullato / Payment cancelled', 'Nessun addebito. / Nothing was charged.'));
       return text('Not found', 404);
     } catch (err) {
-      // Logged as an error (the response is still a plain 500: PayPal sends the notification again later).
       console.error(`Error on ${url.pathname}:`, err && err.message);
       return text('Temporary error', 500);
     }

@@ -1,13 +1,13 @@
-# Cloudflare worker of the trial licences (docs/LICENSING.md). Deploy: npx wrangler deploy (from this folder).
-# The token is a secret: npx wrangler secret put GITHUB_TOKEN
+# Cloudflare worker of the trial licences (docs/LICENSING.md). Deploy: npx wrangler deploy (from this folder), or paste src/index.js in
+# the dashboard and set the same variables there. Secrets (never in this file): GITHUB_TOKEN, PAYPAL_CLIENT_SECRET.
 name = "xtream-iptv-licensing"
 main = "src/index.js"
 compatibility_date = "2026-11-01"
 
 [vars]
 GITHUB_REPO = "OWNER/xtream-iptv-licenses"
-PAYPAL_EMAIL = "payments@example.com"
-PRICE = "9.99"
+PAYPAL_CLIENT_ID = "the Client ID of the PayPal REST app"
+PRICE = "11.50"
 CURRENCY = "EUR"
 ITEM_NAME = "Xtream IPTV - lifetime activation"
 TRIAL_DAYS = "30"
