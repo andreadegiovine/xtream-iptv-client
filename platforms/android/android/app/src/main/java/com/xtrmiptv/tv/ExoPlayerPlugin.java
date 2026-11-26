@@ -149,6 +149,8 @@ public class ExoPlayerPlugin extends Plugin {
         view = new PlayerView(getContext());
         view.setUseController(false);
         view.setShutterBackgroundColor(Color.BLACK);
+        // The bands around a picture that does not fill the screen (letterbox): black, not the window's background showing through.
+        view.setBackgroundColor(Color.BLACK);
         view.setResizeMode(AspectRatioFrameLayout.RESIZE_MODE_FIT);
         view.setPlayer(player);
         WebView webView = getBridge().getWebView();

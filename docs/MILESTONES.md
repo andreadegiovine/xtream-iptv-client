@@ -1316,3 +1316,8 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
 - `/return`: the worker captures the order itself and, a `COMPLETED` capture of the price in the currency for a device key, writes `licenses/<KEY>.json` at once (an order captured already is read again: a reloaded page; pending, wrong amount or another project's payment: nothing). Pages for activated, under review, not completed, cancelled; an already activated device does not pay again.
 - `/health` also says whether PayPal accepts the app's credentials. A payment closed before coming back is not captured (paid again from the QR code); refunds by hand.
 - Tests: the order (price, key, return address, token asked once), the capture (activated once, reloaded, pending, wrong amount, other currency, other project). Not verified with PayPal / Cloudflare.
+
+### Patch 223 — Android / Fire TV: black bands around the video
+- A title that does not fill the screen showed grey bands above and below: ExoPlayer's view had no background of its own (only its shutter was black), so the window's background showed around the picture. The view is now black.
+- Native change: it needs a new APK. The other platforms already had black bands (the `<video>` element of webOS and desktop is black; on Tizen AVPlay draws them). Not verified on the TV.
+
