@@ -44,6 +44,13 @@ describe('ensureVisible', () => {
     expect(page.scrollTop).toBe(0);
   });
 
+  test('first: true under a tall header keeps the row whole instead (a person page)', () => {
+    // At the top the row would end below the view (header 700 px tall): it is brought in, its bottom inside the view.
+    const { page, el } = makePage({ page: { top: 0, bottom: 800 }, el: { top: 700, bottom: 1100 } }, 600);
+    ensureVisible(el, { first: true, margin: 0 });
+    expect(page.scrollTop).toBe(300);
+  });
+
   test('elements outside a page are ignored', () => {
     expect(() => ensureVisible(document.createElement('div'))).not.toThrow();
   });

@@ -4,8 +4,8 @@ import { createSkeletonLine } from '../atoms/skeleton.js';
 import { createListRow } from '../atoms/listRow.js';
 import { t, i18n } from '../../i18n/index.js';
 import { createTypedRows, SEARCH_ORDER } from '../components/typedRows.js';
-import { peopleMatching } from '../../services/peopleIndex.js';
-import { departmentLabel } from './personPage.js';
+import { departmentLabel, personTitles } from './personPage.js';
+import { peopleMatching, titlesByName } from '../../services/peopleIndex.js';
 import { makeSearchKey } from '../../services/titleNormalizer.js';
 import { SEARCH_BAR_ZONE } from '../components/topbar.js';
 import { createSkeletonCard } from '../components/card.js';
@@ -61,30 +61,61 @@ export function createSearchPage(ctx, params = {}) {
     }
     return out;
   }
+  // TMDB's people / companies checked against the catalog (their credits, kept a day by the TMDB service): only the first ones of each
+  // kind, a few at a time, within a time limit (the search does not wait longer for them).
+  const CHECK_PEOPLE = 12;
+  const CHECK_COMPANIES = 8;
+  const CHECK_AT_ONCE = 3;
+  const CHECK_MS = 4000;
+
+  /** The items of `list` for which `test(item)` resolves true, in order; `limit` at a time; those not answered by `ms` are left out. */
+  async function keepMatching(list, test, ms) {
+    const keep = new Array(list.length).fill(false);
+    let next = 0;
+    const worker = async () => {
+      while (next < list.length) {
+        const i = next;
+        next += 1;
+        keep[i] = await test(list[i]).catch(() => false);
+      }
+    };
+    const all = Promise.all(Array.from({ length: Math.min(CHECK_AT_ONCE, list.length) }, worker));
+    await Promise.race([all, new Promise((resolve) => setTimeout(resolve, ms))]);
+    return list.filter((_, i) => keep[i]);
+  }
+
   /**
-   * People and production companies whose name matches: TMDB's (with their photo / logo) when TMDB is on, and the people the provider's
-   * details name (cast, directors) that TMDB did not give; a card opens the person page.
+   * People and production companies whose name matches, only those with films or series in the catalog (their page is never empty):
+   * TMDB's (with their photo / logo; the catalog's titles among their credits, and for a person the titles whose provider details name
+   * them) when TMDB is on, and the people the provider's details name (cast, directors: always in the catalog) that TMDB did not give; a
+   * card opens the person page.
    */
   async function matchingPeople(text) {
     const out = [];
     const seen = new Set();
+    const current = await ctx.active.get();
+    if (!current) return out;
+    const getEntryOf = (key) => getEntry(current.db, key).catch(() => null);
+    const byName = (role, name) => titlesByName(current.db, role, name).catch(() => []);
     const tmdb = ctx.tmdb && ctx.tmdb.enabled && ctx.tmdb.searchPeople ? ctx.tmdb : null;
     if (tmdb) {
       const [people, companies] = await Promise.all([tmdb.searchPeople('person', text).catch(() => []), tmdb.searchPeople('company', text).catch(() => [])]);
-      people.concat(companies).slice(0, PER_TYPE * 2).forEach((p) => {
+      const inCatalog = async (p) => {
+        const info = await (p.kind === 'company' ? tmdb.company(p.id) : tmdb.person(p.id));
+        return (await personTitles({ info, name: p.name, kind: p.kind, getEntryOf, byName })).length > 0;
+      };
+      const found = await keepMatching(people.slice(0, CHECK_PEOPLE).concat(companies.slice(0, CHECK_COMPANIES)), inCatalog, CHECK_MS);
+      found.forEach((p) => {
         if (p.kind === 'person') seen.add(makeSearchKey(p.name));
         out.push({ key: `${p.kind}:t${p.id}`, type: p.kind, name: p.name, icon: p.photo, subtitle: p.kind === 'company' ? p.department : departmentLabel(p.department), person: { kind: p.kind, id: p.id, name: p.name } });
       });
     }
-    const current = await ctx.active.get();
-    if (current) {
-      const names = await peopleMatching(current.db, text).catch(() => []);
-      names.forEach((p) => {
-        if (seen.has(makeSearchKey(p.name))) return;
-        const roles = p.roles.map((role) => t(role === 'director' ? 'person.director' : 'person.cast')).join(', ');
-        out.push({ key: `person:n${makeSearchKey(p.name)}`, type: 'person', name: p.name, icon: '', subtitle: roles, person: { kind: 'person', id: null, name: p.name } });
-      });
-    }
+    const names = await peopleMatching(current.db, text).catch(() => []);
+    names.forEach((p) => {
+      if (seen.has(makeSearchKey(p.name))) return;
+      const roles = p.roles.map((role) => t(role === 'director' ? 'person.director' : 'person.cast')).join(', ');
+      out.push({ key: `person:n${makeSearchKey(p.name)}`, type: 'person', name: p.name, icon: '', subtitle: roles, person: { kind: 'person', id: null, name: p.name } });
+    });
     return out;
   }
   const skeleton = h('div', { class: 'search-skeleton' }, createSkeletonLine({ className: 'title' }), h('div', { class: 'skeleton-row' }, [0, 1, 2, 3, 4, 5].map(() => createSkeletonCard())));

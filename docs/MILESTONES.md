@@ -1329,3 +1329,13 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
 ### Patch 225 — Channel page: "Schedule" heading
 - The programme list of a channel / group page is titled "Programmazione" / "Schedule" (it was "Prossime 24 ore" / "Next 24 hours": with catch-up it holds past programmes too). Not verified on the TV.
 
+### Patch 226 — Person page: the first carousel shown whole when the focus comes back to it
+- On a person page with two carousels, Up from the second to the first left the first cut at the bottom: the first row of a page brings the page's top back (its heading, `ensureVisible` `first`), and under the tall header of a person (photo, biography) that pushed the row below the screen. Now the top is brought back only when the row stays whole; otherwise the row is kept in view.
+- Focus manager (patch 214): the step of scroll before the focus moves is only for an element far away past content without focus (more than half a view: a text, a table); an element next to the focused one takes the focus at once and its zone shows it.
+- Tests: `ensureVisible` under a tall header. Browser check (mock, TMDB person with Movies and TV Series): Up from TV Series shows Movies whole (before: 129 px cut). Not verified on the TV.
+
+### Patch 227 — Search: only people and companies with titles in the catalog
+- TMDB's people and production companies found by name are shown only when the catalog has at least one of their films or series (their page is never empty): their credits (kept a day by the TMDB service) checked against the catalog, as the person page does, and for a person the titles whose provider details name them. The first 12 people and 8 companies are checked, 3 at a time, for at most 4 seconds (the rest is left out). The people the provider names are in the catalog by definition.
+- Patch 226 note: both of its changes apply to every page, not only the person page (the first row of any page, the step of scroll in every page and dialog).
+- Test: a person and a company with a title in the catalog shown, the others not. Not verified on the TV.
+

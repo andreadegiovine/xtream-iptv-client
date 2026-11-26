@@ -60,6 +60,17 @@ function beyond(node, view, down) {
   const r = node.getBoundingClientRect();
   return down ? r.top >= view.bottom - 1 : r.bottom <= view.top + 1;
 }
+/**
+ * Content without focus between the focused element and the next one, taller than half the view (a text, a table): worth showing with
+ * a step of scroll before the focus jumps over it. Elements next to each other (two carousels, the rows of a list) never are.
+ */
+function gapBetween(here, target, view, down) {
+  const a = here.getBoundingClientRect();
+  const b = target.getBoundingClientRect();
+  const gap = down ? b.top - a.bottom : a.top - b.bottom;
+  return gap > view.height * 0.5;
+}
+
 /** Scrolls the box by a step; false when it is already at that end. */
 function scrollStep(box, down) {
   const before = box.scrollTop;
@@ -201,10 +212,11 @@ export class FocusManager {
 
     const result = zone.model.navigate(dir, zone.clamp(zone.index));
     if (result.type === 'move') {
-      // The next element is far below (or above), past content that takes no focus: a step of scroll first; the focus moves once it
-      // shows (at once, when a step is enough).
+      // The next element is far below (or above), past content that takes no focus (more than half a view of it): a step of scroll
+      // first; the focus moves once it shows (at once, when a step is enough). An element right next to this one takes the focus at once
+      // and its zone shows it whole (a step first would leave it cut).
       const target = box ? nodeAt(zone.clamp(result.index)) : null;
-      if (target && beyond(target, viewOf(box), down) && scrollStep(box, down) && !visibleIn(target, viewOf(box))) return true;
+      if (target && beyond(target, viewOf(box), down) && gapBetween(here, target, viewOf(box), down) && scrollStep(box, down) && !visibleIn(target, viewOf(box))) return true;
       zone.onBlur(zone.index);
       zone.index = zone.clamp(result.index);
       zone.onFocus(zone.index);

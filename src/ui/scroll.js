@@ -36,9 +36,12 @@ export function ensureVisible(el, { margin = 32, first = false } = {}) {
   if (held) return;
   const page = el && el.closest ? el.closest('.page') : null;
   if (!page) return;
+  // The first row brings the page's top back into view (its heading), but never at the cost of the row itself: under a tall header (a
+  // person's photo and biography) the row would be left cut at the bottom, then the row is kept whole instead.
   if (first) {
     page.scrollTop = 0;
-    return;
+    const view = page.getBoundingClientRect();
+    if (el.getBoundingClientRect().bottom <= view.bottom - margin) return;
   }
   const pageRect = page.getBoundingClientRect();
   const rect = el.getBoundingClientRect();
