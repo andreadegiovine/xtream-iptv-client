@@ -21,34 +21,37 @@ describe('computeScrollTop', () => {
 });
 
 describe('ensureVisible', () => {
-  function makePage(rects, scrollTop = 0) {
+  /** A page of `height` px whose element sits at `top`..`bottom` of its content (the rects follow scrollTop, as in a real page). */
+  function makePage({ height = 800, top, bottom }, scrollTop = 0) {
     const page = document.createElement('section');
     page.className = 'page';
     const el = document.createElement('div');
     page.appendChild(el);
     page.scrollTop = scrollTop;
-    page.getBoundingClientRect = () => rects.page;
-    el.getBoundingClientRect = () => rects.el;
+    page.getBoundingClientRect = () => ({ top: 0, bottom: height, height });
+    el.getBoundingClientRect = () => ({ top: top - page.scrollTop, bottom: bottom - page.scrollTop, height: bottom - top });
     return { page, el };
   }
 
-  test('writes the computed scrollTop on the closest .page', () => {
-    const { page, el } = makePage({ page: { top: 0, bottom: 800 }, el: { top: 900, bottom: 1000 } });
+  test('an element below the first screen: the page moves just enough to show it whole', () => {
+    const { page, el } = makePage({ top: 900, bottom: 1000 });
     ensureVisible(el, { margin: 0 });
     expect(page.scrollTop).toBe(200);
   });
 
-  test('first: true goes back to the top so the heading shows', () => {
-    const { page, el } = makePage({ page: { top: 0, bottom: 800 }, el: { top: 10, bottom: 20 } }, 300);
-    ensureVisible(el, { first: true });
+  test('an element that fits on the first screen: the page goes back to its top (the heading shows)', () => {
+    const { page, el } = makePage({ top: 500, bottom: 700 }, 300);
+    ensureVisible(el, { margin: 32 });
     expect(page.scrollTop).toBe(0);
   });
 
-  test('first: true under a tall header keeps the row whole instead (a person page)', () => {
-    // At the top the row would end below the view (header 700 px tall): it is brought in, its bottom inside the view.
-    const { page, el } = makePage({ page: { top: 0, bottom: 800 }, el: { top: 700, bottom: 1100 } }, 600);
+  test('under a tall header (a person page) the row is kept whole, the top only as far as it can', () => {
+    const { page, el } = makePage({ top: 700, bottom: 1100 }, 0);
     ensureVisible(el, { first: true, margin: 0 });
-    expect(page.scrollTop).toBe(300);
+    expect(page.scrollTop).toBe(300); // as little as needed: the header shows as much as it can
+    page.scrollTop = 600; // already whole on screen: left as it is
+    ensureVisible(el, { margin: 0 });
+    expect(page.scrollTop).toBe(600);
   });
 
   test('elements outside a page are ignored', () => {

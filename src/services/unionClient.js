@@ -47,6 +47,11 @@ export function createUnionClient(main, others) {
       return r.client.streamUrl(type, r.id, ext);
     },
     /** A past programme of a live channel, from the provider that has the channel (null: that provider has no catch-up). */
+    catchupUrls(id, start, stop) {
+      const r = route(id);
+      if (r.client.catchupUrls) return r.client.catchupUrls(r.id, start, stop);
+      return r.client.catchupUrl ? r.client.catchupUrl(r.id, start, stop).then((url) => (url ? [url] : [])) : Promise.resolve([]);
+    },
     catchupUrl(id, start, stop) {
       const r = route(id);
       return r.client.catchupUrl ? r.client.catchupUrl(r.id, start, stop) : Promise.resolve(null);

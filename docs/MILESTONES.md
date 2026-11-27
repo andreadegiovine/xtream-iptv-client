@@ -1339,3 +1339,12 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
 - Patch 226 note: both of its changes apply to every page, not only the person page (the first row of any page, the step of scroll in every page and dialog).
 - Test: a person and a company with a title in the catalog shown, the others not. Not verified on the TV.
 
+### Patch 228 — One scroll rule for every page; catch-up tries the other addresses
+- **Scroll, every page** (scroll.js, FocusManager.js):
+  - an element that takes the focus and fits whole on the first screen leaves the page at its top (the heading and whatever is above the first focusable element stay visible); otherwise the page moves just enough to show it whole (under a tall header the header is cut, never the element with the focus);
+  - every element focused with the keys is shown by that rule, also in the zones that did not scroll their page themselves (the buttons of a person's header stayed off screen);
+  - Up out of a page (to the top bar) while the page is scrolled: first the page goes back to its top, as an invisible element above the content would (what is above the first focusable element is seen again); the next Up leaves;
+  - where nothing to focus is on screen, Up / Down scroll by steps until an element shows, or to the end of the content (patch 214), only when the content between the two is more than half a screen (patch 226).
+- **Catch-up** (PLAYER_ERROR_CONNECTION_FAILED on every programme): the address used `.m3u8` when the provider allows HLS, while many panels serve the archive as MPEG-TS only. The player now tries `/timeshift/…/<id>.ts`, then `/streaming/timeshift.php?…`, then `/timeshift/…/<id>.m3u8`, the next when one fails, with each address in the log (credentials masked). From the live player the archive is asked up to now (it ends there: the player then goes live), not to the end of the programme.
+- Tests: ensureVisible (top kept, whole element, nothing moved when already shown), the catch-up addresses. Browser checks (mock): person page Up from TV Series → Movies whole → header with the page at its top; Movies grid back at its top on the first row; Settings back at its top; a past programme whose addresses fail tries `.ts`, `timeshift.php`, `.m3u8`. Not verified on the TV nor with a real provider's archive.
+

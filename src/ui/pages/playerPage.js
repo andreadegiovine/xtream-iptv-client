@@ -4,7 +4,7 @@ import { createPlayerButton, setPlayerButtonIcon, setPlayerButtonLabel } from '.
 import { setTip } from '../tooltip.js';
 import { t, i18n } from '../../i18n/index.js';
 import { Action } from '../../core/input.js';
-import { log } from '../../core/logger.js';
+import { log, maskSecrets } from '../../core/logger.js';
 import { platform } from '../../platform/index.js';
 import { outOfRange, rangeOf } from '../../services/kidsLimits.js';
 import { createPlayerController, formatClock, neighborEpisode, subtitleLabel, nextAspect, scrubTarget, positionFromPointer, preferredAudioTrack } from '../../services/playerController.js';
@@ -91,6 +91,9 @@ export function createPlayerPage(ctx, params) {
   let tsBase = null;
   let liveDelay = 0;
   let pausedSince = null;
+  // Catch-up: the other addresses of the programme, tried in turn when one fails (panels differ: .ts, timeshift.php, .m3u8).
+  let catchupNext = [];
+  let catchupOptions = null;
   let sequence = null; // Promise of the keys previous / next channel walk
   const neighborNames = new Map(); // key → name, for the tooltip of previous / next
   let creditsOffset = null; // series: the end credits start this many seconds before the end (set by the user), otherwise null
@@ -723,6 +726,15 @@ export function createPlayerPage(ctx, params) {
     }
     if (state.status === 'playing' && Date.now() >= trackCheckAt && Date.now() < trackCheckUntil) checkTracks();
     if ((state.status === 'paused' || state.status === 'error' || state.status === 'recovering') && state.status !== lastStatus) showControls();
+    // A catch-up address the provider does not serve: the next one, before telling the error.
+    if (state.status === 'error' && lastStatus !== 'error' && catchupNext.length && catchupOptions) {
+      log.warn('Catch-up address failed', state.error || '', maskSecrets(streamUrl));
+      streamUrl = catchupNext.shift();
+      log.info('Catch-up address', maskSecrets(streamUrl));
+      lastStatus = 'loading';
+      controller.load(streamUrl, catchupOptions);
+      return;
+    }
     if (state.status === 'error' && lastStatus !== 'error') showPlayerError(`${t('error.PLAYER')} ${state.error || ''}`.trim());
     else if (state.status === 'playing') closePlayerError();
     if (state.status === 'recovering') showRecovery(t('player.recovering', { attempt: state.attempt, attempts: state.attempts }));
@@ -816,20 +828,32 @@ export function createPlayerPage(ctx, params) {
       const { bufferSeconds, timeFormat: clockFormat, autoplayNext } = await ctx.settings.get();
       timeFormat = clockFormat || 'auto';
       updateSeriesButtons(autoplayNext).catch(() => undefined);
+      catchupNext = [];
+      catchupOptions = null;
+      const catchupList = async (from_, to_) => {
+        const list = client.catchupUrls ? await client.catchupUrls(current().id, from_, to_) : client.catchupUrl ? [await client.catchupUrl(current().id, from_, to_)] : [];
+        return (list || []).filter(Boolean);
+      };
       if (isCatchup) {
         const { start, stop } = params.catchup;
-        streamUrl = client.catchupUrl ? (await client.catchupUrl(current().id, start, stop)) || '' : '';
+        const list = await catchupList(start, stop);
         if (destroyed || token !== loadToken) return;
-        if (!streamUrl) throw new Error('no catch-up address for this provider');
+        if (!list.length) throw new Error('no catch-up address for this provider');
+        [streamUrl, ...catchupNext] = list;
         nowEl.textContent = [params.catchup.channel, `${formatClockTime(new Date(start), timeFormat, i18n.getLocale())} – ${formatClockTime(new Date(stop), timeFormat, i18n.getLocale())}`].filter(Boolean).join(' · ');
       } else if (isLive && from !== null && barProgramme) {
-        // Catch-up on the live player: the programme from `from` (the address runs to the end of the programme).
-        streamUrl = client.catchupUrl ? (await client.catchupUrl(current().id, from, Math.max(barProgramme.stop, from + 60000))) || '' : '';
+        // Catch-up on the live player: the programme from `from` up to now (the archive has nothing later; at its end the player goes live).
+        const list = await catchupList(from, Math.max(Date.now(), from + 60000));
         if (destroyed || token !== loadToken) return;
-        if (!streamUrl) throw new Error('no catch-up address for this provider');
+        if (!list.length) throw new Error('no catch-up address for this provider');
+        [streamUrl, ...catchupNext] = list;
         tsBase = from;
         startAt = seekAt;
       } else streamUrl = client.streamUrl(params.type, current().id, current().ext);
+      if (isCatchup || tsBase !== null) {
+        catchupOptions = { startAt, bufferSeconds, onSubtitle: subtitles.show };
+        log.info('Catch-up address', maskSecrets(streamUrl));
+      }
       controller.load(streamUrl, { startAt, bufferSeconds, onSubtitle: subtitles.show });
       if (isLive) loadProgramme(token);
     } catch (err) {

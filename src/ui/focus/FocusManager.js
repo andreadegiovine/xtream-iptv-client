@@ -1,5 +1,6 @@
 import { Action } from '../../core/input.js';
 import { Dir } from './models.js';
+import { ensureVisible } from '../scroll.js';
 
 const DIRECTIONS = {
   [Action.UP]: Dir.UP,
@@ -69,6 +70,18 @@ function gapBetween(here, target, view, down) {
   const b = target.getBoundingClientRect();
   const gap = down ? b.top - a.bottom : a.top - b.bottom;
   return gap > view.height * 0.5;
+}
+
+/**
+ * The element that took the focus from the keys, shown by its page with one rule everywhere (scroll.js ensureVisible): the page stays at
+ * its top when the element fits on the first screen, otherwise it moves just enough to show it whole. Zones that scroll their page
+ * themselves give the same answer; the others (a header's buttons) no longer stay off screen. Not with a pointer (the page would move
+ * under it).
+ */
+function reveal(zone) {
+  if (typeof document !== 'undefined' && document.body && document.body.classList.contains('pointer-mode')) return;
+  const node = zone.nodes ? (zone.nodes() || [])[zone.index] : null;
+  if (node && node.closest && node.closest('.page')) ensureVisible(node);
 }
 
 /** Scrolls the box by a step; false when it is already at that end. */
@@ -141,6 +154,7 @@ export class FocusManager {
     zone.index = zone.clamp(index === undefined ? zone.index : index);
     this.activeId = id;
     zone.onFocus(zone.index);
+    reveal(zone);
     return true;
   }
 
@@ -204,8 +218,8 @@ export class FocusManager {
     const box = here ? scrollerOf(here) : null;
     // The focused element was scrolled out of view: the arrow scrolls on, and the focus goes to an element of the zone as soon as one
     // shows (the first below for Down, the last above for Up); at the end of the content nothing happens.
-    if (box && !visibleIn(here, viewOf(box))) {
-      scrollStep(box, down);
+    // At the top already (Up), nothing to scroll: the arrow goes on as usual (the links: the top bar).
+    if (box && !visibleIn(here, viewOf(box)) && (scrollStep(box, down) || down)) {
       this.focusShown(zone, box, down);
       return true;
     }
@@ -220,9 +234,16 @@ export class FocusManager {
       zone.onBlur(zone.index);
       zone.index = zone.clamp(result.index);
       zone.onFocus(zone.index);
+      reveal(zone);
       return true;
     }
 
+    // Up out of the page (to the top bar) while the page is scrolled: first the page goes back to its top, as if an invisible element
+    // above its content took the focus (what is above the first focusable element is seen again); the next Up leaves.
+    if (box && !down && box.scrollTop > 0 && !this.insideBox(this.links.get(zone.id) && this.links.get(zone.id)[dir], box)) {
+      box.scrollTop = 0;
+      return true;
+    }
     // Follow links, skipping empty zones, with a guard against cycles.
     let fromId = zone.id;
     for (let hops = 0; hops < this.zones.size; hops += 1) {
@@ -234,6 +255,13 @@ export class FocusManager {
     // Nothing more to focus that way, but the page or the dialog goes on (a table, a text under the last button): it scrolls.
     if (box) scrollStep(box, down);
     return true;
+  }
+
+  /** Whether the zone `id` has its elements inside `box` (a zone of the same page or dialog). */
+  insideBox(id, box) {
+    const zone = id ? this.zones.get(id) : null;
+    const node = zone && zone.nodes ? (zone.nodes() || []).find(Boolean) : null;
+    return Boolean(node && node.closest && node.closest('.dialog, .page') === box);
   }
 
   /** After a step of scroll: the focus to an element of `zone` now on screen (the first below for Down, the last above for Up), if any. */

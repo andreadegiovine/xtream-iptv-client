@@ -31,17 +31,19 @@ export function revealNearest(node) {
   if (!held && node && node.scrollIntoView) node.scrollIntoView({ block: 'nearest' });
 }
 
-/** Scrolls the closest `.page` so that `el` is fully visible. `first: true` also reveals the page heading. */
+/** Scrolls the closest `.page` so that `el` is fully visible, keeping the page at its top whenever the element fits on the first screen. */
 export function ensureVisible(el, { margin = 32, first = false } = {}) {
   if (held) return;
   const page = el && el.closest ? el.closest('.page') : null;
   if (!page) return;
-  // The first row brings the page's top back into view (its heading), but never at the cost of the row itself: under a tall header (a
-  // person's photo and biography) the row would be left cut at the bottom, then the row is kept whole instead.
-  if (first) {
-    page.scrollTop = 0;
-    const view = page.getBoundingClientRect();
-    if (el.getBoundingClientRect().bottom <= view.bottom - margin) return;
+  // The top of the page stays in view whenever it can: an element that fits whole on the first screen leaves the page at its top (the
+  // heading and whatever is above the first focusable element stay visible); otherwise the page moves just enough to show it whole.
+  // (`first` is kept for the callers: the rule is the same for every element.)
+  void first;
+  const topView = page.getBoundingClientRect();
+  if (el.getBoundingClientRect().bottom - topView.top + page.scrollTop <= topView.height - margin) {
+    if (page.scrollTop !== 0) page.scrollTop = 0;
+    return;
   }
   const pageRect = page.getBoundingClientRect();
   const rect = el.getBoundingClientRect();

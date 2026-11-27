@@ -5,6 +5,7 @@ import {
   parseAuthResponse,
   decodeBase64Utf8,
   timeshiftStart,
+  catchupAddresses,
 } from '../../src/services/xtreamClient.js';
 import { ErrorCode } from '../../src/core/errors.js';
 
@@ -101,4 +102,14 @@ describe('catch-up', () => {
     expect(timeshiftStart(at, '')).toBe('2026-11-02:20-05');
     expect(timeshiftStart(at, 'Not/AZone')).toBe('2026-11-02:20-05');
   });
+});
+
+test('catch-up addresses: .ts first, then timeshift.php, then .m3u8; start in the server zone, minutes of the programme', () => {
+  const start = Date.UTC(2026, 10, 2, 20, 5);
+  const list = catchupAddresses({ baseUrl: 'http://h:80', username: 'u s', password: 'p', timezone: 'Europe/Rome', id: 42, start, stop: start + 61 * 60000 });
+  expect(list).toEqual([
+    'http://h:80/timeshift/u%20s/p/61/2026-11-02:21-05/42.ts',
+    'http://h:80/streaming/timeshift.php?username=u%20s&password=p&stream=42&start=2026-11-02:21-05&duration=61',
+    'http://h:80/timeshift/u%20s/p/61/2026-11-02:21-05/42.m3u8',
+  ]);
 });

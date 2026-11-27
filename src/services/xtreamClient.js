@@ -71,6 +71,16 @@ export function timeshiftStart(ms, timeZone = '') {
   return `${parts.year}-${parts.month}-${parts.day}:${parts.hour === '24' ? '00' : parts.hour}-${parts.minute}`;
 }
 
+/** The catch-up addresses of a stream (see XtreamClient.catchupUrls). */
+export function catchupAddresses({ baseUrl, username, password, timezone = '', id, start, stop }) {
+  const minutes = Math.max(1, Math.ceil((stop - start) / 60000));
+  const when = timeshiftStart(start, timezone);
+  const user = encodeURIComponent(username);
+  const pass = encodeURIComponent(password);
+  const path = `${baseUrl}/timeshift/${user}/${pass}/${minutes}/${when}/${id}`;
+  return [`${path}.ts`, `${baseUrl}/streaming/timeshift.php?username=${user}&password=${pass}&stream=${id}&start=${when}&duration=${minutes}`, `${path}.m3u8`];
+}
+
 export function decodeBase64Utf8(value) {
   const text = String(value ?? '');
   try {
@@ -155,16 +165,21 @@ export class XtreamClient {
   }
 
   /**
-   * The address of a past programme of a live channel (catch-up): `/timeshift/<user>/<pass>/<minutes>/<YYYY-MM-DD:HH-MM>/<id>.<ext>`, the
-   * start written in the provider's time zone (its `server_info.timezone`; UTC when it gives none or one this device does not know).
+   * The addresses of a past programme of a live channel (catch-up), the most common first: panels differ, the player tries the next one
+   * when one fails. The start is written in the provider's time zone (its `server_info.timezone`; UTC when it gives none or one this
+   * device does not know).
+   *   /timeshift/<user>/<pass>/<minutes>/<YYYY-MM-DD:HH-MM>/<id>.ts      (most panels serve the archive as MPEG-TS only)
+   *   /streaming/timeshift.php?username=&password=&stream=&start=&duration=
+   *   /timeshift/…/<id>.m3u8                                            (the panels that offer it as HLS)
    */
-  async catchupUrl(id, start, stop) {
+  async catchupUrls(id, start, stop) {
     if (!this.authenticated) await this.authenticate();
-    const minutes = Math.max(1, Math.ceil((stop - start) / 60000));
-    const extension = pickLiveFormat(this.allowedFormats) === 'm3u8' ? 'm3u8' : 'ts';
-    const user = encodeURIComponent(this.username);
-    const pass = encodeURIComponent(this.password);
-    return `${this.baseUrl}/timeshift/${user}/${pass}/${minutes}/${timeshiftStart(start, this.timezone)}/${id}.${extension}`;
+    return catchupAddresses({ baseUrl: this.baseUrl, username: this.username, password: this.password, timezone: this.timezone, id, start, stop });
+  }
+
+  /** The first of catchupUrls. */
+  async catchupUrl(id, start, stop) {
+    return (await this.catchupUrls(id, start, stop))[0];
   }
 
   async getCategories(type, { signal } = {}) {
