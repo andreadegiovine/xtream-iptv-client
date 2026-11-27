@@ -39,7 +39,7 @@ export function normalizeAddress(input, { required = true } = {}) {
  */
 export function createProviderSetup(ctx, { editId = null, firstRun = false, completing = false, zoneId, onCancel = null, onSaved }) {
   // `completing`: a provider from a sync account, without its connection data (never synced): only its data to type, no way back.
-  const title = createHeading({ level: 1, text: t(completing ? 'sync.providerLoginTitle' : editId ? 'setup.editTitle' : 'setup.title') });
+  const title = createHeading({ level: 1, text: t(completing ? 'sync.providerLoginTitle' : editId ? 'setup.editTitle' : firstRun ? 'setup.welcome' : 'setup.title') }); // the first start welcomes
   const body = h('div', { class: 'setup-step' });
   let form = null;
   let kind = null; // chosen provider type (null: the choice is on screen)
@@ -68,7 +68,7 @@ export function createProviderSetup(ctx, { editId = null, firstRun = false, comp
     // First start, in a build with the device sync: everything from an account another TV already set up.
     if (firstRun && ctx.deviceSync) actions.push({ label: t('sync.fromAccount'), primary: true, run: () => fromAccount() });
     const next = createForm({ id: zoneId, focus: ctx.focus, fields: [], actions });
-    next.el.insertBefore(createHint({ text: t('setup.type.hint'), className: 'setup-hint' }), next.el.firstChild);
+    next.el.insertBefore(createHint({ text: t(firstRun ? 'setup.type.welcomeHint' : 'setup.type.hint'), className: 'setup-hint' }), next.el.firstChild);
     next.el.classList.add('setup-types');
     show(next);
   }

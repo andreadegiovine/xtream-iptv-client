@@ -558,7 +558,7 @@
   "sync.replaceTitle": "Scarica i dati dell'account",
   "sync.replaceMessage": "L'account contiene {count} elementi. I dati sincronizzati di questa TV (provider, profili, impostazioni, preferiti, stato di visione…) verranno sostituiti da quelli dell'account. Continuare?",
   "sync.replace": "Sostituisci",
-  "sync.fromAccount": "Account",
+  "sync.fromAccount": "Account sincronizzato",
   "sync.fromAccountHint": "Tutto da un account di sincronizzazione già configurato su un'altra TV (Impostazioni › Sincronizzazione).",
   "sync.hidePassword": "Nascondi password",
   "sync.providerLoginTitle": "Accesso al provider",
@@ -584,5 +584,7 @@
   "license.offlineTitle": "Connettiti a internet",
   "license.offlineText": "Non è stato possibile verificare il periodo di prova di questo dispositivo: connettilo a internet e verifica di nuovo.",
   "license.checkAgain": "Verifica di nuovo",
-  "license.exit": "Esci"
+  "license.exit": "Esci",
+  "setup.welcome": "Benvenuto/a",
+  "setup.type.welcomeHint": "Scegli la prima fonte del catalogo e buona visione!"
 }

@@ -558,7 +558,7 @@
   "sync.replaceTitle": "Take the data of the account",
   "sync.replaceMessage": "The account holds {count} items. The synced data of this TV (providers, profiles, settings, favourites, watch state…) is replaced by the account's. Continue?",
   "sync.replace": "Replace",
-  "sync.fromAccount": "Account",
+  "sync.fromAccount": "Sync account",
   "sync.fromAccountHint": "Everything from a sync account another TV already set up (Settings › Sync there).",
   "sync.hidePassword": "Hide password",
   "sync.providerLoginTitle": "Provider access",
@@ -584,5 +584,7 @@
   "license.offlineTitle": "Connect to the internet",
   "license.offlineText": "The free trial of this device could not be checked: connect it to the internet and check again.",
   "license.checkAgain": "Check again",
-  "license.exit": "Exit"
+  "license.exit": "Exit",
+  "setup.welcome": "Welcome",
+  "setup.type.welcomeHint": "Choose the first source of your catalog and enjoy watching!"
 }
