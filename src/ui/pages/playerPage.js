@@ -141,7 +141,7 @@ export function createPlayerPage(ctx, params) {
     { id: 'credits', icon: 'credits', label: () => t(creditsOffset ? 'player.credits.remove' : 'player.credits'), seriesOnly: true, hidden: true, group: 'end', run: () => toggleCredits() },
   ]
     .filter((def) => def.id !== 'fullscreen' || platform.toggleFullscreen)
-    .filter((def) => !(isLive && def.vodOnly) && !(!isLive && def.liveOnly) && !(def.seriesOnly && params.type !== 'series') && !(isTrailer && (def.id === 'aspect' || def.id === 'subtitles' || def.id === 'audio')));
+    .filter((def) => !(isLive && def.vodOnly) && !(!isLive && def.liveOnly && !(isCatchup && def.id === 'versions')) && !(def.seriesOnly && params.type !== 'series') && !(isTrailer && (def.id === 'aspect' || def.id === 'subtitles' || def.id === 'audio')));
   buttonDefs.forEach((def) => {
     def.el = createPlayerButton({ icon: def.icon, label: def.label() }).el;
   });
@@ -261,7 +261,7 @@ export function createPlayerPage(ctx, params) {
       .then((n) => {
         if (destroyed || token !== loadToken) return;
         liveProgramme = n && n.now ? n.now : null;
-        nowEl.textContent = liveProgramme ? liveProgramme.title : '';
+        showProgrammeTitle();
         updateTimeline();
         if (liveProgramme && outOfRange(liveProgramme.rating, rangeOf(ctx.profile))) leaveForKids('rating'); // the guide rates it outside the profile's range
         drawState();
@@ -508,6 +508,12 @@ export function createPlayerPage(ctx, params) {
     play(index);
   }
 
+  /** Under the channel: the programme being watched (behind live with catch-up: the one of the bar, not the one on now). */
+  function showProgrammeTitle() {
+    const p = tsBase !== null && barProgramme ? barProgramme : liveProgramme;
+    nowEl.textContent = p ? p.title : '';
+  }
+
   /** Catch-up: the live stream's pause counted (how far behind live it is); the timeshift stream at its end, or caught up with live, goes live. */
   function followTimeline(state) {
     if (!isLive || !barProgramme) return;
@@ -526,6 +532,7 @@ export function createPlayerPage(ctx, params) {
     if (p && p !== barProgramme && p.start >= barProgramme.stop && wallPosition({ tsBase, position: state.position, liveDelay, pausedSince }) >= barProgramme.stop) {
       barProgramme = p;
       updateTimeline();
+      showProgrammeTitle();
     }
     const tl = timeline();
     if (tl) setVisible('goLive', tl.behind >= LIVE_SNAP_MS || pausedSince !== null);
@@ -969,7 +976,7 @@ export function createPlayerPage(ctx, params) {
   /** Versions and network buttons for the channel playing; the tooltips are worked out again. */
   function updateLiveButtons() {
     updateTimeline();
-    setVisible('versions', Boolean(liveEntry && liveEntry.isGroup && (liveEntry.members || []).length > 1));
+    setVisible('versions', versionChoices().length > 1);
     setVisible('network', Boolean(liveEntry && liveEntry.networkKey));
     buttonDefs.forEach((def) => {
       if (def.tip) setPlayerButtonLabel(def.el, def.label());
@@ -1036,12 +1043,28 @@ export function createPlayerPage(ctx, params) {
   }
 
   /** "Versions": the streams of the group playing; the chosen one plays. */
+  /** The versions of the group playing that can be chosen: all of them live; for a past programme, those whose provider keeps it. */
+  function versionChoices() {
+    if (!liveEntry || !liveEntry.isGroup) return [];
+    const members = liveEntry.members || [];
+    if (!isCatchup) return members;
+    const start = params.catchup.start;
+    return members.filter((m) => m.archive > 0 && Date.now() - start < m.archive * 24 * 3600 * 1000);
+  }
+
   async function openVersions() {
-    if (!liveEntry || !liveEntry.isGroup) return;
+    const choices = versionChoices();
+    if (!choices.length) return;
     const names = sourceNames(await ctx.active.get().catch(() => null)); // the provider of each version, with several active
-    const options = liveEntry.members.map((m) => ({ label: streamLabel(m, names), value: m.id }));
+    const options = choices.map((m) => ({ label: streamLabel(m, names), value: m.id }));
     const value = await ctx.dialogs.choose({ title: t('player.versions'), options, selected: current().id });
     if (value === null || destroyed || value === current().id) return;
+    if (isCatchup) {
+      // The same past programme from the version chosen.
+      playlist = [{ id: value, ext: '', title: '' }];
+      play(0);
+      return;
+    }
     switchTo(liveEntry, value);
   }
 
@@ -1237,7 +1260,7 @@ export function createPlayerPage(ctx, params) {
           }
         });
       }
-      if (isLive && params.entryKey) {
+      if ((isLive || isCatchup) && params.entryKey) {
         ctx.active
           .get()
           .then((active) => getEntry(active.db, params.entryKey))

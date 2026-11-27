@@ -586,5 +586,6 @@
   "license.checkAgain": "Verifica di nuovo",
   "license.exit": "Esci",
   "setup.welcome": "Benvenuto/a",
-  "setup.type.welcomeHint": "Scegli la prima fonte del catalogo e buona visione!"
+  "setup.type.welcomeHint": "Scegli la prima fonte del catalogo e buona visione!",
+  "detail.epgDay": "Programmazione {date}"
 }

@@ -1364,3 +1364,13 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
 - A second report of the same failure is ignored while the next address is chosen (no address skipped).
 - Test: the provider's guide's start first, then the others, no duplicates. Not verified with the provider.
 
+### Patch 232 — Schedule by day; catch-up of a group: versions and the programme's title
+- Catch-up on the user's provider: every address answers 404 in this app and in another one too: the provider does not keep the archive it declares (an open point of the provider, not of the app).
+- **Channel / group page, schedule:**
+  - one row per past day the provider keeps (its date in the app's format, weekday, an arrow), oldest first, above the programme on and the next ones;
+  - from a grid the focus stays on Play; Down enters the schedule on the programme on (the days above it);
+  - OK on a day: its programmes, titled "Programmazione 10/11/2026" / "Schedule 10/11/2026", the focus on the first; Back: the schedule again, the focus on that day;
+  - opened from the guide on a past programme: that day's list, the focus on it; Back: the schedule; a second Back: the page it came from. The day shown is kept when the page comes back from the player.
+- **Catch-up player of a group:** "Versions" lists the versions whose provider keeps that programme; the one chosen plays the same programme. Live player behind live (catch-up): under the channel the programme being watched, not the one on now.
+- Browser check (mock): from the guide to a past programme, its day, Back, OK on a day, second Back; from the search (as from a grid) the focus on Play, Down on the programme on, Up on the days; a past programme of a group: Versions shown, its title on top. Not verified on the TV.
+

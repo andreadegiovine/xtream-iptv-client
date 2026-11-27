@@ -32,6 +32,7 @@ import { faMinimize } from '@fortawesome/free-solid-svg-icons/faMinimize';
 import { faClosedCaptioning } from '@fortawesome/free-solid-svg-icons/faClosedCaptioning';
 import { faVolumeHigh } from '@fortawesome/free-solid-svg-icons/faVolumeHigh';
 import { faChevronDown } from '@fortawesome/free-solid-svg-icons/faChevronDown';
+import { faChevronRight } from '@fortawesome/free-solid-svg-icons/faChevronRight';
 import { faUser } from '@fortawesome/free-solid-svg-icons/faUser';
 import { faHeart } from '@fortawesome/free-solid-svg-icons/faHeart';
 import { faEye } from '@fortawesome/free-solid-svg-icons/faEye';
@@ -131,6 +132,7 @@ const ICONS = {
   subtitles: faClosedCaptioning,
   audio: faVolumeHigh,
   chevron: faChevronDown,
+  chevronRight: faChevronRight, // a row that opens a list (a day of the schedule)
   user: faUser,
   clock: faClock,
   moveUp: faArrowUp,

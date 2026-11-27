@@ -203,6 +203,13 @@
     border-radius: 6px;
     font-size: 1.5rem;
 
+    // A past day of the schedule (catch-up): its date, an arrow at the right (OK shows its programmes).
+    .epg-day-open {
+      margin-left: auto;
+      width: 0.8em;
+      height: 0.8em;
+    }
+
     // A past programme (catch-up): a little transparent while not focused.
     &.past:not(.focused) {
       opacity: 0.55;

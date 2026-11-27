@@ -586,5 +586,6 @@
   "license.checkAgain": "Check again",
   "license.exit": "Exit",
   "setup.welcome": "Welcome",
-  "setup.type.welcomeHint": "Choose the first source of your catalog and enjoy watching!"
+  "setup.type.welcomeHint": "Choose the first source of your catalog and enjoy watching!",
+  "detail.epgDay": "Schedule {date}"
 }

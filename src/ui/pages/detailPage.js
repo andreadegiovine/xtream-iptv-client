@@ -11,6 +11,7 @@ import { cssUrl } from '../cssUrl.js';
 import { isEmptySeries, markUnavailable } from '../../services/unavailable.js';
 import { scheduleId, LEAD_MS } from '../../services/scheduledViewing.js';
 import { formatClockTime } from '../../core/clock.js';
+import { formatDate } from '../../core/format.js';
 import { t, i18n } from '../../i18n/index.js';
 import { icon } from '../icons.js';
 import { FocusZone } from '../focus/FocusManager.js';
@@ -62,6 +63,11 @@ export function createDetailPage(ctx, params) {
   // Opened from the guide on a programme: once the list is there, the focus starts on it (its start time, or null).
   let landOn = typeof params.programme === 'number' ? params.programme : null;
   let restoredFocus = null; // { id, index } saved when the page was left (see saveState)
+  let epgDay = null; // the past day whose programmes the schedule shows ('2026-11-10'), or null: the days, the one on and the next
+  const dayKey = (ms) => {
+    const d = new Date(ms);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
 
   let backdropUrl = '';
   let posterUrl = '';
@@ -802,31 +808,83 @@ export function createDetailPage(ctx, params) {
 
   async function loadEpg() {
     try {
-      // Catch-up: with the provider keeping the channel's past, its past programmes are listed above the one on (as far back as kept).
+      // Catch-up: with the provider keeping the channel's past, its past programmes are listed by day above the one on (as far back as kept).
       epgList = ctx.epg.around ? await ctx.epg.around(entry.epgChannelId, entry.archive || 0) : await ctx.epg.upcoming(entry.epgChannelId);
       await refreshScheduled();
       if (destroyed || !epgList.length) return;
+      // Opened from the guide on a past programme: the list of its day, the focus on it.
+      if (landOn !== null && epgDay === null) {
+        const chosen = epgList.find((p) => p.start === landOn);
+        if (chosen && chosen.stop <= Date.now()) epgDay = dayKey(chosen.start);
+      }
       build();
     } catch (err) {
       log.warn('EPG failed', err && err.message);
     }
   }
 
+  /**
+   * The schedule: one row per past day kept by the provider (catch-up), oldest first, then the programme on and the next ones. OK on a day
+   * shows its programmes ("Schedule 10/11/2026"; Back comes back to the day); OK on a programme opens its actions.
+   */
+  function epgItems(at) {
+    if (epgDay !== null) return epgList.filter((p) => p.stop <= at && dayKey(p.start) === epgDay).map((p) => ({ p }));
+    const days = [];
+    epgList.forEach((p) => {
+      if (p.stop > at) return;
+      const key = dayKey(p.start);
+      if (!days.some((d) => d.day === key)) days.push({ day: key, start: p.start });
+    });
+    return days.concat(epgList.filter((p) => p.stop > at).map((p) => ({ p })));
+  }
+
+  function openDay(key) {
+    epgDay = key;
+    build();
+    ctx.focus.focus('detailEpg', 0); // the first programme of the day
+  }
+
+  /** Back on a day's programmes: the schedule again, the focus on that day. */
+  function closeDay() {
+    const key = epgDay;
+    epgDay = null;
+    build();
+    const index = epgItems(Date.now()).findIndex((item) => item.day === key);
+    ctx.focus.focus('detailEpg', Math.max(0, index));
+  }
+
   /** The programme list as a focusable list: OK opens its actions (schedule the viewing, or cancel it). */
   function renderEpg(next) {
     clear(epgEl);
     if (!epgList.length) return;
-    epgEl.appendChild(createHeading({ text: t('detail.epg') }));
     const at = Date.now();
-    const nodes = epgList.map((p) =>
-      h(
+    const items = epgItems(at);
+    if (!items.length) {
+      epgDay = null;
+      renderEpg(next);
+      return;
+    }
+    const firstDay = epgDay !== null ? items[0].p.start : 0;
+    epgEl.appendChild(createHeading({ text: epgDay !== null ? t('detail.epgDay', { date: formatDate(firstDay, i18n.getLocale()) }) : t('detail.epg') }));
+    const nodes = items.map((item) => {
+      if (item.day) {
+        return h(
+          'div',
+          { class: 'epg-row epg-day past' },
+          h('span', { class: 'epg-time', text: new Date(item.start).toLocaleDateString(i18n.getLocale(), { weekday: 'short' }) }),
+          h('span', { class: 'epg-title', text: formatDate(item.start, i18n.getLocale()) }),
+          icon('chevronRight', 'epg-day-open'),
+        );
+      }
+      const p = item.p;
+      return h(
         'div',
         { class: `epg-row${p.start <= at && p.stop > at ? ' now' : ''}${p.stop <= at ? ' past' : ''}` },
-        h('span', { class: 'epg-time', text: programmeTime(p.start, at) }),
+        h('span', { class: 'epg-time', text: epgDay !== null ? formatClockTime(new Date(p.start), 'auto', i18n.getLocale()) : programmeTime(p.start, at) }),
         h('span', { class: 'epg-title', text: p.title }),
         scheduledIds.has(scheduleId(programmeItem(p))) ? icon('scheduled', 'epg-scheduled') : null,
-      ),
-    );
+      );
+    });
     nodes.forEach((node) => epgEl.appendChild(node));
     const zone = new FocusZone({
       id: 'detailEpg',
@@ -837,10 +895,19 @@ export function createDetailPage(ctx, params) {
         ensureVisible(nodes[i], { margin: 120 });
       },
       onBlur: (i) => nodes[i] && nodes[i].classList.remove('focused'),
-      onActivate: (i) => programmeActions(epgList[i]).catch((err) => log.warn('Programme action failed', err && err.message)),
+      onActivate: (i) => {
+        const item = items[i];
+        if (!item) return undefined;
+        if (item.day) return openDay(item.day);
+        return programmeActions(item.p).catch((err) => log.warn('Programme action failed', err && err.message));
+      },
     });
-    // The focus enters the list on the programme opened from the guide (past or future), otherwise on the one on now.
-    zone.index = landingIndex(epgList, landOn !== null ? landOn : at);
+    // The focus enters the list on the programme opened from the guide (past or future), otherwise on the one on now (after the days);
+    // a day's list starts on its first programme.
+    const programmes = items.filter((item) => item.p).map((item) => item.p);
+    const offset = items.length - programmes.length;
+    if (landOn !== null) zone.index = offset + landingIndex(programmes, landOn);
+    else zone.index = epgDay !== null ? 0 : offset + landingIndex(programmes, at);
     next.push({ id: 'detailEpg', zone });
   }
 
@@ -928,9 +995,19 @@ export function createDetailPage(ctx, params) {
       rows.forEach((r) => ctx.focus.unregister(r.id));
       rows = [];
     },
-    /** Where the focus was (a card of a row, a button), to land on it again when the page comes back. */
-    saveState: () => ({ focus: savedRowFocus(ctx.focus, rows.map((r) => r.id)) }),
+    /** Back on a day's programmes: the schedule of the channel again (a second Back leaves the page). */
+    onBack() {
+      if (epgDay === null) return false;
+      closeDay();
+      return true;
+    },
+    /** Where the focus was (a card of a row, a button), to land on it again when the page comes back; the day the schedule showed. */
+    saveState: () => ({ focus: savedRowFocus(ctx.focus, rows.map((r) => r.id)), epgDay }),
     restoreState(state) {
+      if (state && state.epgDay && state.epgDay !== epgDay) {
+        epgDay = state.epgDay;
+        if (epgList.length) build();
+      }
       restoredFocus = (state && state.focus) || null;
       if (!restoredFocus) return;
       const row = rows.find((r) => r.id === restoredFocus.id);
