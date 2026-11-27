@@ -95,6 +95,7 @@ export function createPlayerPage(ctx, params) {
   // Catch-up: the other addresses of the programme, tried in turn when one fails (panels differ: .ts, timeshift.php, .m3u8).
   let catchupNext = [];
   let catchupOptions = null;
+  let catchupSwitching = false; // a failed address is being replaced by the next one
   let sequence = null; // Promise of the keys previous / next channel walk
   const neighborNames = new Map(); // key → name, for the tooltip of previous / next
   let creditsOffset = null; // series: the end credits start this many seconds before the end (set by the user), otherwise null
@@ -728,16 +729,23 @@ export function createPlayerPage(ctx, params) {
     if (state.status === 'playing' && Date.now() >= trackCheckAt && Date.now() < trackCheckUntil) checkTracks();
     if ((state.status === 'paused' || state.status === 'error' || state.status === 'recovering') && state.status !== lastStatus) showControls();
     // A catch-up address the provider does not serve: the next one, before telling the error.
+    // The TV's player can report the same failure twice: the second one, while the next address is being chosen, is ignored.
+    if (state.status === 'error' && catchupSwitching) return;
     if (state.status === 'error' && lastStatus !== 'error' && catchupOptions) {
       // What the provider answers there (the TV's error says only "connection failed"), then the next address, if any.
       const failed = streamUrl;
+      if (catchupNext.length) catchupSwitching = true;
       const token = loadToken;
       log.warn('Catch-up address failed', state.error || '', maskSecrets(failed));
       probeAddress(failed).then((answer) => {
         log.info('Catch-up answer:', probeText(answer), maskSecrets(failed));
-        if (destroyed || token !== loadToken || !catchupNext.length) return;
+        if (destroyed || token !== loadToken || !catchupNext.length) {
+          catchupSwitching = false;
+          return;
+        }
         streamUrl = catchupNext.shift();
         log.info('Catch-up address', maskSecrets(streamUrl));
+        catchupSwitching = false;
         controller.load(streamUrl, catchupOptions);
       });
       if (catchupNext.length) {
@@ -840,6 +848,7 @@ export function createPlayerPage(ctx, params) {
       updateSeriesButtons(autoplayNext).catch(() => undefined);
       catchupNext = [];
       catchupOptions = null;
+      catchupSwitching = false;
       const catchupList = async (from_, to_) => {
         const list = client.catchupUrls ? await client.catchupUrls(current().id, from_, to_) : client.catchupUrl ? [await client.catchupUrl(current().id, from_, to_)] : [];
         return (list || []).filter(Boolean);
@@ -865,6 +874,8 @@ export function createPlayerPage(ctx, params) {
         const zone = client.serverZone ? await client.serverZone(current().id).catch(() => '') : '';
         if (destroyed || token !== loadToken) return;
         log.info(`Catch-up: provider time zone "${zone || 'none (UTC)'}", this TV "${Intl.DateTimeFormat().resolvedOptions().timeZone || '?'}"`);
+        const own = typeof client.lastArchiveInfo === 'function' ? client.lastArchiveInfo(current().id) : client.lastArchiveInfo;
+        log.info(own ? `Catch-up: the provider's guide has "${own.title}" from ${own.when}, archive ${own.hasArchive ? 'yes' : 'no'}` : "Catch-up: the provider's guide has no programme at that time");
         log.info('Catch-up address', maskSecrets(streamUrl));
       }
       controller.load(streamUrl, { startAt, bufferSeconds, onSubtitle: subtitles.show });

@@ -126,3 +126,23 @@ test('catch-up probe: what the provider answers, for the log', async () => {
   expect(res.body.cancel).toHaveBeenCalled();
   expect(probeText(await probeAddress('http://h/x', { fetchImpl: async () => { throw new Error('Failed to fetch'); } }))).toBe('no answer (Failed to fetch)');
 });
+
+test("catch-up: the provider's own guide gives the start its archive uses, and whether it keeps the programme", async () => {
+  const start = Date.UTC(2026, 10, 27, 5, 25); // 06:25 in Amsterdam
+  const fetcher = jest.fn(async (url) => {
+    if (/get_simple_data_table/.test(url)) {
+      return { epg_listings: [
+        { start: '2026-11-27 04:00:00', start_timestamp: String(start / 1000 - 5100), title: btoa('Before'), has_archive: 1 },
+        { start: '2026-11-27 07:25:00', start_timestamp: String(start / 1000 + 60), title: btoa('News'), has_archive: 0 },
+      ] };
+    }
+    return authData();
+  });
+  const client = new XtreamClient({ baseUrl: 'http://h', username: 'u', password: 'p', fetchJson: fetcher, wrapUrl: (u) => u });
+  const list = await client.catchupUrls(128, start, start + 30 * 60000);
+  expect(client.lastArchiveInfo).toEqual({ when: '2026-11-27:07-25', hasArchive: false, title: 'News' });
+  expect(list[0]).toBe('http://h/timeshift/u/p/30/2026-11-27:07-25/128.ts'); // the server's own writing first
+  expect(list[1]).toMatch(/timeshift\.php\?.*start=2026-11-27:07-25/);
+  expect(list[2]).toBe('http://h/timeshift/u/p/30/2026-11-27:06-25/128.ts'); // then the declared zone (Europe/Rome in authData)
+  expect(new Set(list).size).toBe(list.length);
+});

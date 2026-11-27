@@ -75,12 +75,12 @@ export function timeshiftStart(ms, timeZone = '') {
  * The catch-up addresses of a stream (see XtreamClient.catchupUrls): the two common forms with the start in the server's time zone, then
  * `.ts` with the start in UTC and in this device's zone (panels whose declared zone is not the one their archive uses), then HLS.
  */
-export function catchupAddresses({ baseUrl, username, password, timezone = '', id, start, stop, deviceZone = localZone() }) {
+export function catchupAddresses({ baseUrl, username, password, timezone = '', id, start, stop, deviceZone = localZone(), when: given = '' }) {
   const minutes = Math.max(1, Math.ceil((stop - start) / 60000));
   const user = encodeURIComponent(username);
   const pass = encodeURIComponent(password);
   const path = (when) => `${baseUrl}/timeshift/${user}/${pass}/${minutes}/${when}/${id}`;
-  const when = timeshiftStart(start, timezone);
+  const when = given || timeshiftStart(start, timezone);
   const out = [`${path(when)}.ts`, `${baseUrl}/streaming/timeshift.php?username=${user}&password=${pass}&stream=${id}&start=${when}&duration=${minutes}`];
   [timeshiftStart(start, ''), timeshiftStart(start, deviceZone)].forEach((other) => {
     const url = `${path(other)}.ts`;
@@ -192,7 +192,31 @@ export class XtreamClient {
    */
   async catchupUrls(id, start, stop) {
     if (!this.authenticated) await this.authenticate();
-    return catchupAddresses({ baseUrl: this.baseUrl, username: this.username, password: this.password, timezone: this.timezone, id, start, stop });
+    const list = catchupAddresses({ baseUrl: this.baseUrl, username: this.username, password: this.password, timezone: this.timezone, id, start, stop });
+    // The provider's own guide of the channel says how it writes that programme's start (the time its archive uses): its addresses first.
+    const info = await this.archiveInfo(id, start).catch(() => null);
+    this.lastArchiveInfo = info;
+    if (!info || !info.when) return list;
+    const own = catchupAddresses({ baseUrl: this.baseUrl, username: this.username, password: this.password, id, start, stop, when: info.when });
+    return own.slice(0, 2).concat(list.filter((url) => own.indexOf(url) < 0 || own.indexOf(url) > 1));
+  }
+
+  /**
+   * The programme of the provider's own guide (get_simple_data_table) that starts at `start` (within 10 minutes): { when (its start as the
+   * timeshift addresses want it, written by the server), hasArchive, title }; null when the guide has none.
+   */
+  async archiveInfo(id, start) {
+    const data = await this.request('get_simple_data_table', { stream_id: id }, { timeoutMs: 8000, retries: 0 });
+    const listings = data && Array.isArray(data.epg_listings) ? data.epg_listings : [];
+    let best = null;
+    listings.forEach((l) => {
+      const at = Number(l.start_timestamp) * 1000;
+      if (!Number.isFinite(at) || Math.abs(at - start) > 10 * 60000) return;
+      if (!best || Math.abs(at - start) < Math.abs(Number(best.start_timestamp) * 1000 - start)) best = l;
+    });
+    if (!best) return null;
+    const m = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}):(\d{2})/.exec(String(best.start || ''));
+    return { when: m ? `${m[1]}:${m[2]}-${m[3]}` : '', hasArchive: Number(best.has_archive) === 1, title: decodeBase64Utf8(best.title) };
   }
 
   /** The time zone the provider declares (`server_info.timezone`; '' when none), for the log of a catch-up. */

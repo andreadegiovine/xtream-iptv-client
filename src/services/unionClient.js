@@ -52,6 +52,11 @@ export function createUnionClient(main, others) {
       if (r.client.catchupUrls) return r.client.catchupUrls(r.id, start, stop);
       return r.client.catchupUrl ? r.client.catchupUrl(r.id, start, stop).then((url) => (url ? [url] : [])) : Promise.resolve([]);
     },
+    /** What the provider's own guide says of the last programme asked (see XtreamClient.archiveInfo), or null. */
+    lastArchiveInfo(id) {
+      const r = route(id);
+      return r.client.lastArchiveInfo || null;
+    },
     serverZone(id) {
       const r = route(id);
       return r.client.serverZone ? r.client.serverZone() : Promise.resolve('');

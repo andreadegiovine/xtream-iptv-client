@@ -1358,3 +1358,9 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
 - More addresses: after `.ts` and `timeshift.php` with the start in the provider's zone, `.ts` with the start in UTC and in the TV's zone (when different; panels whose declared zone is not the one of their archive), then `.m3u8`.
 - Tests: the addresses (zones, no duplicates), the answer for the log. Browser check (mock): the addresses tried in order. Not verified with the provider.
 
+### Patch 231 — Catch-up: the provider's own guide gives the start
+- The log of patch 230 (Tizen, a Smarters panel, provider zone Europe/Amsterdam): every address answered `HTTP 404` (redirected to the streaming server) for the start in the declared zone and in UTC; and the second address was skipped: the TV's player reports the same failure twice.
+- The addresses now start with the programme's start as the provider writes it in its own guide of the channel (`get_simple_data_table`: the programme within 10 minutes of the one asked, its `start` text as the archive uses it), then the ones of patch 230. The log says what that guide has at that time: `Catch-up: the provider's guide has "<title>" from <start>, archive yes|no` (no: the provider keeps no recording of it, a 404 is its answer).
+- A second report of the same failure is ignored while the next address is chosen (no address skipped).
+- Test: the provider's guide's start first, then the others, no duplicates. Not verified with the provider.
+
