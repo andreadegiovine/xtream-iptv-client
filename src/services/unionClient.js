@@ -52,6 +52,10 @@ export function createUnionClient(main, others) {
       if (r.client.catchupUrls) return r.client.catchupUrls(r.id, start, stop);
       return r.client.catchupUrl ? r.client.catchupUrl(r.id, start, stop).then((url) => (url ? [url] : [])) : Promise.resolve([]);
     },
+    serverZone(id) {
+      const r = route(id);
+      return r.client.serverZone ? r.client.serverZone() : Promise.resolve('');
+    },
     catchupUrl(id, start, stop) {
       const r = route(id);
       return r.client.catchupUrl ? r.client.catchupUrl(r.id, start, stop) : Promise.resolve(null);

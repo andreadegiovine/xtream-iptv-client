@@ -104,12 +104,25 @@ describe('catch-up', () => {
   });
 });
 
-test('catch-up addresses: .ts first, then timeshift.php, then .m3u8; start in the server zone, minutes of the programme', () => {
+test('catch-up addresses: .ts and timeshift.php in the server zone, .ts in UTC and in the device zone, then .m3u8', () => {
   const start = Date.UTC(2026, 10, 2, 20, 5);
-  const list = catchupAddresses({ baseUrl: 'http://h:80', username: 'u s', password: 'p', timezone: 'Europe/Rome', id: 42, start, stop: start + 61 * 60000 });
+  const list = catchupAddresses({ baseUrl: 'http://h:80', username: 'u s', password: 'p', timezone: 'Europe/Rome', id: 42, start, stop: start + 61 * 60000, deviceZone: 'America/New_York' });
   expect(list).toEqual([
     'http://h:80/timeshift/u%20s/p/61/2026-11-02:21-05/42.ts',
     'http://h:80/streaming/timeshift.php?username=u%20s&password=p&stream=42&start=2026-11-02:21-05&duration=61',
+    'http://h:80/timeshift/u%20s/p/61/2026-11-02:20-05/42.ts',
+    'http://h:80/timeshift/u%20s/p/61/2026-11-02:15-05/42.ts',
     'http://h:80/timeshift/u%20s/p/61/2026-11-02:21-05/42.m3u8',
   ]);
+  // The same zone everywhere: no address twice.
+  expect(catchupAddresses({ baseUrl: 'http://h', username: 'u', password: 'p', timezone: '', id: 1, start, stop: start + 60000, deviceZone: 'UTC' })).toHaveLength(3);
+});
+
+test('catch-up probe: what the provider answers, for the log', async () => {
+  const { probeAddress, probeText } = await import('../../src/services/catchupProbe.js');
+  const res = { status: 404, url: 'http://other.example:8080/x', redirected: true, headers: { get: () => 'text/html' }, body: { cancel: jest.fn() } };
+  const answer = await probeAddress('http://h/x', { fetchImpl: async () => res });
+  expect(probeText(answer)).toBe('HTTP 404 · text/html · host other.example:8080 (redirected)');
+  expect(res.body.cancel).toHaveBeenCalled();
+  expect(probeText(await probeAddress('http://h/x', { fetchImpl: async () => { throw new Error('Failed to fetch'); } }))).toBe('no answer (Failed to fetch)');
 });

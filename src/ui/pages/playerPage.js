@@ -17,6 +17,7 @@ import { streamLabel, sourceNames } from '../streamLabel.js';
 import { portableKeyFor } from '../../services/shareKeys.js';
 import { createPlayerSubtitles } from './player/subtitles.js';
 import { createSubtitleAligner } from './player/subtitleAlign.js';
+import { probeAddress, probeText } from '../../services/catchupProbe.js';
 import { canTimeshift, wallPosition, timelineBar, seekPlan, LIVE_SNAP_MS } from '../../services/liveTimeline.js';
 
 const CONTROLS_MS = 4000;
@@ -727,13 +728,22 @@ export function createPlayerPage(ctx, params) {
     if (state.status === 'playing' && Date.now() >= trackCheckAt && Date.now() < trackCheckUntil) checkTracks();
     if ((state.status === 'paused' || state.status === 'error' || state.status === 'recovering') && state.status !== lastStatus) showControls();
     // A catch-up address the provider does not serve: the next one, before telling the error.
-    if (state.status === 'error' && lastStatus !== 'error' && catchupNext.length && catchupOptions) {
-      log.warn('Catch-up address failed', state.error || '', maskSecrets(streamUrl));
-      streamUrl = catchupNext.shift();
-      log.info('Catch-up address', maskSecrets(streamUrl));
-      lastStatus = 'loading';
-      controller.load(streamUrl, catchupOptions);
-      return;
+    if (state.status === 'error' && lastStatus !== 'error' && catchupOptions) {
+      // What the provider answers there (the TV's error says only "connection failed"), then the next address, if any.
+      const failed = streamUrl;
+      const token = loadToken;
+      log.warn('Catch-up address failed', state.error || '', maskSecrets(failed));
+      probeAddress(failed).then((answer) => {
+        log.info('Catch-up answer:', probeText(answer), maskSecrets(failed));
+        if (destroyed || token !== loadToken || !catchupNext.length) return;
+        streamUrl = catchupNext.shift();
+        log.info('Catch-up address', maskSecrets(streamUrl));
+        controller.load(streamUrl, catchupOptions);
+      });
+      if (catchupNext.length) {
+        lastStatus = 'loading'; // the next address is on its way: no error shown meanwhile
+        return;
+      }
     }
     if (state.status === 'error' && lastStatus !== 'error') showPlayerError(`${t('error.PLAYER')} ${state.error || ''}`.trim());
     else if (state.status === 'playing') closePlayerError();
@@ -852,6 +862,9 @@ export function createPlayerPage(ctx, params) {
       } else streamUrl = client.streamUrl(params.type, current().id, current().ext);
       if (isCatchup || tsBase !== null) {
         catchupOptions = { startAt, bufferSeconds, onSubtitle: subtitles.show };
+        const zone = client.serverZone ? await client.serverZone(current().id).catch(() => '') : '';
+        if (destroyed || token !== loadToken) return;
+        log.info(`Catch-up: provider time zone "${zone || 'none (UTC)'}", this TV "${Intl.DateTimeFormat().resolvedOptions().timeZone || '?'}"`);
         log.info('Catch-up address', maskSecrets(streamUrl));
       }
       controller.load(streamUrl, { startAt, bufferSeconds, onSubtitle: subtitles.show });

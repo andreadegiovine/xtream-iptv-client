@@ -71,14 +71,32 @@ export function timeshiftStart(ms, timeZone = '') {
   return `${parts.year}-${parts.month}-${parts.day}:${parts.hour === '24' ? '00' : parts.hour}-${parts.minute}`;
 }
 
-/** The catch-up addresses of a stream (see XtreamClient.catchupUrls). */
-export function catchupAddresses({ baseUrl, username, password, timezone = '', id, start, stop }) {
+/**
+ * The catch-up addresses of a stream (see XtreamClient.catchupUrls): the two common forms with the start in the server's time zone, then
+ * `.ts` with the start in UTC and in this device's zone (panels whose declared zone is not the one their archive uses), then HLS.
+ */
+export function catchupAddresses({ baseUrl, username, password, timezone = '', id, start, stop, deviceZone = localZone() }) {
   const minutes = Math.max(1, Math.ceil((stop - start) / 60000));
-  const when = timeshiftStart(start, timezone);
   const user = encodeURIComponent(username);
   const pass = encodeURIComponent(password);
-  const path = `${baseUrl}/timeshift/${user}/${pass}/${minutes}/${when}/${id}`;
-  return [`${path}.ts`, `${baseUrl}/streaming/timeshift.php?username=${user}&password=${pass}&stream=${id}&start=${when}&duration=${minutes}`, `${path}.m3u8`];
+  const path = (when) => `${baseUrl}/timeshift/${user}/${pass}/${minutes}/${when}/${id}`;
+  const when = timeshiftStart(start, timezone);
+  const out = [`${path(when)}.ts`, `${baseUrl}/streaming/timeshift.php?username=${user}&password=${pass}&stream=${id}&start=${when}&duration=${minutes}`];
+  [timeshiftStart(start, ''), timeshiftStart(start, deviceZone)].forEach((other) => {
+    const url = `${path(other)}.ts`;
+    if (out.indexOf(url) < 0) out.push(url);
+  });
+  out.push(`${path(when)}.m3u8`);
+  return out;
+}
+
+/** This device's IANA time zone ('' when unknown). */
+function localZone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+  } catch {
+    return '';
+  }
 }
 
 export function decodeBase64Utf8(value) {
@@ -175,6 +193,12 @@ export class XtreamClient {
   async catchupUrls(id, start, stop) {
     if (!this.authenticated) await this.authenticate();
     return catchupAddresses({ baseUrl: this.baseUrl, username: this.username, password: this.password, timezone: this.timezone, id, start, stop });
+  }
+
+  /** The time zone the provider declares (`server_info.timezone`; '' when none), for the log of a catch-up. */
+  async serverZone() {
+    if (!this.authenticated) await this.authenticate();
+    return this.timezone || '';
   }
 
   /** The first of catchupUrls. */

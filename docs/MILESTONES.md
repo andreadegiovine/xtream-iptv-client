@@ -1352,3 +1352,9 @@ Measured with the new `npm run bench` (`scripts/mock-xtream/bench.js`, see MOCK-
 - The first start's choice next to "Xtream API" and "M3U" was only "Account": now "Account sincronizzato" / "Sync account". It is offered at the first start of the builds that have the device sync (the SYNC_TOKEN secret of the release). Not verified on the TV.
 - First start (same patch): the title is "Benvenuto/a" / "Welcome" and the hint "Scegli la prima fonte del catalogo e buona visione!" / "Choose the first source of your catalog and enjoy watching!"; adding another provider later keeps "Aggiungi un provider" and its question.
 
+### Patch 230 — Catch-up: what the provider answers, other time zones
+- A user's log (Tizen, a Smarters panel): every catch-up address failed with `PLAYER_ERROR_CONNECTION_FAILED`, which does not say what the server answered.
+- After a failed address one small request (the first bytes, only once the player has given up: never a second connection while playing) logs the answer: `Catch-up answer: HTTP 404 · text/html · host … (redirected)` or `no answer (…)`. The log also says the provider's declared time zone and the TV's.
+- More addresses: after `.ts` and `timeshift.php` with the start in the provider's zone, `.ts` with the start in UTC and in the TV's zone (when different; panels whose declared zone is not the one of their archive), then `.m3u8`.
+- Tests: the addresses (zones, no duplicates), the answer for the log. Browser check (mock): the addresses tried in order. Not verified with the provider.
+
